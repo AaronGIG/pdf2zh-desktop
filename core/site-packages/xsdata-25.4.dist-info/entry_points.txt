@@ -1,0 +1,2 @@
+[console_scripts]
+xsdata = xsdata.__main__:main

@@ -1,0 +1,152 @@
+start = Document
+Document =
+  element document {
+    Page+,
+    attribute totalPages { xsd:int }
+  }
+Page =
+  element page {
+    element mediabox { Box },
+    element cropbox { Box },
+    PDFXobject*,
+    PageLayout*,
+    PDFRectangle*,
+    PDFFont*,
+    PDFParagraph*,
+    PDFFigure*,
+    PDFCharacter*,
+    attribute pageNumber { xsd:int },
+    attribute Unit { xsd:string },
+    element baseOperations { xsd:string }
+  }
+Box =
+  element box {
+    # from (x,y) to (x2,y2)
+    attribute x { xsd:float },
+    attribute y { xsd:float },
+    attribute x2 { xsd:float },
+    attribute y2 { xsd:float }
+  }
+PDFXrefId = xsd:int
+PDFFont =
+  element pdfFont {
+    attribute name { xsd:string },
+    attribute fontId { xsd:string },
+    attribute xrefId { PDFXrefId },
+    attribute encodingLength { xsd:int },
+    attribute bold { xsd:boolean }?,
+    attribute italic { xsd:boolean }?,
+    attribute monospace { xsd:boolean }?,
+    attribute serif { xsd:boolean }?,
+    attribute ascent { xsd:float }?,
+    attribute descent { xsd:float }?,
+    PDFFontCharBoundingBox*
+  }
+PDFFontCharBoundingBox =
+  element pdfFontCharBoundingBox {
+    attribute x { xsd:float },
+    attribute y { xsd:float },
+    attribute x2 { xsd:float },
+    attribute y2 { xsd:float },
+    attribute char_id { xsd:int }
+  }
+PDFXobject =
+  element pdfXobject {
+    attribute xobjId { xsd:int },
+    attribute xrefId { PDFXrefId },
+    Box,
+    PDFFont*,
+    element baseOperations { xsd:string }
+  }
+PDFCharacter =
+  element pdfCharacter {
+    attribute vertical { xsd:boolean }?,
+    attribute scale { xsd:float }?,
+    attribute pdfCharacterId { xsd:int }?,
+    attribute char_unicode { xsd:string },
+    attribute advance { xsd:float }?,
+    # xobject nesting depth
+    attribute xobjId { xsd:int }?,
+    attribute debug_info { xsd:boolean }?,
+    PDFStyle,
+    Box,
+    element visual_bbox { Box }?
+  }
+PageLayout =
+  element pageLayout {
+    attribute id { xsd:int },
+    attribute conf { xsd:float },
+    attribute class_name { xsd:string },
+    Box
+  }
+GraphicState =
+  element graphicState {
+    attribute linewidth { xsd:float }?,
+    attribute dash {
+      list { xsd:float+ }
+    }?,
+    attribute flatness { xsd:float }?,
+    attribute intent { xsd:string }?,
+    attribute linecap { xsd:int }?,
+    attribute linejoin { xsd:int }?,
+    attribute miterlimit { xsd:float }?,
+    attribute ncolor {
+      list { xsd:float+ }
+    }?,
+    attribute scolor {
+      list { xsd:float+ }
+    }?,
+    attribute strokingColorSpaceName { xsd:string }?,
+    attribute nonStrokingColorSpaceName { xsd:string }?,
+    attribute passthroughPerCharInstruction { xsd:string }?
+  }
+PDFStyle =
+  element pdfStyle {
+    attribute font_id { xsd:string },
+    attribute font_size { xsd:float },
+    GraphicState
+  }
+PDFParagraph =
+  element pdfParagraph {
+    attribute xobjId { xsd:int }?,
+    attribute unicode { xsd:string },
+    attribute scale { xsd:float }?,
+    attribute vertical { xsd:boolean }?,
+    attribute FirstLineIndent { xsd:boolean }?,
+    attribute debug_id { xsd:string }?,
+    attribute layout_label { xsd:string }?,
+    Box,
+    PDFStyle,
+    PDFParagraphComposition*
+  }
+PDFParagraphComposition =
+  element pdfParagraphComposition {
+    PDFLine
+    | PDFFormula
+    | PDFSameStyleCharacters
+    | PDFCharacter
+    | PDFSameStyleUnicodeCharacters
+  }
+PDFLine = element pdfLine { Box, PDFCharacter+ }
+PDFSameStyleCharacters =
+  element pdfSameStyleCharacters { Box, PDFStyle, PDFCharacter+ }
+PDFSameStyleUnicodeCharacters =
+  element pdfSameStyleUnicodeCharacters {
+    PDFStyle?,
+    attribute unicode { xsd:string },
+    attribute debug_info { xsd:boolean }?
+  }
+PDFFormula =
+  element pdfFormula {
+    Box,
+    PDFCharacter+,
+    attribute x_offset { xsd:float },
+    attribute y_offset { xsd:float }
+  }
+PDFFigure = element pdfFigure { Box }
+PDFRectangle =
+  element pdfRectangle {
+    Box,
+    GraphicState,
+    attribute debug_info { xsd:boolean }?
+  }

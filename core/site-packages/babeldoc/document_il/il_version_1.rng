@@ -1,0 +1,422 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<grammar xmlns="http://relaxng.org/ns/structure/1.0" datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">
+  <start>
+    <ref name="Document"/>
+  </start>
+  <define name="Document">
+    <element name="document">
+      <oneOrMore>
+        <ref name="Page"/>
+      </oneOrMore>
+      <attribute name="totalPages">
+        <data type="int"/>
+      </attribute>
+    </element>
+  </define>
+  <define name="Page">
+    <element name="page">
+      <element name="mediabox">
+        <ref name="Box"/>
+      </element>
+      <element name="cropbox">
+        <ref name="Box"/>
+      </element>
+      <zeroOrMore>
+        <ref name="PDFXobject"/>
+      </zeroOrMore>
+      <zeroOrMore>
+        <ref name="PageLayout"/>
+      </zeroOrMore>
+      <zeroOrMore>
+        <ref name="PDFRectangle"/>
+      </zeroOrMore>
+      <zeroOrMore>
+        <ref name="PDFFont"/>
+      </zeroOrMore>
+      <zeroOrMore>
+        <ref name="PDFParagraph"/>
+      </zeroOrMore>
+      <zeroOrMore>
+        <ref name="PDFFigure"/>
+      </zeroOrMore>
+      <zeroOrMore>
+        <ref name="PDFCharacter"/>
+      </zeroOrMore>
+      <attribute name="pageNumber">
+        <data type="int"/>
+      </attribute>
+      <attribute name="Unit">
+        <data type="string"/>
+      </attribute>
+      <element name="baseOperations">
+        <data type="string"/>
+      </element>
+    </element>
+  </define>
+  <define name="Box">
+    <element name="box">
+      <!-- from (x,y) to (x2,y2) -->
+      <attribute name="x">
+        <data type="float"/>
+      </attribute>
+      <attribute name="y">
+        <data type="float"/>
+      </attribute>
+      <attribute name="x2">
+        <data type="float"/>
+      </attribute>
+      <attribute name="y2">
+        <data type="float"/>
+      </attribute>
+    </element>
+  </define>
+  <define name="PDFXrefId">
+    <data type="int"/>
+  </define>
+  <define name="PDFFont">
+    <element name="pdfFont">
+      <attribute name="name">
+        <data type="string"/>
+      </attribute>
+      <attribute name="fontId">
+        <data type="string"/>
+      </attribute>
+      <attribute name="xrefId">
+        <ref name="PDFXrefId"/>
+      </attribute>
+      <attribute name="encodingLength">
+        <data type="int"/>
+      </attribute>
+      <optional>
+        <attribute name="bold">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="italic">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="monospace">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="serif">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="ascent">
+          <data type="float"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="descent">
+          <data type="float"/>
+        </attribute>
+      </optional>
+      <zeroOrMore>
+        <ref name="PDFFontCharBoundingBox"/>
+      </zeroOrMore>
+    </element>
+  </define>
+  <define name="PDFFontCharBoundingBox">
+    <element name="pdfFontCharBoundingBox">
+      <attribute name="x">
+        <data type="float"/>
+      </attribute>
+      <attribute name="y">
+        <data type="float"/>
+      </attribute>
+      <attribute name="x2">
+        <data type="float"/>
+      </attribute>
+      <attribute name="y2">
+        <data type="float"/>
+      </attribute>
+      <attribute name="char_id">
+        <data type="int"/>
+      </attribute>
+    </element>
+  </define>
+  <define name="PDFXobject">
+    <element name="pdfXobject">
+      <attribute name="xobjId">
+        <data type="int"/>
+      </attribute>
+      <attribute name="xrefId">
+        <ref name="PDFXrefId"/>
+      </attribute>
+      <ref name="Box"/>
+      <zeroOrMore>
+        <ref name="PDFFont"/>
+      </zeroOrMore>
+      <element name="baseOperations">
+        <data type="string"/>
+      </element>
+    </element>
+  </define>
+  <define name="PDFCharacter">
+    <element name="pdfCharacter">
+      <optional>
+        <attribute name="vertical">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="scale">
+          <data type="float"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="pdfCharacterId">
+          <data type="int"/>
+        </attribute>
+      </optional>
+      <attribute name="char_unicode">
+        <data type="string"/>
+      </attribute>
+      <optional>
+        <attribute name="advance">
+          <data type="float"/>
+        </attribute>
+      </optional>
+      <optional>
+        <!-- xobject nesting depth -->
+        <attribute name="xobjId">
+          <data type="int"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="debug_info">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <ref name="PDFStyle"/>
+      <ref name="Box"/>
+      <optional>
+        <element name="visual_bbox">
+          <ref name="Box"/>
+        </element>
+      </optional>
+    </element>
+  </define>
+  <define name="PageLayout">
+    <element name="pageLayout">
+      <attribute name="id">
+        <data type="int"/>
+      </attribute>
+      <attribute name="conf">
+        <data type="float"/>
+      </attribute>
+      <attribute name="class_name">
+        <data type="string"/>
+      </attribute>
+      <ref name="Box"/>
+    </element>
+  </define>
+  <define name="GraphicState">
+    <element name="graphicState">
+      <optional>
+        <attribute name="linewidth">
+          <data type="float"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="dash">
+          <list>
+            <oneOrMore>
+              <data type="float"/>
+            </oneOrMore>
+          </list>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="flatness">
+          <data type="float"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="intent">
+          <data type="string"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="linecap">
+          <data type="int"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="linejoin">
+          <data type="int"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="miterlimit">
+          <data type="float"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="ncolor">
+          <list>
+            <oneOrMore>
+              <data type="float"/>
+            </oneOrMore>
+          </list>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="scolor">
+          <list>
+            <oneOrMore>
+              <data type="float"/>
+            </oneOrMore>
+          </list>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="strokingColorSpaceName">
+          <data type="string"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="nonStrokingColorSpaceName">
+          <data type="string"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="passthroughPerCharInstruction">
+          <data type="string"/>
+        </attribute>
+      </optional>
+    </element>
+  </define>
+  <define name="PDFStyle">
+    <element name="pdfStyle">
+      <attribute name="font_id">
+        <data type="string"/>
+      </attribute>
+      <attribute name="font_size">
+        <data type="float"/>
+      </attribute>
+      <ref name="GraphicState"/>
+    </element>
+  </define>
+  <define name="PDFParagraph">
+    <element name="pdfParagraph">
+      <optional>
+        <attribute name="xobjId">
+          <data type="int"/>
+        </attribute>
+      </optional>
+      <attribute name="unicode">
+        <data type="string"/>
+      </attribute>
+      <optional>
+        <attribute name="scale">
+          <data type="float"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="vertical">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="FirstLineIndent">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="debug_id">
+          <data type="string"/>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name="layout_label">
+          <data type="string"/>
+        </attribute>
+      </optional>
+      <ref name="Box"/>
+      <ref name="PDFStyle"/>
+      <zeroOrMore>
+        <ref name="PDFParagraphComposition"/>
+      </zeroOrMore>
+    </element>
+  </define>
+  <define name="PDFParagraphComposition">
+    <element name="pdfParagraphComposition">
+      <choice>
+        <ref name="PDFLine"/>
+        <ref name="PDFFormula"/>
+        <ref name="PDFSameStyleCharacters"/>
+        <ref name="PDFCharacter"/>
+        <ref name="PDFSameStyleUnicodeCharacters"/>
+      </choice>
+    </element>
+  </define>
+  <define name="PDFLine">
+    <element name="pdfLine">
+      <ref name="Box"/>
+      <oneOrMore>
+        <ref name="PDFCharacter"/>
+      </oneOrMore>
+    </element>
+  </define>
+  <define name="PDFSameStyleCharacters">
+    <element name="pdfSameStyleCharacters">
+      <ref name="Box"/>
+      <ref name="PDFStyle"/>
+      <oneOrMore>
+        <ref name="PDFCharacter"/>
+      </oneOrMore>
+    </element>
+  </define>
+  <define name="PDFSameStyleUnicodeCharacters">
+    <element name="pdfSameStyleUnicodeCharacters">
+      <optional>
+        <ref name="PDFStyle"/>
+      </optional>
+      <attribute name="unicode">
+        <data type="string"/>
+      </attribute>
+      <optional>
+        <attribute name="debug_info">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+    </element>
+  </define>
+  <define name="PDFFormula">
+    <element name="pdfFormula">
+      <ref name="Box"/>
+      <oneOrMore>
+        <ref name="PDFCharacter"/>
+      </oneOrMore>
+      <attribute name="x_offset">
+        <data type="float"/>
+      </attribute>
+      <attribute name="y_offset">
+        <data type="float"/>
+      </attribute>
+    </element>
+  </define>
+  <define name="PDFFigure">
+    <element name="pdfFigure">
+      <ref name="Box"/>
+    </element>
+  </define>
+  <define name="PDFRectangle">
+    <element name="pdfRectangle">
+      <ref name="Box"/>
+      <ref name="GraphicState"/>
+      <optional>
+        <attribute name="debug_info">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+    </element>
+  </define>
+</grammar>

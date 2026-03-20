@@ -1,0 +1,11 @@
+{%- for source, items in imports|groupby("source") -%}
+{%- if items|length == 1 -%}
+from {{ source | import_module(module)  }} import {{ items[0].name | import_class(alias=items[0].alias) }}
+{% else -%}
+from {{ source | import_module(module) }} import (
+{%- for item in items %}
+    {{ item.name | import_class(alias=item.alias) }},
+{%- endfor %}
+)
+{% endif -%}
+{%- endfor %}

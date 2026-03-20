@@ -1,0 +1,43 @@
+Testing in CMD environment... 
+PATH=E:\tool\pdf2zh\pdf2zh-desktop-slim\core\runtime;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;D:\Program Files\Calibre2\;C:\Program Files\R\R-4.4.2\bin;D:\users\anaconda3\Scripts;D:\soft\Graphviz-12.2.1-win64\bin;E:\Program Files\Git\cmd;C:\Program Files\Docker\Docker\resources\bin;E:\Program Files (x86)\pcsuite\;E:\BaiduNetdiskDownload\texlive\2024\bin\windows;D:\users\anaconda3;E:\nodejs\;C:\Users\59362\.local\bin;C:\Users\59362\AppData\Local\Microsoft\WindowsApps;C:\Users\59362\AppData\Local\Programs\Ollama;D:\soft\ffmpeg-2025-01-08-git-251de1791e-full_build\ffmpeg-2025-01-08-git-251de1791e-full_build\bin;E:\Program Files\Git\bin;D:\users\anaconda3;D:\users\anaconda3\python.exe;C:\Users\59362\python;E:\Users\59362\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\59362\AppData\Local\Pandoc\;C:\Users\59362\AppData\Roaming\npm;E:\soft\Codex 
+PYTHONHOME= 
+Failed to import OnnxModel: Microsoft Visual C++ Redistributable is not installed. Download it at https://aka.ms/vs/17/release/vc_redist.x64.exe
+Python: 3.12.9 (tags/v3.12.9:fdb8142, Feb  4 2025, 15:27:58) [MSC v.1942 64 bit (AMD64)]
+Path: ['E:\\tool\\pdf2zh\\pdf2zh-desktop-slim\\core\\runtime\\python312.zip', 'E:\\tool\\pdf2zh\\pdf2zh-desktop-slim\\core\\runtime', 'E:\\tool\\pdf2zh\\pdf2zh-desktop-slim\\core\\site-packages']
+QApplication OK
+gui_pyqt5.main import OK
+All checks passed - calling main()...
+not in git repo
+警告: 无法加载文档布局模型: Microsoft Visual C++ Redistributable is not installed. Download it at https://aka.ms/vs/17/release/vc_redist.x64.exe
+  0%|          | 0/12 [00:00<?, ?it/s]Model not available, skipping layout detection
+ 17%|█▋        | 2/12 [00:01<00:09,  1.11it/s]Model not available, skipping layout detection
+ 25%|██▌       | 3/12 [00:01<00:05,  1.74it/s]Model not available, skipping layout detection
+ 33%|███▎      | 4/12 [00:02<00:03,  2.33it/s]Model not available, skipping layout detection
+ 42%|████▏     | 5/12 [00:03<00:05,  1.25it/s]Model not available, skipping layout detection
+ 50%|█████     | 6/12 [00:04<00:05,  1.04it/s]Model not available, skipping layout detection
+ 58%|█████▊    | 7/12 [00:04<00:03,  1.46it/s]Model not available, skipping layout detection
+ 67%|██████▋   | 8/12 [00:06<00:03,  1.21it/s]Model not available, skipping layout detection
+ 75%|███████▌  | 9/12 [00:06<00:01,  1.65it/s]Model not available, skipping layout detection
+ 83%|████████▎ | 10/12 [00:06<00:00,  2.20it/s]Model not available, skipping layout detection
+ 92%|█████████▏| 11/12 [00:06<00:00,  2.86it/s]Model not available, skipping layout detection
+100%|██████████| 12/12 [00:07<00:00,  1.69it/s]Model not available, skipping layout detection
+100%|██████████| 12/12 [00:07<00:00,  1.53it/s]
+core\site-packages\pymupdf\__init__.py:276:exception_info(): exception_info:
+core\site-packages\pymupdf\__init__.py:277:exception_info(): Traceback (most recent call last):
+  File "E:\tool\pdf2zh\pdf2zh-desktop-slim\core\site-packages\pymupdf\__init__.py", line 7615, in build_subset
+    fts.main(args)
+  File "E:\tool\pdf2zh\pdf2zh-desktop-slim\core\site-packages\fontTools\misc\loggingTools.py", line 375, in wrapper
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "E:\tool\pdf2zh\pdf2zh-desktop-slim\core\site-packages\fontTools\subset\__init__.py", line 3815, in main
+    save_font(font, outfile, options)
+  File "E:\tool\pdf2zh\pdf2zh-desktop-slim\core\site-packages\fontTools\misc\loggingTools.py", line 375, in wrapper
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "E:\tool\pdf2zh\pdf2zh-desktop-slim\core\site-packages\fontTools\subset\__init__.py", line 3644, in save_font
+    font.save(outfile, reorderTables=options.canonical_order)
+  File "E:\tool\pdf2zh\pdf2zh-desktop-slim\core\site-packages\fontTools\ttLib\ttFont.py", line 248, in save
+    file.write(tmp.getvalue())
+OSError: [Errno 28] No space left on device
+
+EXIT_CODE=0 

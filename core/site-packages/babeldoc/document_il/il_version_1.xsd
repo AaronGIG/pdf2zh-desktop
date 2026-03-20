@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:element name="document">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element maxOccurs="unbounded" ref="page"/>
+      </xs:sequence>
+      <xs:attribute name="totalPages" use="required" type="xs:int"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="page">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="mediabox"/>
+        <xs:element ref="cropbox"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfXobject"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pageLayout"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfRectangle"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfFont"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfParagraph"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfFigure"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfCharacter"/>
+        <xs:element ref="baseOperations"/>
+      </xs:sequence>
+      <xs:attribute name="pageNumber" use="required" type="xs:int"/>
+      <xs:attribute name="Unit" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="mediabox">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="cropbox">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="baseOperations" type="xs:string"/>
+  <xs:element name="box">
+    <xs:complexType>
+      <xs:attribute name="x" use="required" type="xs:float"/>
+      <xs:attribute name="y" use="required" type="xs:float"/>
+      <xs:attribute name="x2" use="required" type="xs:float"/>
+      <xs:attribute name="y2" use="required" type="xs:float"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:simpleType name="PDFXrefId">
+    <xs:restriction base="xs:int"/>
+  </xs:simpleType>
+  <xs:element name="pdfFont">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfFontCharBoundingBox"/>
+      </xs:sequence>
+      <xs:attribute name="name" use="required" type="xs:string"/>
+      <xs:attribute name="fontId" use="required" type="xs:string"/>
+      <xs:attribute name="xrefId" use="required" type="PDFXrefId"/>
+      <xs:attribute name="encodingLength" use="required" type="xs:int"/>
+      <xs:attribute name="bold" type="xs:boolean"/>
+      <xs:attribute name="italic" type="xs:boolean"/>
+      <xs:attribute name="monospace" type="xs:boolean"/>
+      <xs:attribute name="serif" type="xs:boolean"/>
+      <xs:attribute name="ascent" type="xs:float"/>
+      <xs:attribute name="descent" type="xs:float"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfFontCharBoundingBox">
+    <xs:complexType>
+      <xs:attribute name="x" use="required" type="xs:float"/>
+      <xs:attribute name="y" use="required" type="xs:float"/>
+      <xs:attribute name="x2" use="required" type="xs:float"/>
+      <xs:attribute name="y2" use="required" type="xs:float"/>
+      <xs:attribute name="char_id" use="required" type="xs:int"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfXobject">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfFont"/>
+        <xs:element ref="baseOperations"/>
+      </xs:sequence>
+      <xs:attribute name="xobjId" use="required" type="xs:int"/>
+      <xs:attribute name="xrefId" use="required" type="PDFXrefId"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfCharacter">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="pdfStyle"/>
+        <xs:element ref="box"/>
+        <xs:element minOccurs="0" ref="visual_bbox"/>
+      </xs:sequence>
+      <xs:attribute name="vertical" type="xs:boolean"/>
+      <xs:attribute name="scale" type="xs:float"/>
+      <xs:attribute name="pdfCharacterId" type="xs:int"/>
+      <xs:attribute name="char_unicode" use="required" type="xs:string"/>
+      <xs:attribute name="advance" type="xs:float"/>
+      <xs:attribute name="xobjId" type="xs:int"/>
+      <xs:attribute name="debug_info" type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="visual_bbox">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pageLayout">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+      </xs:sequence>
+      <xs:attribute name="id" use="required" type="xs:int"/>
+      <xs:attribute name="conf" use="required" type="xs:float"/>
+      <xs:attribute name="class_name" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="graphicState">
+    <xs:complexType>
+      <xs:attribute name="linewidth" type="xs:float"/>
+      <xs:attribute name="dash">
+        <xs:simpleType>
+          <xs:restriction>
+            <xs:simpleType>
+              <xs:list itemType="xs:float"/>
+            </xs:simpleType>
+            <xs:minLength value="1"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="flatness" type="xs:float"/>
+      <xs:attribute name="intent" type="xs:string"/>
+      <xs:attribute name="linecap" type="xs:int"/>
+      <xs:attribute name="linejoin" type="xs:int"/>
+      <xs:attribute name="miterlimit" type="xs:float"/>
+      <xs:attribute name="ncolor">
+        <xs:simpleType>
+          <xs:restriction>
+            <xs:simpleType>
+              <xs:list itemType="xs:float"/>
+            </xs:simpleType>
+            <xs:minLength value="1"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="scolor">
+        <xs:simpleType>
+          <xs:restriction>
+            <xs:simpleType>
+              <xs:list itemType="xs:float"/>
+            </xs:simpleType>
+            <xs:minLength value="1"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="strokingColorSpaceName" type="xs:string"/>
+      <xs:attribute name="nonStrokingColorSpaceName" type="xs:string"/>
+      <xs:attribute name="passthroughPerCharInstruction" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfStyle">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="graphicState"/>
+      </xs:sequence>
+      <xs:attribute name="font_id" use="required" type="xs:string"/>
+      <xs:attribute name="font_size" use="required" type="xs:float"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfParagraph">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+        <xs:element ref="pdfStyle"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfParagraphComposition"/>
+      </xs:sequence>
+      <xs:attribute name="xobjId" type="xs:int"/>
+      <xs:attribute name="unicode" use="required" type="xs:string"/>
+      <xs:attribute name="scale" type="xs:float"/>
+      <xs:attribute name="vertical" type="xs:boolean"/>
+      <xs:attribute name="FirstLineIndent" type="xs:boolean"/>
+      <xs:attribute name="debug_id" type="xs:string"/>
+      <xs:attribute name="layout_label" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfParagraphComposition">
+    <xs:complexType>
+      <xs:choice>
+        <xs:element ref="pdfLine"/>
+        <xs:element ref="pdfFormula"/>
+        <xs:element ref="pdfSameStyleCharacters"/>
+        <xs:element ref="pdfCharacter"/>
+        <xs:element ref="pdfSameStyleUnicodeCharacters"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfLine">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+        <xs:element maxOccurs="unbounded" ref="pdfCharacter"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfSameStyleCharacters">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+        <xs:element ref="pdfStyle"/>
+        <xs:element maxOccurs="unbounded" ref="pdfCharacter"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfSameStyleUnicodeCharacters">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="pdfStyle"/>
+      </xs:sequence>
+      <xs:attribute name="unicode" use="required" type="xs:string"/>
+      <xs:attribute name="debug_info" type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfFormula">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+        <xs:element maxOccurs="unbounded" ref="pdfCharacter"/>
+      </xs:sequence>
+      <xs:attribute name="x_offset" use="required" type="xs:float"/>
+      <xs:attribute name="y_offset" use="required" type="xs:float"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfFigure">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="pdfRectangle">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="box"/>
+        <xs:element ref="graphicState"/>
+      </xs:sequence>
+      <xs:attribute name="debug_info" type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

@@ -1,0 +1,3 @@
+[console_scripts]
+deepl=deepl.__main__:main
+

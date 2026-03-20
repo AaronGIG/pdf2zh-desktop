@@ -1,0 +1,861 @@
+Metadata-Version: 2.1
+Name: deepl
+Version: 1.22.0
+Summary: Python library for the DeepL API.
+Home-page: https://github.com/DeepLcom/deepl-python
+License: MIT
+Author: DeepL SE
+Author-email: python-api@deepl.com
+Requires-Python: >=3.6.2,<4
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Provides-Extra: keyring
+Requires-Dist: keyring (>=23.4.1,<24.0.0) ; (python_version >= "3.6" and python_version < "4") and (extra == "keyring")
+Requires-Dist: requests (>=2,<3)
+Project-URL: Bug Tracker, https://github.com/DeepLcom/deepl-python/issues
+Project-URL: Documentation, https://www.deepl.com/docs-api/
+Project-URL: Repository, https://github.com/DeepLcom/deepl-python
+Description-Content-Type: text/markdown
+
+# DeepL Python Library
+
+[![PyPI version](https://img.shields.io/pypi/v/deepl.svg)](https://pypi.org/project/deepl/)
+[![Supported Python versions](https://img.shields.io/pypi/pyversions/deepl.svg)](https://pypi.org/project/deepl/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blueviolet.svg)](https://github.com/DeepLcom/deepl-python/blob/main/LICENSE)
+
+The [DeepL API][api-docs] is a language AI API that allows other computer programs
+to send texts and documents to DeepL's servers and receive high-quality
+translations and improvements to the text. This opens a whole universe of
+opportunities for developers: any translation product you can imagine can now
+be built on top of DeepL's best-in-class translation technology.
+
+The DeepL Python library offers a convenient way for applications written in
+Python to interact with the DeepL API. We intend to support all API functions
+with the library, though support for new features may be added to the library
+after they’re added to the API.
+
+## Getting an authentication key
+
+To use the DeepL Python Library, you'll need an API authentication key. To get a
+key, [please create an account here][create-account]. With a DeepL API Free
+account you can consume up to 500,000 characters/month for free.
+
+## Installation
+
+The library can be installed from [PyPI][pypi-project] using pip:
+
+```shell
+pip install --upgrade deepl
+```
+
+If you need to modify this source code, install the dependencies using poetry:
+
+```shell
+poetry install
+```
+
+On Ubuntu 22.04 an error might occur: `ModuleNotFoundError: No module named 
+'cachecontrol'`. Use the workaround `sudo apt install python3-cachecontrol` as
+explained in this [bug report][bug-report-ubuntu-2204].
+
+### Requirements
+
+The library is tested with Python versions 3.6 to 3.11.
+
+The `requests` module is used to perform HTTP requests; the minimum is version
+2.0.
+
+Starting in 2024, we will drop support for older Python versions that have
+reached official end-of-life. You can find the Python versions and support
+timelines [here][python-version-list].
+To continue using this library, you should update to Python 3.8+.
+
+## Usage
+
+Import the package and construct a `DeepLClient`. The first argument is a string
+containing your API authentication key as found in your
+[DeepL Pro Account][pro-account].
+
+Be careful not to expose your key, for example when sharing source code.
+
+```python
+import deepl
+
+auth_key = "f63c02c5-f056-..."  # Replace with your key
+deepl_client = deepl.DeepLClient(auth_key)
+
+result = deepl_client.translate_text("Hello, world!", target_lang="FR")
+print(result.text)  # "Bonjour, le monde !"
+```
+
+This example is for demonstration purposes only. In production code, the
+authentication key should not be hard-coded, but instead fetched from a
+configuration file or environment variable.
+
+`DeepLClient` accepts additional options, see [Configuration](#configuration)
+for more information.
+
+### Translating text
+
+To translate text, call `translate_text()`. The first argument is a string
+containing the text you want to translate, or a list of strings if you want to
+translate multiple texts.
+
+`source_lang` and `target_lang` specify the source and target language codes
+respectively. The `source_lang` is optional, if it is unspecified the source
+language will be auto-detected.
+
+Language codes are **case-insensitive** strings according to ISO 639-1, for
+example `'DE'`, `'FR'`, `'JA''`. Some target languages also include the regional
+variant according to ISO 3166-1, for example `'EN-US'`, or `'PT-BR'`. The full
+list of supported languages is in the
+[API documentation][api-docs-lang-list].
+
+There are additional optional arguments to control translation, see
+[Text translation options](#text-translation-options) below.
+
+`translate_text()` returns a `TextResult`, or a list of `TextResult`s
+corresponding to your input text(s). `TextResult` has the following properties:
+- `text` is the translated text,
+- `detected_source_lang` is the detected source language code,
+- `billed_characters` is the number of characters billed for the translation.
+- `model_type_used` indicates the translation model used, but is `None` unless
+  the `model_type` option is specified. 
+
+```python
+# Translate text into a target language, in this case, French:
+result = deepl_client.translate_text("Hello, world!", target_lang="FR")
+print(result.text)  # "Bonjour, le monde !"
+
+# Translate multiple texts into British English
+result = deepl_client.translate_text(
+    ["お元気ですか？", "¿Cómo estás?"],
+    target_lang="EN-GB",
+)
+print(result[0].text)  # "How are you?"
+print(result[0].detected_source_lang)  # "JA" the language code for Japanese
+print(result[0].billed_characters)  # 7 - the number of characters in the source text "お元気ですか？"
+print(result[1].text)  # "How are you?"
+print(result[1].detected_source_lang)  # "ES" the language code for Spanish
+print(result[1].billed_characters)  # 12 - the number of characters in the source text "¿Cómo estás?"
+
+# Translate into German with less and more Formality:
+print(
+    deepl_client.translate_text(
+        "How are you?", target_lang="DE", formality="less"
+    )
+)  # 'Wie geht es dir?'
+print(
+    deepl_client.translate_text(
+        "How are you?", target_lang="DE", formality="more"
+    )
+)  # 'Wie geht es Ihnen?'
+```
+
+#### Text translation options
+
+In addition to the input text(s) argument, the available `translate_text()`
+arguments are:
+
+- `source_lang`: Specifies the source language code, but may be omitted to
+  auto-detect the source language.
+- `target_lang`: Required. Specifies the target language code.
+- `split_sentences`: specify how input text should be split into sentences,
+  default: `'on'`.
+    - `'on''` (`SplitSentences.ON`): input text will be split into sentences
+      using both newlines and punctuation.
+    - `'off'` (`SplitSentences.OFF`): input text will not be split into
+      sentences. Use this for applications where each input text contains only
+      one sentence.
+    - `'nonewlines'` (`SplitSentences.NO_NEWLINES`): input text will be split
+      into sentences using punctuation but not newlines.
+- `preserve_formatting`: controls automatic-formatting-correction. Set to `True`
+  to prevent automatic-correction of formatting, default: `False`.
+- `formality`: controls whether translations should lean toward informal or
+  formal language. This option is only available for some target languages, see
+  [Listing available languages](#listing-available-languages).
+    - `'less'` (`Formality.LESS`): use informal language.
+    - `'more'` (`Formality.MORE`): use formal, more polite language.
+- `glossary`: specifies a glossary to use with translation, either as a string
+  containing the glossary ID, or a `GlossaryInfo` as returned by
+  `get_glossary()`.
+- `context`: specifies additional context to influence translations, that is not
+  translated itself. Characters in the `context` parameter are not counted toward billing.
+  See the [API documentation][api-docs-context-param] for more information and 
+  example usage.
+- `model_type`: specifies the type of translation model to use, options are:
+  - `'quality_optimized'` (`ModelType.QUALITY_OPTIMIZED`): use a translation
+    model that maximizes translation quality, at the cost of response time. 
+    This option may be unavailable for some language pairs.
+  - `'prefer_quality_optimized'` (`ModelType.PREFER_QUALITY_OPTIMIZED`): use 
+    the highest-quality translation model for the given language pair.
+  - `'latency_optimized'` (`ModelType.LATENCY_OPTIMIZED`): use a translation
+    model that minimizes response time, at the cost of translation quality.
+- `tag_handling`: type of tags to parse before translation, options are `'html'`
+  and `'xml'`.
+
+The following options are only used if `tag_handling` is `'xml'`:
+
+- `outline_detection`: specify `False` to disable automatic tag detection,
+  default is `True`.
+- `splitting_tags`: list of XML tags that should be used to split text into
+  sentences. Tags may be specified as an array of strings (`['tag1', 'tag2']`),
+  or a comma-separated list of strings (`'tag1,tag2'`). The default is an empty
+  list.
+- `non_splitting_tags`: list of XML tags that should not be used to split text
+  into sentences. Format and default are the same as for `splitting_tags`.
+- `ignore_tags`: list of XML tags that containing content that should not be
+  translated. Format and default are the same as for `splitting_tags`.
+
+For a detailed explanation of the XML handling options, see the
+[API documentation][api-docs-xml-handling].
+
+### Improving text (Write API)
+
+You can use the Write API to improve or rephrase text. This is implemented in
+the `rephrase_text()` method. The first argument is a string containing the text
+you want to translate, or a list of strings if you want to translate multiple texts.
+
+`target_lang` optionally specifies the target language, e.g. when you want to change
+the variant of a text (for example, you can send an english text to the write API and
+use `target_lang` to turn it into British or American English). Please note that the
+Write API itself does NOT translate. If you wish to translate and improve a text, you
+will need to make multiple calls in a chain.
+
+Language codes are the same as for translating text.
+
+Example call:
+
+```python
+result = deepl_client.rephrase_text("A rainbouw has seven colours.", target_lang="EN-US")
+print(result.text)
+```
+
+Additionally, you can optionally specify a style OR a tone (not both at once) that the
+improvement should be in. The following styles are supported (`default` will be used if
+nothing is selected):
+
+- `academic`
+- `business`
+- `casual`
+- `default`
+- `simple`
+
+The following tones are supported (`default` will be used if nothing is selected):
+
+- `confident`
+- `default`
+- `diplomatic`
+- `enthusiastic`
+- `friendly`
+
+You can also prefix any non-default style or tone with `prefer_` (`prefer_academic`, etc.),
+in which case the style/tone will only be applied if the language supports it. If you do not
+use `prefer_`, requests with `target_lang`s or detected languages that do not support
+styles and tones will fail. The current list of supported languages can be found in our
+[API documentation][api-docs]. We plan to also expose this information via an API endpoint
+in the future.
+
+You can use the predefined constants in the library to use a style:
+
+```python
+result = deepl_client.rephrase_text(
+    "A rainbouw has seven colours.", target_lang="EN-US", style=WritingStyle.BUSINESS.value
+)
+print(result.text)
+```
+
+### Translating documents
+
+To translate documents, you may call either `translate_document()` using file IO
+objects, or `translate_document_from_filepath()` using file paths. For both
+functions, the first and second arguments correspond to the input and output
+files respectively.
+
+Just as for the `translate_text()` function, the `source_lang` and
+`target_lang` arguments specify the source and target language codes.
+
+There are additional optional arguments to control translation, see
+[Document translation options](#document-translation-options) below.
+
+```python
+# Translate a formal document from English to German
+input_path = "/path/to/Instruction Manual.docx"
+output_path = "/path/to/Bedienungsanleitung.docx"
+try:
+    # Using translate_document_from_filepath() with file paths 
+    deepl_client.translate_document_from_filepath(
+        input_path,
+        output_path,
+        target_lang="DE",
+        formality="more"
+    )
+
+    # Alternatively you can use translate_document() with file IO objects
+    with open(input_path, "rb") as in_file, open(output_path, "wb") as out_file:
+        deepl_client.translate_document(
+            in_file,
+            out_file,
+            target_lang="DE",
+            formality="more"
+        )
+
+except deepl.DocumentTranslationException as error:
+    # If an error occurs during document translation after the document was
+    # already uploaded, a DocumentTranslationException is raised. The
+    # document_handle property contains the document handle that may be used to
+    # later retrieve the document from the server, or contact DeepL support.
+    doc_id = error.document_handle.id
+    doc_key = error.document_handle.key
+    print(f"Error after uploading ${error}, id: ${doc_id} key: ${doc_key}")
+except deepl.DeepLException as error:
+    # Errors during upload raise a DeepLException
+    print(error)
+```
+
+`translate_document()` and `translate_document_from_filepath()` are convenience
+functions that wrap multiple API calls: uploading, polling status until the
+translation is complete, and downloading. If your application needs to execute
+these steps individually, you can instead use the following functions directly:
+
+- `translate_document_upload()`,
+- `translate_document_get_status()` (or
+  `translate_document_wait_until_done()`), and
+- `translate_document_download()`
+
+#### Document translation options
+
+In addition to the input file, output file, `source_lang` and `target_lang`
+arguments, the available `translate_document()` and
+`translate_document_from_filepath()` arguments are:
+
+- `formality`: same as in [Text translation options](#text-translation-options).
+- `glossary`: same as in [Text translation options](#text-translation-options).
+- `output_format`: (`translate_document()` only)
+  file extension of desired format of translated file, for example: `'pdf'`. If
+  unspecified, by default the translated file will be in the same format as the
+  input file. 
+
+### Glossaries
+
+Glossaries allow you to customize your translations using user-defined terms.
+Multiple glossaries can be stored with your account, each with a user-specified
+name and a uniquely-assigned ID.
+
+#### v2 versus v3 glossary APIs
+
+The newest version of the glossary APIs are the `/v3` endpoints, allowing both
+editing functionality plus support for multilingual glossaries. New methods and
+objects have been created to support interacting with these new glossaries. 
+Due to this  new functionality, users are recommended to utilize these 
+multilingual glossary methods. However, to continue using the `v2` glossary API 
+endpoints, please continue to use the existing endpoints in the `translator.py` 
+(e.g. `create_glossary()`, `get_glossary()`, etc).
+
+To migrate to use the new multilingual glossary methods from the current 
+monolingual glossary methods, please refer to 
+[this migration guide](upgrade_to_multilingual_glossaries.md).
+
+The following sections describe how to interact with multilingual glossaries 
+using the new functionality:
+
+#### Creating a glossary
+
+You can create a multi-lingual glossary with your desired terms and name using
+`create_multilingual_glossary()`. Glossaries created via the /v3 endpoints can now 
+support multiple source-target language pairs. Note: Glossaries are only 
+supported for some language pairs, see
+[Listing available glossary languages](#listing-available-glossary-languages)
+for more information. The entries should be specified as a dictionary.
+
+If successful, the glossary is created and stored with your DeepL account, and
+a `MultilingualGlossaryInfo` object is returned including the ID, name, and glossary
+dictionaries. The glossary dictionaries would be an array of 
+`MultilingualGlossaryDictionaryInfo` objects, each containing its own languages and 
+entry count.
+
+```python
+# Create a glossary with an English to German dictionary containing two terms:
+entries = {"artist": "Maler", "prize": "Gewinn"}
+dictionaries = [MultilingualGlossaryDictionaryEntries("EN", "DE", entries)]
+my_glossary = deepl_client.create_multilingual_glossary(
+    "My glossary",
+    dictionaries
+)
+my_glossary_dict = my_glossary.dictionaries[0]
+print(
+    f"Created '{my_glossary.name}' ({my_glossary.glossary_id}) "
+    f"with {len(my_glossary.dictionaries)} dictionary where "
+    f"its language pair is {my_glossary_dict.source_lang}->"
+    f"{my_glossary_dict.target_lang} containing "
+    f"{my_glossary.entry_count} entries"
+)
+# Example: Created 'My glossary' (559192ed-8e23-...) with 1 dictionary where
+# its language pair is EN->DE containing 2 entries
+```
+
+You can also upload a glossary downloaded from the DeepL website using
+`create_multilingual_glossary_from_csv()`. Instead of supplying the entries as a 
+dictionary within a MultilingualGlossaryDictionaryEntries object, you can specify 
+the CSV data as `csv_data` either as a file-like object or string or bytes 
+containing file content:
+
+```python
+# Open the CSV file assuming UTF-8 encoding. If your file contains a BOM,
+# consider using encoding='utf-8-sig' instead.
+with open('/path/to/glossary_file.csv', 'r',  encoding='utf-8') as csv_file:
+    csv_data = csv_file.read()  # Read the file contents as a string
+    my_csv_glossary = deepl_client.create_multilingual_glossary_from_csv(
+        "CSV glossary",
+        source_lang="EN",
+        target_lang="DE",
+        csv_data=csv_data,
+    )
+```
+
+The [API documentation][api-docs-csv-format] explains the expected CSV format in
+detail.
+
+#### Getting, listing, and deleting stored glossaries
+
+Functions to get, list, and delete stored glossaries are also provided:
+
+- `get_multilingual_glossary()` takes a glossary ID and returns a 
+  `MultilingualGlossaryInfo` object for a stored glossary, or raises an 
+  exception if no such glossary is found.
+- `list_multilingual_glossaries()` returns a list of `MultilingualGlossaryInfo` objects 
+  corresponding to all of your stored glossaries.
+- `delete_multilingual_glossary()` takes a glossary ID or `MultilingualGlossaryInfo` 
+  object and deletes the stored glossary from the server, or raises an 
+  exception if no such glossary is found.
+- `delete_multilingual_glossary_dictionary()` takes a glossary ID or `GlossaryInfo` object to 
+  identify the glossary. Additionally takes in a source and target language or a 
+  `MultilingualGlossaryDictionaryInfo` object and deletes the stored dictionary
+   from the server, or raises an exception if no such glossary dictionary is found.
+
+```python
+# Retrieve a stored glossary using the ID
+glossary_id = "559192ed-8e23-..."
+my_glossary = deepl_client.get_multilingual_glossary(glossary_id)
+
+# Delete a glossary dictionary from a stored glossary
+deepl_client.delete_multilingual_glossary_dictionary(my_glossary, my_glossary.dictionaries[0])
+
+# Find and delete glossaries named 'Old glossary'
+glossaries = deepl_client.list_multilingual_glossaries()
+for glossary in glossaries:
+    if glossary.name == "Old glossary":
+        deepl_client.delete_multilingual_glossary(glossary)
+```
+
+#### Listing entries in a stored glossary
+
+The `MultilingualGlossaryInfo` object does not contain the glossary entries, but
+instead only the number of entries in the `entry_count` property.
+
+To list the entries contained within a stored glossary, use
+`get_multilingual_glossary_entries()` providing either the `MultilingualGlossaryInfo` object or glossary
+ID and either a `MultilingualGlossaryDictionaryInfo` or source and target language pair:
+
+```python
+entries = deepl_client.get_multilingual_glossary_entries(my_glossary, "EN", "DE")
+print(entries.dictionaries[0])  # "{'artist': 'Maler', 'prize': 'Gewinn'}"
+```
+
+#### Editing a glossary
+
+Functions to edit stored glossaries are also provided:
+
+- `update_multilingual_glossary_dictionary()` takes a glossary ID or `MultilingualGlossaryInfo`
+  object, plus a source language, target language, and a dictionary of entries.
+  It will then either update the list of entries for that dictionary (either 
+  inserting new entires or replacing the target phrase for any existing 
+  entries) or will insert a new glossary dictionary if that language pair is 
+  not currently in the stored glossary.
+- `replace_multilingual_glossary_dictionary()` takes a glossary ID or `MultilingualGlossaryInfo`
+  object, plus a source language, target language, and a dictionary of entries.
+  It will then either set the entries to the parameter value, completely 
+  replacing any pre-existing entries for that language pair.
+- `update_multilingual_glossary_name()` takes a glossary ID or `MultilingualGlossaryInfo`
+  object, plus the new name of the glossary. 
+
+```python
+# Update glossary dictionary
+entries = {"artist": "Maler", "hello": "guten tag"}
+dictionaries = [MultilingualGlossaryDictionaryEntries("EN", "DE", entries)]
+my_glossary = deepl_client.create_multilingual_glossary(
+    "My glossary",
+    dictionaries
+)
+new_entries = {"hello": "hallo", "prize": "Gewinn"}
+glossary_dict = MultilingualGlossaryDictionaryEntries("EN", "DE", new_entries)
+updated_glossary = deepl_client.update_multilingual_glossary_dictionary(
+    my_glossary,
+    glossary_dict
+)
+
+entries_response = deepl_client.get_multilingual_glossary_entries(my_glossary, "EN", "DE")
+print(entries_response.dictionaries[0])  # "{'artist': 'Maler', 'hello': 'hallo', 'prize': 'Gewinn'}"
+
+# Update a glossary dictionary from CSV
+# Open the CSV file assuming UTF-8 encoding. If your file contains a BOM,
+# consider using encoding='utf-8-sig' instead.
+with open('/path/to/glossary_file.csv', 'r',  encoding='utf-8') as csv_file:
+    csv_data = csv_file.read()  # Read the file contents as a string
+    my_csv_glossary = deepl_client.update_multilingual_glossary_dictionary_from_csv(
+        glossary="4c81ffb4-2e...",
+        source_lang="EN",
+        target_lang="DE",
+        csv_data=csv_data,
+    )
+
+# Replace glossary dictionary
+replacement_entries = {"goodbye": "Auf Wiedersehen"}
+glossary_dict = MultilingualGlossaryDictionaryEntries("EN", "DE", replacement_entries)
+updated_glossary = deepl_client.replace_multilingual_glossary_dictionary(
+  my_glossary,
+  glossary_dict)
+entries_response = deepl_client.get_multilingual_glossary_entries(my_glossary, "EN", "DE")
+print(entries_response.dictionaries[0])  # "{'goodbye': 'Auf Wiedersehen'}"
+
+# Replace a glossary dictionary from CSV
+# Open the CSV file assuming UTF-8 encoding. If your file contains a BOM,
+# consider using encoding='utf-8-sig' instead.
+with open('/path/to/glossary_file.csv', 'r',  encoding='utf-8') as csv_file:
+    csv_data = csv_file.read()  # Read the file contents as a string
+    my_csv_glossary = deepl_client.replace_multilingual_glossary_dictionary_from_csv(
+        glossary="4c81ffb4-2e...",
+        source_lang="EN",
+        target_lang="DE",
+        csv_data=csv_data,
+    )
+
+# Update the glossary name
+updated_glossary = deepl_client.update_multilingual_glossary_name(
+  my_glossary,
+  "My new glossary name"
+)
+print(updated_glossary.name) # 'My new glossary name'
+```
+
+#### Using a stored glossary
+
+You can use a stored glossary for text translation by setting the `glossary`
+argument to either the glossary ID or `GlossaryInfo`/`MultilingualGlossaryInfo` object.
+You must also specify the `source_lang` argument (it is required when using a
+glossary):
+
+```python
+text = "The artist was awarded a prize."
+with_glossary = deepl_client.translate_text(
+    text, source_lang="EN", target_lang="DE", glossary=my_glossary,
+)
+print(with_glossary)  # "Der Maler wurde mit einem Gewinn ausgezeichnet."
+
+# For comparison, the result without a glossary:
+without_glossary = deepl_client.translate_text(text, target_lang="DE")
+print(without_glossary)  # "Der Künstler wurde mit einem Preis ausgezeichnet."
+```
+
+Using a stored glossary for document translation is the same: set the `glossary`
+argument and specify the `source_lang` argument:
+
+```python
+deepl_client.translate_document(
+    in_file, out_file, source_lang="EN", target_lang="DE", glossary=my_glossary,
+)
+```
+
+The `translate_document()`, `translate_document_from_filepath()` and
+`translate_document_upload()` functions all support the `glossary` argument.
+
+### Checking account usage
+
+To check account usage, use the `get_usage()` function.
+
+The returned `Usage` object contains three usage subtypes: `character`,
+`document` and `team_document`. Depending on your account type, some usage
+subtypes may be invalid; this can be checked using the `valid` property. For API
+accounts:
+
+- `usage.character.valid` is `True`,
+- `usage.document.valid` and `usage.team_document.valid` are `False`.
+
+Each usage subtype (if valid) has `count` and `limit` properties giving the
+amount used and maximum amount respectively, and the `limit_reached` property
+that checks if the usage has reached the limit. The top level `Usage` object has
+the `any_limit_reached` property to check all usage subtypes.
+
+```python
+usage = deepl_client.get_usage()
+if usage.any_limit_reached:
+    print('Translation limit reached.')
+if usage.character.valid:
+    print(
+        f"Character usage: {usage.character.count} of {usage.character.limit}")
+if usage.document.valid:
+    print(f"Document usage: {usage.document.count} of {usage.document.limit}")
+```
+
+### Listing available languages
+
+You can request the list of languages supported by DeepL for text and documents
+using the `get_source_languages()` and `get_target_languages()` functions. They
+both return a list of `Language` objects.
+
+The `name` property gives the name of the language in English, and the `code`
+property gives the language code. The `supports_formality` property only appears
+for target languages, and indicates whether the target language supports the
+optional `formality` parameter.
+
+```python
+print("Source languages:")
+for language in deepl_client.get_source_languages():
+    print(f"{language.name} ({language.code})")  # Example: "German (DE)"
+
+print("Target languages:")
+for language in deepl_client.get_target_languages():
+    if language.supports_formality:
+        print(f"{language.name} ({language.code}) supports formality")
+        # Example: "Italian (IT) supports formality"
+    else:
+        print(f"{language.name} ({language.code})")
+        # Example: "Lithuanian (LT)"
+```
+
+#### Listing available glossary languages
+
+Glossaries are supported for a subset of language pairs. To retrieve those
+languages use the `get_glossary_languages()` function, which returns an array
+of `GlossaryLanguagePair` objects. Each has `source_lang` and `target_lang`
+properties indicating that that pair of language codes is supported.
+
+```python
+glossary_languages = deepl_client.get_glossary_languages()
+for language_pair in glossary_languages:
+    print(f"{language_pair.source_lang} to {language_pair.target_lang}")
+    # Example: "EN to DE", "DE to EN", etc.
+```
+
+You can also find the list of supported glossary language pairs in the
+[API documentation][api-docs-glossary-lang-list].
+
+Note that glossaries work for all target regional-variants: a glossary for the
+target language English (`"EN"`) supports translations to both American English
+(`"EN-US"`) and British English (`"EN-GB"`).
+
+### Writing a Plugin
+
+If you use this library in an application, please identify the application with
+`deepl.DeepLClient.set_app_info`, which needs the name and version of the app:
+
+```python
+deepl_client = deepl.DeepLClient(...).set_app_info("sample_python_plugin", "1.0.2")
+```
+
+This information is passed along when the library makes calls to the DeepL API.
+Both name and version are required. Please note that setting the `User-Agent` header
+via `deepl.http_client.user_agent` will override this setting, if you need to use this,
+please manually identify your Application in the `User-Agent` header.
+
+### Exceptions
+
+All module functions may raise `deepl.DeepLException` or one of its subclasses.
+If invalid arguments are provided, they may raise the standard exceptions
+`ValueError` and `TypeError`.
+
+### Configuration
+
+#### Logging
+
+Logging can be enabled to see the HTTP requests sent and responses received by
+the library. Enable and control logging using Python's `logging` module, for
+example:
+
+```python
+import logging
+
+logging.basicConfig()
+logging.getLogger('deepl').setLevel(logging.DEBUG)
+```
+
+#### Server URL configuration
+
+You can override the URL of the DeepL API by specifying the `server_url`
+argument when constructing a `deepl.DeepLClient`. This may be useful for testing
+purposes. You **do not** need to specify the URL to distinguish API Free and API
+Pro accounts, the library selects the correct URL automatically.
+
+```python
+server_url = "http://user:pass@localhost:3000"
+deepl_client = deepl.DeepLClient(..., server_url=server_url)
+```
+
+#### Proxy configuration
+
+You can configure a proxy by specifying the `proxy` argument when constructing a
+`deepl.DeepLClient`:
+
+```python
+proxy = "http://user:pass@10.10.1.10:3128"
+deepl_client = deepl.DeepLClient(..., proxy=proxy)
+```
+
+The proxy argument is passed to the underlying `requests` session, see the
+[documentation for requests][requests-proxy-docs]; a dictionary of schemes to
+proxy URLs is also accepted.
+
+#### Override SSL verification
+
+You can control how `requests` performs SSL verification by specifying the 
+`verify_ssl` option when constructing a `deepl.DeepLClient`, for example to
+disable SSL certificate verification:
+
+```python
+deepl_client = deepl.DeepLClient(..., verify_ssl=False)
+```
+
+This option is passed to the underlying `requests` session as the `verify`
+option, see the [documentation for requests][requests-verify-ssl-docs].
+
+#### Configure automatic retries
+
+This SDK will automatically retry failed HTTP requests (if the failures could
+be transient, e.g. a HTTP 429 status code). This behaviour can be configured
+in `http_client.py`, for example by default the number of retries is 5. This
+can be changed to 3 as follows:
+
+```python
+import deepl
+
+deepl.http_client.max_network_retries = 3
+c = deepl.DeepLClient(...)
+c.translate_text(...)
+```
+
+You can configure the timeout `min_connection_timeout` the same way, as well
+as set a custom `user_agent`, see the next section.
+
+#### Anonymous platform information
+
+By default, we send some basic information about the platform the client library is running on with each request, see [here for an explanation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent). This data is completely anonymous and only used to improve our product, not track any individual users. If you do not wish to send this data, you can opt-out when creating your `deepl.DeepLClient` object by setting the `send_platform_info` flag like so:
+
+```python
+deepl_client = deepl.DeepLClient(..., send_platform_info=False)
+```
+
+You can also customize the `user_agent` by setting its value explicitly before constructing your `deepl.DeepLClient` object.
+
+```python
+deepl.http_client.user_agent = 'my custom user agent'
+deepl_client = deepl.DeepLClient(os.environ["DEEPL_AUTH_KEY"])
+```
+
+## Command Line Interface
+
+The library can be run on the command line supporting all API functions. Use the
+`--help` option for usage information:
+
+```shell
+python3 -m deepl --help
+```
+
+The CLI requires your DeepL authentication key specified either as the
+`DEEPL_AUTH_KEY` environment variable, through the `keyring` module, or
+using the `--auth-key` option, for example:
+
+```shell
+python3 -m deepl --auth-key=YOUR_AUTH_KEY usage
+```
+
+Note that the `--auth-key` argument must appear *before* the command argument.
+To use the [keyring](https://pypi.org/project/keyring/) module, set the 
+*DEEPL_AUTH_KEY* field in the service *deepl* to your API key.
+The recognized commands are:
+
+| Command   | Description                                            |
+| :-------- | :----------------------------------------------------- |
+| text      | translate text(s)                                      |
+| document  | translate document(s)                                  |
+| usage     | print usage information for the current billing period |
+| languages | print available languages                              |
+| glossary  | create, list, and remove glossaries                    |
+
+For example, to translate text:
+
+```shell
+python3 -m deepl --auth-key=YOUR_AUTH_KEY text --to=DE "Text to be translated."
+```
+
+Wrap text arguments in quotes to prevent the shell from splitting sentences into
+words.
+
+## Issues
+
+If you experience problems using the library, or would like to request a new
+feature, please open an [issue][issues].
+
+## Development
+
+We welcome Pull Requests, please read the
+[contributing guidelines](CONTRIBUTING.md).
+
+### Tests
+
+Execute the tests using `pytest`. The tests communicate with the DeepL API using
+the auth key defined by the `DEEPL_AUTH_KEY` environment variable.
+
+Be aware that the tests make DeepL API requests that contribute toward your API
+usage.
+
+The test suite may instead be configured to communicate with the mock-server
+provided by [deepl-mock][deepl-mock]. Although most test cases work for either,
+some test cases work only with the DeepL API or the mock-server and will be
+otherwise skipped. The test cases that require the mock-server trigger server
+errors and test the client error-handling. To execute the tests using
+deepl-mock, run it in another terminal while executing the tests. Execute the
+tests using `pytest` with the `DEEPL_MOCK_SERVER_PORT` and `DEEPL_SERVER_URL`
+environment variables defined referring to the mock-server.
+
+[api-docs]: https://www.deepl.com/docs-api?utm_source=github&utm_medium=github-python-readme
+
+[api-docs-csv-format]: https://www.deepl.com/docs-api/managing-glossaries/supported-glossary-formats/?utm_source=github&utm_medium=github-python-readme
+
+[api-docs-xml-handling]: https://www.deepl.com/docs-api/handling-xml/?utm_source=github&utm_medium=github-python-readme
+
+[api-docs-context-param]: https://www.deepl.com/docs-api/translating-text/?utm_source=github&utm_medium=github-python-readme
+
+[api-docs-lang-list]: https://www.deepl.com/docs-api/translating-text/?utm_source=github&utm_medium=github-python-readme
+
+[api-docs-glossary-lang-list]: https://www.deepl.com/docs-api/managing-glossaries/?utm_source=github&utm_medium=github-python-readme
+
+[bug-report-ubuntu-2204]: https://bugs.launchpad.net/ubuntu/+source/poetry/+bug/1958227
+
+[create-account]: https://www.deepl.com/pro?utm_source=github&utm_medium=github-python-readme#developer
+
+[deepl-mock]: https://www.github.com/DeepLcom/deepl-mock
+
+[issues]: https://www.github.com/DeepLcom/deepl-python/issues
+
+[pypi-project]: https://pypi.org/project/deepl/
+
+[pro-account]: https://www.deepl.com/pro-account/?utm_source=github&utm_medium=github-python-readme
+
+[python-version-list]: https://devguide.python.org/versions/
+
+[requests-proxy-docs]: https://docs.python-requests.org/en/latest/user/advanced/#proxies
+
+[requests-verify-ssl-docs]: https://docs.python-requests.org/en/latest/user/advanced/#ssl-cert-verification
+

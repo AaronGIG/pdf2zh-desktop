@@ -1,0 +1,69 @@
+{
+  "modules": {
+    "core": {
+      "name": "核心模块",
+      "version": "1.9.9",
+      "size": "80MB",
+      "required": true,
+      "components": [
+        "python_runtime",
+        "pdf2zh_core",
+        "pyqt5_gui",
+        "basic_translators"
+      ]
+    },
+    "models": {
+      "name": "AI模型包",
+      "version": "1.0.0",
+      "size": "200MB",
+      "required": false,
+      "auto_download": true,
+      "components": [
+        "document_layout_model",
+        "ocr_models",
+        "font_detection"
+      ]
+    },
+    "translators_extended": {
+      "name": "扩展翻译服务",
+      "version": "1.0.0",
+      "size": "20MB",
+      "required": false,
+      "components": [
+        "openai_translator",
+        "deepl_translator",
+        "azure_translator",
+        "ollama_translator"
+      ]
+    },
+    "advanced_features": {
+      "name": "高级功能",
+      "version": "1.0.0",
+      "size": "50MB",
+      "required": false,
+      "components": [
+        "batch_processing",
+        "cloud_sync",
+        "advanced_ocr",
+        "custom_fonts"
+      ]
+    }
+  },
+  "dependencies": {
+    "core": [],
+    "models": ["core"],
+    "translators_extended": ["core"],
+    "advanced_features": ["core", "models"]
+  },
+  "download_sources": {
+    "primary": "https://github.com/your-username/pdf2zh-desktop/releases",
+    "mirror": "https://gitee.com/your-username/pdf2zh-desktop/releases",
+    "cdn": "https://cdn.example.com/pdf2zh-desktop"
+  },
+  "update_policy": {
+    "check_interval": "24h",
+    "auto_update_core": false,
+    "auto_update_models": true,
+    "beta_channel": false
+  }
+}

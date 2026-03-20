@@ -1,0 +1,52 @@
+{
+  "app": {
+    "name": "pdf2zh 桌面版",
+    "version": "1.9.9",
+    "build": "slim",
+    "author": "pdf2zh Desktop Contributors"
+  },
+  "runtime": {
+    "python_version": "3.12",
+    "architecture": "x64",
+    "embedded": true
+  },
+  "features": {
+    "core_translation": true,
+    "pdf_preview": true,
+    "batch_processing": true,
+    "cache_system": true,
+    "auto_update": true
+  },
+  "modules": {
+    "required": [
+      "pdf2zh.core",
+      "pdf2zh.gui_pyqt5",
+      "pdf2zh.translator",
+      "pdf2zh.converter"
+    ],
+    "optional": [
+      "pdf2zh.ocr",
+      "pdf2zh.advanced_layout",
+      "pdf2zh.cloud_sync"
+    ]
+  },
+  "translators": {
+    "free": ["Google", "Bing"],
+    "paid": ["OpenAI", "DeepL", "Azure"],
+    "local": ["Ollama"]
+  },
+  "paths": {
+    "core": "./core",
+    "config": "./config",
+    "plugins": "./plugins",
+    "cache": "./cache",
+    "assets": "./assets",
+    "output": "./pdf2zh_files"
+  },
+  "optimization": {
+    "lazy_loading": true,
+    "memory_limit": "512MB",
+    "cache_size": "100MB",
+    "preload_models": false
+  }
+}

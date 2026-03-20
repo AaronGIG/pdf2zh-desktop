@@ -1,0 +1,2 @@
+Version: 1.10.0
+Arguments: ['C:\\Users\\runneradmin\\AppData\\Local\\Temp\\cibw-run-fcs7gyw9\\cp312-win_amd64\\build\\venv\\Scripts\\delvewheel', 'repair', '--add-path', 'D:\\a\\_temp\\geos-3.13.1\\bin', '-w', 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\cibw-run-fcs7gyw9\\cp312-win_amd64\\repaired_wheel', 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\cibw-run-fcs7gyw9\\cp312-win_amd64\\built_wheel\\shapely-2.1.0-cp312-cp312-win_amd64.whl']

@@ -1,0 +1,84 @@
+Metadata-Version: 2.1
+Name: xinference-client
+Version: 1.5.1
+Summary: Client for Xinference
+Home-page: https://github.com/xorbitsai/inference-client
+Author: Qin Xuye
+Author-email: qinxuye@xprobe.io
+Maintainer: Qin Xuye
+Maintainer-email: qinxuye@xprobe.io
+License: Apache License 2.0
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Topic :: Software Development :: Libraries
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests
+Requires-Dist: typing-extensions
+Requires-Dist: pydantic
+Provides-Extra: dev
+Requires-Dist: cython>=0.29; extra == "dev"
+Requires-Dist: pytest>=3.5.0; extra == "dev"
+Requires-Dist: pytest-cov>=2.5.0; extra == "dev"
+Requires-Dist: pytest-timeout>=1.2.0; extra == "dev"
+Requires-Dist: pytest-forked>=1.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.14.0; extra == "dev"
+Requires-Dist: pytest-mock>=3.11.1; extra == "dev"
+Requires-Dist: ipython>=6.5.0; extra == "dev"
+Requires-Dist: flake8>=3.8.0; extra == "dev"
+Requires-Dist: black; extra == "dev"
+
+# Xinference Restful Client
+Xinference provides a restful client for managing and accessing models programmatically.
+
+## Install
+```shell
+pip install xinference-client
+```
+
+## Usage
+```python
+from xinference_client import RESTfulClient as Client
+
+client = Client("http://localhost:9997")
+model_uid = client.launch_model(model_name="chatglm2")
+model = client.get_model(model_uid)
+
+chat_history = []
+prompt = "What is the largest animal?"
+model.chat(
+    prompt,
+    chat_history=chat_history,
+    generate_config={"max_tokens": 1024}
+)
+```
+Result:
+```json
+{
+  "id": "chatcmpl-8d76b65a-bad0-42ef-912d-4a0533d90d61",
+  "model": "56f69622-1e73-11ee-a3bd-9af9f16816c6",
+  "object": "chat.completion",
+  "created": 1688919187,
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The largest animal that has been scientifically measured is the blue whale, which has a maximum length of around 23 meters (75 feet) for adult animals and can weigh up to 150,000 pounds (68,000 kg). However, it is important to note that this is just an estimate and that the largest animal known to science may be larger still. Some scientists believe that the largest animals may not have a clear \"size\" in the same way that humans do, as their size can vary depending on the environment and the stage of their life."
+      },
+      "finish_reason": "None"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": -1,
+    "completion_tokens": -1,
+    "total_tokens": -1
+  }
+}
+```

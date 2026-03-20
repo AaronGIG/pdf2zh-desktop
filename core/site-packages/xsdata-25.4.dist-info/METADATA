@@ -1,0 +1,146 @@
+Metadata-Version: 2.4
+Name: xsdata
+Version: 25.4
+Summary: Python XML Binding
+Author-email: Christodoulos Tsoulloftas <chris@komposta.net>
+License: MIT
+Project-URL: Homepage, https://github.com/tefra/xsdata
+Project-URL: Source, https://github.com/tefra/xsdata
+Project-URL: Documentation, https://xsdata.readthedocs.io/
+Project-URL: Changelog, https://xsdata.readthedocs.io/en/latest/changelog/
+Keywords: xsd,wsdl,schema,dtd,binding,xml,json,dataclasses,generator,cli
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Classifier: Topic :: Software Development :: Code Generators
+Classifier: Topic :: Text Processing :: Markup :: XML
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: typing-extensions>=4.7.0
+Provides-Extra: cli
+Requires-Dist: click>=5.0; extra == "cli"
+Requires-Dist: click-default-group>=1.2; extra == "cli"
+Requires-Dist: docformatter>=1.7.2; extra == "cli"
+Requires-Dist: jinja2>=2.10; extra == "cli"
+Requires-Dist: toposort>=1.5; extra == "cli"
+Requires-Dist: ruff>=0.9.8; extra == "cli"
+Provides-Extra: docs
+Requires-Dist: mkdocs; extra == "docs"
+Requires-Dist: mkdocs-gen-files; extra == "docs"
+Requires-Dist: mkdocs-literate-nav; extra == "docs"
+Requires-Dist: mkdocs-material; extra == "docs"
+Requires-Dist: mkdocs-minify-plugin; extra == "docs"
+Requires-Dist: mkdocstrings[python]; extra == "docs"
+Requires-Dist: markdown-exec[ansi]; extra == "docs"
+Requires-Dist: pymdownx-superfence-filter-lines; extra == "docs"
+Provides-Extra: lxml
+Requires-Dist: lxml>=4.5.0; extra == "lxml"
+Provides-Extra: soap
+Requires-Dist: requests; extra == "soap"
+Provides-Extra: test
+Requires-Dist: pre-commit; extra == "test"
+Requires-Dist: pytest; extra == "test"
+Requires-Dist: pytest-benchmark; extra == "test"
+Requires-Dist: pytest-cov; extra == "test"
+Dynamic: license-file
+
+[![image](https://github.com/tefra/xsdata/raw/main/docs/logo.svg)](https://xsdata.readthedocs.io/)
+
+# Naive XML Bindings for python
+
+[![image](https://github.com/tefra/xsdata/workflows/tests/badge.svg)](https://github.com/tefra/xsdata/actions)
+[![image](https://readthedocs.org/projects/xsdata/badge)](https://xsdata.readthedocs.io/)
+[![image](https://codecov.io/gh/tefra/xsdata/branch/main/graph/badge.svg)](https://codecov.io/gh/tefra/xsdata)
+[![image](https://www.codefactor.io/repository/github/tefra/xsdata/badge)](https://www.codefactor.io/repository/github/tefra/xsdata)
+[![image](https://img.shields.io/pypi/pyversions/xsdata.svg)](https://pypi.org/pypi/xsdata/)
+[![image](https://img.shields.io/pypi/v/xsdata.svg)](https://pypi.org/pypi/xsdata/)
+
+---
+
+xsData is a complete data binding library for python allowing developers to access and
+use XML and JSON documents as simple objects rather than using DOM.
+
+The code generator supports XML schemas, DTD, WSDL definitions, XML & JSON documents. It
+produces simple dataclasses with type hints and simple binding metadata.
+
+The included XML and JSON parser/serializer are highly optimized and adaptable, with
+multiple handlers and configuration properties.
+
+xsData is constantly tested against the
+[W3C XML Schema 1.1 test suite](https://github.com/tefra/xsdata-w3c-tests).
+
+## Getting started
+
+```console
+$ # Install all dependencies
+$ pip install xsdata[cli,lxml,soap]
+```
+
+```console
+$ # Generate models
+$ xsdata generate tests/fixtures/primer/order.xsd --package tests.fixtures.primer
+```
+
+```python
+>>> from tests.fixtures.primer import PurchaseOrder
+>>> from xsdata.formats.dataclass.parsers import XmlParser
+>>>
+>>> parser = XmlParser()
+>>> order = parser.parse("tests/fixtures/primer/sample.xml", PurchaseOrder)
+>>> order.bill_to
+Usaddress(name='Robert Smith', street='8 Oak Avenue', city='Old Town', state='PA', zip=Decimal('95819'), country='US')
+```
+
+Check the [documentation](https://xsdata.readthedocs.io) for more ✨✨✨
+
+## Features
+
+**Code Generator**
+
+- XML Schemas 1.0 & 1.1
+- WSDL 1.1 definitions with SOAP 1.1 bindings
+- DTD external definitions
+- Directly from XML and JSON Documents
+- Extensive configuration to customize output
+- Pluggable code writer for custom output formats
+
+**Default Output**
+
+- Pure python dataclasses with metadata
+- Type hints with support for forward references and unions
+- Enumerations and inner classes
+- Support namespace qualified elements and attributes
+
+**Data Binding**
+
+- XML and JSON parser, serializer
+- PyCode serializer
+- Handlers and Writers based on lxml and native xml python
+- Support wildcard elements and attributes
+- Support xinclude statements and unknown properties
+- Customize behaviour through config
+
+## Changelog: 25.4 (2025-04-13)
+
+**Features**
+
+- Allow extensions to match module paths
+  ([#1132](https://github.com/tefra/xsdata/pull/1132))
+
+- Improve duplicate class names detection and resolution
+  ([#1127](https://github.com/tefra/xsdata/pull/1127))
+
+**Fixes**
+
+- Resolve Code Quality Issue

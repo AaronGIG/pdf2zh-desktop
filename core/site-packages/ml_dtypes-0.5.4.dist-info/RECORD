@@ -1,0 +1,11 @@
+ml_dtypes/__init__.py,sha256=RkCOAwQBqfF1sQwVzAVw9ZMfSMMUhyc90DiJ6VwgNjU,2434
+ml_dtypes/_finfo.py,sha256=0tD0p8H6cXQ_3-tVPln4gCkxCqggs7teuG7KRA_cVQo,23619
+ml_dtypes/_iinfo.py,sha256=il9ONlgDbzJeV2vVlnSRhwut4WQ7LxXmsYWNTgiL4-o,2100
+ml_dtypes/_ml_dtypes_ext.cp312-win_amd64.pyd,sha256=SUhJXyRnjDW4jtt9SEVyzXrGON1zshQHdvUBtvFI34E,818176
+ml_dtypes/py.typed,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+ml_dtypes-0.5.4.dist-info/licenses/LICENSE,sha256=Pd-b5cKP4n2tFDpdx27qJSIq0d1ok0oEcGTlbtL6QMU,11560
+ml_dtypes-0.5.4.dist-info/licenses/LICENSE.eigen,sha256=kiHC-TYVm4RG0ykkn7TA8lvlEPRHODoPEzNqx5hWaKM,17099
+ml_dtypes-0.5.4.dist-info/METADATA,sha256=mrYb9GdGPuTXPvFz_GxWp_n_WYKT7DpYlSGroL0OSLU,9176
+ml_dtypes-0.5.4.dist-info/WHEEL,sha256=8UP9x9puWI0P1V_d7K2oMTBqfeLNm21CTzZ_Ptr0NXU,101
+ml_dtypes-0.5.4.dist-info/top_level.txt,sha256=meeeNkM1LLmTU5q_0ssFs21A_42VAoES24ntCrPqASw,10
+ml_dtypes-0.5.4.dist-info/RECORD,,
