@@ -9,6 +9,13 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 
+# pythonw.exe 没有控制台，sys.stdout/stderr 为 None，
+# 会导致 tqdm 等库写入时崩溃 (AttributeError: 'NoneType' object has no attribute 'write')
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 APP_DIR = Path(__file__).parent
 LOG_DIR = APP_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -45,17 +52,68 @@ def show_error_dialog(title: str, message: str):
             pass
 
 
+def preload_onnxruntime():
+    """在 PyQt5 之前预加载 OnnxRuntime，避免 DLL 搜索路径冲突。
+
+    PyQt5 会修改 Windows DLL 搜索路径，导致 OnnxRuntime 的
+    onnxruntime_pybind11_state.pyd 无法找到 VC++ DLL 而加载失败。
+    必须在任何 PyQt5 导入之前完成 OnnxRuntime 的加载。
+    """
+    app_dir = str(APP_DIR)
+
+    if hasattr(os, 'add_dll_directory'):
+        runtime_dir = os.path.join(app_dir, 'core', 'runtime')
+        if os.path.isdir(runtime_dir):
+            os.add_dll_directory(os.path.abspath(runtime_dir))
+
+        onnx_dll_dir = os.path.join(app_dir, 'core', 'site-packages', 'onnxruntime', 'capi')
+        if os.path.isdir(onnx_dll_dir):
+            os.add_dll_directory(os.path.abspath(onnx_dll_dir))
+
+    try:
+        import onnxruntime
+        import onnx
+        log(f"OnnxRuntime 预加载成功: {onnxruntime.__version__}")
+    except Exception as e:
+        log(f"OnnxRuntime 预加载失败（AI布局检测将不可用）: {e}")
+
+
+def ensure_window_visible(window, app):
+    """确保窗口在可见屏幕范围内并居中显示。"""
+    screen = app.primaryScreen().availableGeometry()
+    w = min(window.width(), screen.width())
+    h = min(window.height(), screen.height())
+    window.resize(w, h)
+    x = screen.x() + (screen.width() - w) // 2
+    y = screen.y() + (screen.height() - h) // 2
+    window.move(x, y)
+
+
 def main():
     log("=== pdf2zh 桌面版启动 ===")
     log(f"Python: {sys.version}")
     log(f"工作目录: {os.getcwd()}")
 
+    # 关键：必须在 PyQt5 之前预加载 OnnxRuntime
+    log("预加载 OnnxRuntime...")
+    preload_onnxruntime()
+
     try:
         log("导入 pdf2zh.gui_pyqt5...")
-        from pdf2zh.gui_pyqt5 import main as gui_main
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import QApplication
+        from pdf2zh.gui_pyqt5 import PDF2ZHMainWindow
         log("导入成功，启动 GUI...")
-        gui_main()
-        log("GUI 正常退出")
+
+        app = QApplication(sys.argv)
+        app.setStyle('Fusion')
+        window = PDF2ZHMainWindow()
+        ensure_window_visible(window, app)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        log("GUI 窗口已显示")
+        sys.exit(app.exec_())
     except ImportError as e:
         msg = f"模块导入失败: {e}\n\n请检查 core\\site-packages 是否完整。"
         log(f"[ERROR] {msg}\n{traceback.format_exc()}")

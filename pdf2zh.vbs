@@ -44,7 +44,9 @@ shell.Environment("Process")("PYTHONPATH") = ""
 shell.Environment("Process")("PYTHONDONTWRITEBYTECODE") = "1"
 shell.Environment("Process")("PYTHONIOENCODING") = "utf-8"
 
-' 静默启动（窗口样式 0 = 隐藏控制台）
+' 启动 GUI（pythonw.exe 本身无控制台，窗口样式用 1 = 正常显示）
+' 注意：窗口样式 0 (SW_HIDE) 会导致 PyQt5 的 window.show() 被 Windows
+' STARTUPINFO 覆盖为隐藏状态，使得 GUI 窗口永远不可见。
 Dim cmd
 cmd = Chr(34) & pythonw & Chr(34) & " " & Chr(34) & script & Chr(34)
-shell.Run cmd, 0, False
+shell.Run cmd, 1, False

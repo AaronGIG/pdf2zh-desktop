@@ -78,10 +78,14 @@ if not exist "config\app.json" (
     echo [✓] 应用配置
 )
 
-if exist "models\layout" (
-    echo [✓] AI模型包 (已安装)
+:: AI 布局检测模型由 babeldoc 管理，首次翻译时自动下载到用户缓存目录
+:: 检查 VC++ 运行库是否已安装（AI 布局检测的前提条件）
+reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" /v Version >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [✓] VC++ 运行库 (AI布局检测可用)
 ) else (
-    echo [!] AI模型包 (未安装，部分功能可能受限)
+    echo [!] VC++ 运行库未安装 (AI布局检测不可用，翻译功能不受影响)
+    echo     运行 VC_redist.x64.exe 或 install.bat 安装
 )
 goto :eof
 
@@ -107,7 +111,7 @@ echo.
 
 set "LOG_FILE=logs\app_%date:~0,4%%date:~5,2%%date:~8,2%.log"
 
-"%APP_DIR%core\runtime\python.exe" -c "from pdf2zh.gui_pyqt5 import main; main()" 2>&1
+"%APP_DIR%core\runtime\python.exe" "%APP_DIR%_launcher.py" 2>&1
 
 if %errorlevel% neq 0 (
     echo.

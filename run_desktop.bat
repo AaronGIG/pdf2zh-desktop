@@ -41,7 +41,7 @@ if not exist "pdf2zh_files" mkdir "pdf2zh_files"
 
 :: 启动应用
 echo 正在启动 pdf2zh 桌面版...
-"%~dp0core\runtime\python.exe" -c "from pdf2zh.gui_pyqt5 import main; main()"
+"%~dp0core\runtime\python.exe" "%~dp0_launcher.py"
 
 if errorlevel 1 (
     echo.
