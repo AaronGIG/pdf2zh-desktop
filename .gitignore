@@ -1,0 +1,15 @@
+# Translation output files - never commit user documents
+pdf2zh_files/
+
+# Logs
+logs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+core/site-packages/**/__pycache__/
+core/site-packages/**/*.pyc
+
+# User config
+config/user.json
