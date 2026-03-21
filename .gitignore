@@ -13,3 +13,15 @@ core/site-packages/**/*.pyc
 
 # User config
 config/user.json
+
+# Dev artifacts (prevent accidental commit)
+build_script.py
+COMPLETION_SUMMARY.md
+PROJECT_REFACTOR_SUMMARY.md
+GITHUB_PRIVATE_SETUP.md
+GITHUB_RELEASE_GUIDE.md
+RELEASE_NOTES.md
+CONTRIBUTING.md
+pyproject.toml
+requirements.txt
+pdf2zh-desktop-slim/
