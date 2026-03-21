@@ -146,7 +146,7 @@ pdf2zh-desktop-win/
 ├── logs/               📋 运行日志
 ├── pdf2zh.vbs          ⭐ 主启动入口（双击我！）
 ├── _launcher.py        🐍 Python 启动器
-├── run_desktop.bat     🔧 调试模式启动
+├── debug_start.bat     🔧 调试模式启动（带诊断输出）
 ├── install.bat         📥 首次安装脚本
 ├── VC_redist.x64.exe   🔧 VC++ 运行库
 └── diagnostic.bat      🩺 系统诊断工具

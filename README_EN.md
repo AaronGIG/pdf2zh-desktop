@@ -146,7 +146,7 @@ pdf2zh-desktop-win/
 ├── logs/               📋 Runtime logs
 ├── pdf2zh.vbs          ⭐ Main launcher (double-click me!)
 ├── _launcher.py        🐍 Python entry point
-├── run_desktop.bat     🔧 Debug launcher (shows console)
+├── debug_start.bat     🔧 Debug launcher (shows console + diagnostics)
 ├── install.bat         📥 First-time setup script
 ├── VC_redist.x64.exe   🔧 VC++ Redistributable
 └── diagnostic.bat      🩺 System diagnostic tool
