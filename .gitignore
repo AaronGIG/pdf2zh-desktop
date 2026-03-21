@@ -15,6 +15,7 @@ core/site-packages/**/*.pyc
 config/user.json
 
 # Dev artifacts (prevent accidental commit)
+DEPLOY_TEST_REPORT.md
 build_script.py
 COMPLETION_SUMMARY.md
 PROJECT_REFACTOR_SUMMARY.md

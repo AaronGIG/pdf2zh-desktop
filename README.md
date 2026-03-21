@@ -168,7 +168,7 @@ pdf2zh-desktop-win/
 
 ## 👨‍💻 关于本项目
 
-**桌面版作者**：[@AaronGIG](https://github.com/AaronGIG)
+**桌面版作者**：[@AaronGIG](https://github.com/AaronGIG) (CAS)
 
 桌面版的独立打包、GUI 增强、便携化改造、智能诊断等功能由 AaronGIG 与 Claude (Anthropic AI) 协作开发完成 🤖✨
 
