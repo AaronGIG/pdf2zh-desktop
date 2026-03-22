@@ -33,26 +33,18 @@ echo 处理器: %PROCESSOR_IDENTIFIER%
 echo.
 
 echo [内存信息]
-for /f "skip=1" %%p in ('wmic computersystem get TotalPhysicalMemory') do (
-    set /a MEMORY_GB=%%p/1024/1024/1024
-    echo 总内存: !MEMORY_GB! GB
-    goto :memory_done
+for /f %%p in ('powershell -command "[math]::Floor((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)"') do (
+    set "MEMORY_GB=%%p"
+    echo 总内存: %%p GB
 )
-:memory_done
-
-for /f "skip=1" %%p in ('wmic OS get FreePhysicalMemory') do (
-    set /a FREE_MEMORY_GB=%%p/1024/1024
-    echo 可用内存: !FREE_MEMORY_GB! GB
-    goto :free_memory_done
+for /f %%p in ('powershell -command "[math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024/1024)"') do (
+    echo 可用内存: %%p GB
 )
-:free_memory_done
 echo.
 
 echo [磁盘空间]
-for /f "skip=1" %%p in ('wmic logicaldisk where size^>0 get size^,freespace^,caption') do (
-    if not "%%p"=="" (
-        echo %%p
-    )
+for /f "delims=" %%p in ('powershell -command "Get-CimInstance Win32_LogicalDisk -Filter 'Size GT 0' | ForEach-Object { '{0}  Total: {1:N1} GB  Free: {2:N1} GB' -f $_.DeviceID, ($_.Size/1GB), ($_.FreeSpace/1GB) }"') do (
+    echo %%p
 )
 echo.
 
@@ -197,11 +189,9 @@ if %errorlevel% neq 0 (
     set /a ISSUES_FOUND+=1
 )
 
-for /f "skip=1" %%p in ('wmic computersystem get TotalPhysicalMemory') do (
-    set /a MEMORY_GB=%%p/1024/1024/1024
-    goto :check_memory
+for /f %%p in ('powershell -command "[math]::Floor((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)"') do (
+    set "MEMORY_GB=%%p"
 )
-:check_memory
 if %MEMORY_GB% LSS 4 (
     echo [!] 问题: 系统内存不足 (%MEMORY_GB%GB^<4GB)
     set /a ISSUES_FOUND+=1
