@@ -1,4 +1,5 @@
 @echo off
+chcp 65001>nul 2>&1
 setlocal enabledelayedexpansion
 
 :: pdf2zh 桌面版卸载程序
