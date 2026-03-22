@@ -36,14 +36,16 @@ Tired of wrestling with Python environments just to translate a paper? Done with
 ### 🚀 Massive Documents? No Problem!
 
 - 📄 1000+ page documents handled with ease
-- 🧩 Smart chunking to avoid memory overflow
+- 🧩 **Chunk translation**: Customize chunk size (5–200 pages), auto-splits large PDFs, built-in rate-limit delays, assembles the complete document when done
+- 🧠 **Smart memory management**: Per-page layout array release prevents OOM even on 1000+ page books
 - ⏯️ Auto-resume — quit mid-translation and pick up right where you left off, no wasted API calls
 
 ### 📚 History & Live Preview
 
-- 🗂️ Full translation history, browse anytime
+- 🗂️ Full translation history, navigate with keyboard arrow keys
 - 👀 Built-in PDF previewer — what you see is what you get
 - 🔍 Before/after comparison at a glance
+- 📝 Re-translating the same file auto-numbers output (`file(1)`, `file(2)`), never overwrites previous results
 
 ### 📁 Batch Translation
 
@@ -55,7 +57,8 @@ Tired of wrestling with Python environments just to translate a paper? Done with
 ## 🚀 Three Steps to Get Started
 
 1. 📥 **Download and extract** this repository
-2. 🖱️ **Double-click `pdf2zh.vbs`** to launch (first-time users: run `install.bat` first)
+2. 🖱️ **Double-click `pdf2zh.bat`** to launch (first-time users: run `install.bat` first)
+   > ⚠️ Windows 11 24H2+ users: use `pdf2zh.bat`. Older Windows versions can also use `pdf2zh.vbs`.
 3. 📄 **Drop in a PDF** → pick a translation service → hit "Start Translation" → done! 🎉
 
 > 💡 **Tip**: Google / Bing translation is free and requires zero configuration — just open and go!
@@ -88,6 +91,9 @@ Every translation generates:
 
 Built-in DocLayout-YOLO model identifies page regions (body text, formulas, captions, headings, etc.) and ensures translated content is placed in exactly the right spot.
 
+- ✅ Status indicator: "AI Layout Detection Enabled ✓" shown at translation start
+- 📋 Full translation logs at `logs/translate.log` for easy debugging
+
 > ⚠️ Requires [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (`VC_redist.x64.exe` included in the folder).
 > Without it, translation works perfectly — layout detection accuracy is just slightly reduced.
 
@@ -103,6 +109,7 @@ Built-in DocLayout-YOLO model identifies page regions (body text, formulas, capt
 | 🔤 Skip Font Subsetting | For PDFs with non-standard embedded fonts |
 | 🔄 Ignore Cache | Force re-translation |
 | 📐 Formula Font Regex | Custom pattern to identify formula regions |
+| 🧩 Chunk Translation | Split large files into N-page chunks, with configurable size and rate-limit delay |
 
 ---
 
@@ -144,7 +151,8 @@ pdf2zh-desktop-win/
 ├── config/             ⚙️ App configuration
 ├── pdf2zh_files/       📄 Translation output
 ├── logs/               📋 Runtime logs
-├── pdf2zh.vbs          ⭐ Main launcher (double-click me!)
+├── pdf2zh.bat          ⭐ Main launcher (double-click me!)
+├── pdf2zh.vbs          ⭐ Alt launcher (older Windows)
 ├── _launcher.py        🐍 Python entry point
 ├── debug_start.bat     🔧 Debug launcher (shows console + diagnostics)
 ├── install.bat         📥 First-time setup script
@@ -158,10 +166,13 @@ pdf2zh-desktop-win/
 
 | 😰 What happened? | 💡 How to fix |
 | --- | --- |
-| Double-clicked vbs, nothing happened | Check `logs/startup_*.log` |
+| VBS says "incompatible" | Windows 11 24H2 deprecated VBScript — use `pdf2zh.bat` instead |
+| Double-clicked, nothing happened | Check `logs/startup_*.log` |
 | Translation stopped midway | Check disk space; restart to auto-resume from cache |
 | VC++ error | Run `install.bat` or manually install `VC_redist.x64.exe` |
 | Garbled text / layout issues | Try enabling "Skip font subsetting" |
+| AI layout detection status? | Check progress bar message; details in `logs/translate.log` |
+| Out of memory on large docs? | Enable "Chunk Translation" and set an appropriate chunk size |
 | Need full diagnostics? | Double-click `diagnostic.bat` for a report 📋 |
 
 ---
