@@ -56,12 +56,13 @@ Tired of wrestling with Python environments just to translate a paper? Done with
 
 ## 🚀 Three Steps to Get Started
 
-1. 📥 **Download and extract** this repository
-2. 🖱️ **Double-click `pdf2zh.bat`** to launch (first-time users: run `install.bat` first)
-   > ⚠️ Windows 11 24H2+ users: use `pdf2zh.bat`. Older Windows versions can also use `pdf2zh.vbs`.
+1. 📥 **[Download the latest Release](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest)** (zip file, ready to use)
+2. 🖱️ **Double-click `pdf2zh.bat`** to launch
 3. 📄 **Drop in a PDF** → pick a translation service → hit "Start Translation" → done! 🎉
 
 > 💡 **Tip**: Google / Bing translation is free and requires zero configuration — just open and go!
+>
+> ⚠️ Download the zip from the [Releases page](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest). Do **NOT** click "Source code" — it won't work out of the box.
 
 ---
 
@@ -179,9 +180,9 @@ pdf2zh-desktop-win/
 
 ## 👨‍💻 About This Project
 
-**Desktop version author**: [@AaronGIG](https://github.com/AaronGIG)
+**Desktop version author**: [@AaronGIG](https://github.com/AaronGIG) (CAS)
 
-The standalone packaging, GUI enhancements, portable design, and smart diagnostics were co-developed by AaronGIG and Claude (Anthropic AI) 🤖✨
+The standalone packaging, GUI enhancements, portable design, and smart diagnostics were co-developed by AaronGIG (CAS) and Claude (Anthropic AI) 🤖✨
 
 **Core translation engine**: [PDFMathTranslate](https://github.com/Byaidu/PDFMathTranslate) (EMNLP 2025) — thanks to the original project 🤝
 

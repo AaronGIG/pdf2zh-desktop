@@ -56,12 +56,13 @@
 
 ## 🚀 三步上手，就这么简单
 
-1. 📥 **下载解压**本仓库
-2. 🖱️ **双击 `pdf2zh.bat`** 启动（首次使用建议先跑一下 `install.bat`）
-   > ⚠️ Windows 11 24H2 用户请用 `pdf2zh.bat`。旧版 Windows 也可用 `pdf2zh.vbs`。
+1. 📥 **[下载最新版 Release](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest)**（zip 压缩包，解压即用）
+2. 🖱️ **双击 `pdf2zh.bat`** 启动
 3. 📄 **拖入 PDF** → 选翻译服务 → 点「开始翻译」→ 搞定！🎉
 
 > 💡 **小贴士**：Google / Bing 翻译免费无需配置，打开就能用！
+>
+> ⚠️ 请从 [Releases 页面](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) 下载 zip 压缩包，**不要**点 Source code，那个不能直接用。
 
 ---
 
@@ -179,9 +180,9 @@ pdf2zh-desktop-win/
 
 ## 👨‍💻 关于本项目
 
-**桌面版作者**：[@AaronGIG](https://github.com/AaronGIG)
+**桌面版作者**：[@AaronGIG](https://github.com/AaronGIG) (CAS)
 
-桌面版的独立打包、GUI 增强、便携化改造、智能诊断等功能由 AaronGIG 与 Claude (Anthropic AI) 协作开发完成 🤖✨
+桌面版的独立打包、GUI 增强、便携化改造、智能诊断等功能由 AaronGIG (CAS) 与 Claude (Anthropic AI) 协作开发完成 🤖✨
 
 **核心翻译引擎**：[PDFMathTranslate](https://github.com/Byaidu/PDFMathTranslate)（EMNLP 2025），感谢原项目的贡献 🤝
 
