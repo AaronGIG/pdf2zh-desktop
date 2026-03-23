@@ -112,6 +112,7 @@ Built-in DocLayout-YOLO model identifies page regions (body text, formulas, capt
 | 🔄 Ignore Cache | Force re-translation |
 | 📐 Formula Font Regex | Custom pattern to identify formula regions |
 | 🧩 Chunk Translation | Split large files into N-page chunks, with configurable size and rate-limit delay |
+| 📜 Scanned PDF | Draws white backgrounds over translated regions to cover original text in page images (only needed for scanned books) |
 
 ---
 
@@ -175,6 +176,7 @@ pdf2zh-desktop-win/
 | Garbled text / layout issues | Try enabling "Skip font subsetting" |
 | AI layout detection status? | Check progress bar message; details in `logs/translate.log` |
 | Out of memory on large docs? | Enable "Chunk Translation" and set an appropriate chunk size |
+| Scanned book text overlaps translation? | Enable "Scanned PDF" in advanced options — it draws white backgrounds over translated regions |
 | Need full diagnostics? | Double-click `diagnostic.bat` for a report 📋 |
 
 ---
