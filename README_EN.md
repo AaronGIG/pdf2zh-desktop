@@ -39,6 +39,7 @@ Tired of wrestling with Python environments just to translate a paper? Done with
 - 🧩 **Chunk translation**: Customize chunk size (5–200 pages), auto-splits large PDFs, built-in rate-limit delays, assembles the complete document when done
 - 🧠 **Smart memory management**: Per-page layout array release prevents OOM even on 1000+ page books
 - ⏯️ Auto-resume — quit mid-translation and pick up right where you left off, no wasted API calls
+- 📜 **Scanned PDF support**: Generates white backgrounds over translated regions to cover the original text in the page image, so scanned books get clean, readable translations
 
 ### 📚 History & Live Preview
 
