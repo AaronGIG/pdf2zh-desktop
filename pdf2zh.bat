@@ -36,5 +36,8 @@ set "PYTHONPATH="
 set "PYTHONDONTWRITEBYTECODE=1"
 set "PYTHONIOENCODING=utf-8"
 
+:: Set Qt plugin path to bundled PyQt5 (avoid conflicts with other Qt installations)
+set "QT_PLUGIN_PATH=%APP_DIR%core\site-packages\PyQt5\Qt5\plugins"
+
 :: Launch GUI (pythonw.exe = no console window)
 start "" "%PYTHONW%" "%SCRIPT%"

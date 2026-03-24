@@ -94,6 +94,11 @@ def main():
     log(f"Python: {sys.version}")
     log(f"工作目录: {os.getcwd()}")
 
+    # 设置 Qt 插件路径，避免与系统中其他 Qt 安装冲突
+    qt_plugin_path = str(APP_DIR / "core" / "site-packages" / "PyQt5" / "Qt5" / "plugins")
+    os.environ["QT_PLUGIN_PATH"] = qt_plugin_path
+    log(f"QT_PLUGIN_PATH: {qt_plugin_path}")
+
     # 关键：必须在 PyQt5 之前预加载 OnnxRuntime
     log("预加载 OnnxRuntime...")
     preload_onnxruntime()
