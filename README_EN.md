@@ -177,6 +177,7 @@ pdf2zh-desktop-win/
 | AI layout detection status? | Check progress bar message; details in `logs/translate.log` |
 | Out of memory on large docs? | Enable "Chunk Translation" and set an appropriate chunk size |
 | Scanned book text overlaps translation? | Enable "Scanned PDF" in advanced options — it draws white backgrounds over translated regions |
+| PDF finishes instantly with no translation? | Likely a pure image scan (no text layer). Use [PDF24 OCR](https://tools.pdf24.org/en/ocr-pdf) to add a text layer first, then translate |
 | Need full diagnostics? | Double-click `diagnostic.bat` for a report 📋 |
 
 ---
