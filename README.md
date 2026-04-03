@@ -2,6 +2,8 @@
 
 **🎉 无需安装 Python · 无需配置环境 · 下载解压双击就能用！**
 
+**🖥️ 支持 Windows + macOS 双平台**
+
 > 基于 [PDFMathTranslate](https://github.com/Byaidu/PDFMathTranslate)（EMNLP 2025）打造，在原项目基础上大幅增强桌面体验。
 
 让学术 PDF 翻译变得像复制粘贴一样简单——公式、图表、排版全部完美保留 ✨
@@ -79,13 +81,27 @@
 
 ## 🚀 三步上手，就这么简单
 
-1. 📥 **[下载最新版 Release](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest)**（zip 压缩包，解压即用）
-2. 🖱️ **双击 `pdf2zh.bat`** 启动
-3. 📄 **拖入 PDF** → 选翻译服务 → 点「开始翻译」→ 搞定！🎉
+### 📥 第一步：下载
+
+| 平台 | 下载 | 大小 | 启动方式 |
+|------|------|------|---------|
+| 🪟 Windows | [`pdf2zh-desktop-win.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | 309MB | 解压 → 双击 `pdf2zh.bat` |
+| 🍎 macOS (Apple Silicon) | [`pdf2zh-desktop-mac.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | 144MB | 解压 → 双击 `pdf2zh.app` |
+
+### 🖱️ 第二步：启动
+
+- **Windows**：双击 `pdf2zh.bat`
+- **macOS**：双击 `pdf2zh.app`（首次打开需右键 → 打开 → 确认）
+
+### 📄 第三步：翻译
+
+拖入 PDF → 选翻译服务 → 点「开始翻译」→ 搞定！🎉
 
 > 💡 **小贴士**：Google / Bing 翻译免费无需配置，打开就能用！
 >
 > ⚠️ 请从 [Releases 页面](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) 下载 zip 压缩包，**不要**点 Source code，那个不能直接用。
+>
+> 🍎 **macOS 注意**：仅支持 Apple Silicon（M1/M2/M3/M4），首次翻译需联网下载 AI 模型。
 
 ---
 
