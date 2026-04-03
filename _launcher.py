@@ -59,6 +59,8 @@ def preload_onnxruntime():
     onnxruntime_pybind11_state.pyd 无法找到 VC++ DLL 而加载失败。
     必须在任何 PyQt5 导入之前完成 OnnxRuntime 的加载。
     """
+    import threading
+
     app_dir = str(APP_DIR)
 
     if hasattr(os, 'add_dll_directory'):
@@ -70,12 +72,25 @@ def preload_onnxruntime():
         if os.path.isdir(onnx_dll_dir):
             os.add_dll_directory(os.path.abspath(onnx_dll_dir))
 
-    try:
-        import onnxruntime
-        import onnx
-        log(f"OnnxRuntime 预加载成功: {onnxruntime.__version__}")
-    except Exception as e:
-        log(f"OnnxRuntime 预加载失败（AI布局检测将不可用）: {e}")
+    result = [None]
+    def _load():
+        try:
+            import onnxruntime
+            import onnx
+            result[0] = onnxruntime.__version__
+        except Exception as e:
+            result[0] = f"ERROR: {e}"
+
+    t = threading.Thread(target=_load, daemon=True)
+    t.start()
+    t.join(timeout=8)  # 最多等 8 秒
+
+    if t.is_alive():
+        log("OnnxRuntime 预加载超时（8秒），跳过，AI布局检测将不可用")
+    elif result[0] and not str(result[0]).startswith("ERROR"):
+        log(f"OnnxRuntime 预加载成功: {result[0]}")
+    else:
+        log(f"OnnxRuntime 预加载失败（AI布局检测将不可用）: {result[0]}")
 
 
 def ensure_window_visible(window, app):
@@ -112,6 +127,165 @@ def main():
 
         app = QApplication(sys.argv)
         app.setStyle('Fusion')
+        app.setStyleSheet("""
+            * {
+                font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+                font-size: 12px;
+            }
+            QMainWindow {
+                background: #fafbfc;
+            }
+            QGroupBox {
+                font-weight: bold;
+                font-size: 13px;
+                color: #333;
+                border: 1px solid #e0e4ea;
+                border-radius: 6px;
+                margin-top: 8px;
+                padding-top: 14px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+                color: #4169E1;
+            }
+            QPushButton {
+                border: 1px solid #d0d5dd;
+                border-radius: 4px;
+                padding: 5px 10px;
+                background: white;
+            }
+            QPushButton:hover {
+                background: #f0f4ff;
+                border-color: #4169E1;
+            }
+            QPushButton:pressed {
+                background: #e0e8ff;
+            }
+            QPushButton:disabled {
+                background: #f5f5f5;
+                color: #aaa;
+                border-color: #e0e0e0;
+            }
+            QComboBox {
+                border: 1px solid #d0d5dd;
+                border-radius: 4px;
+                padding: 4px 8px;
+                background: white;
+            }
+            QComboBox:hover {
+                border-color: #4169E1;
+            }
+            QComboBox QAbstractItemView {
+                border: 1px solid #d0d5dd;
+                border-radius: 4px;
+                background: white;
+                selection-background-color: #e8eeff;
+                selection-color: #333;
+                padding: 2px;
+            }
+            QLineEdit {
+                border: 1px solid #d0d5dd;
+                border-radius: 4px;
+                padding: 4px 8px;
+                background: white;
+            }
+            QLineEdit:focus {
+                border-color: #4169E1;
+            }
+            QSpinBox {
+                border: 1px solid #d0d5dd;
+                border-radius: 4px;
+                padding: 3px 6px;
+                background: white;
+            }
+            QCheckBox {
+                spacing: 6px;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+                border: 1px solid #bbb;
+                border-radius: 3px;
+                background: white;
+            }
+            QCheckBox::indicator:checked {
+                background: #4169E1;
+                border-color: #4169E1;
+            }
+            QListWidget {
+                border: 1px solid #e0e4ea;
+                border-radius: 4px;
+                background: white;
+            }
+            QListWidget::item {
+                padding: 3px 6px;
+            }
+            QListWidget::item:selected {
+                background: #e8eeff;
+                color: #333;
+            }
+            QTextEdit {
+                border: 1px solid #d0d5dd;
+                border-radius: 4px;
+                background: white;
+            }
+            QTextEdit:focus {
+                border-color: #4169E1;
+            }
+            QProgressBar {
+                border: none;
+                border-radius: 3px;
+                background: #e8ecf4;
+            }
+            QProgressBar::chunk {
+                background: #4169E1;
+                border-radius: 3px;
+            }
+            QTabBar::tab {
+                font-size: 13px;
+                padding: 8px 6px;
+                border: none;
+                border-bottom: 2px solid transparent;
+            }
+            QTabBar::tab:selected {
+                font-weight: bold;
+                color: #4169E1;
+                border-bottom: 2px solid #4169E1;
+            }
+            QTabBar::tab:!selected {
+                color: #666;
+            }
+            QTabBar::tab:hover:!selected {
+                color: #333;
+            }
+            QTabBar::tab:selected {
+                background: white;
+                border-bottom: 2px solid #4169E1;
+                font-weight: bold;
+                color: #4169E1;
+            }
+            QTabWidget::pane {
+                border: 1px solid #d0d5dd;
+                border-radius: 0 0 6px 6px;
+                background: white;
+            }
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QToolTip {
+                background-color: #FFFDF0;
+                color: #333;
+                border: 1px solid #D4C89A;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 16px;
+                line-height: 1.6;
+            }
+        """)
         window = PDF2ZHMainWindow()
         ensure_window_visible(window, app)
         window.show()

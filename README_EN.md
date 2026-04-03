@@ -40,6 +40,14 @@ Tired of wrestling with Python environments just to translate a paper? Done with
 - 🧠 **Smart memory management**: Per-page layout array release prevents OOM even on 1000+ page books
 - ⏯️ Auto-resume — quit mid-translation and pick up right where you left off, no wasted API calls
 - 📜 **Scanned PDF support**: Generates white backgrounds over translated regions to cover the original text in the page image, so scanned books get clean, readable translations
+- 📊 **Table/figure translation**: Enable to translate text inside tables and figure captions — ideal for patent documents
+- 🔍 **Built-in OCR**: Powered by RapidOCR — automatically recognizes and translates pure-image scanned PDFs (no text layer)
+
+### 🤖 AI Translation Config
+
+- 🧩 **20+ model presets**: DeepSeek, Zhipu GLM, Qwen, Kimi, OpenAI, Gemini, Mistral, Ollama and more — one click to configure
+- 🔧 **Fully customizable**: Supports any OpenAI-compatible API — enter your own URL, key and model
+- 🔗 **One-click connection test**: Verify your config works instantly, auto-saves on success
 
 ### 📚 History & Live Preview
 
@@ -113,6 +121,8 @@ Built-in DocLayout-YOLO model identifies page regions (body text, formulas, capt
 | 📐 Formula Font Regex | Custom pattern to identify formula regions |
 | 🧩 Chunk Translation | Split large files into N-page chunks, with configurable size and rate-limit delay |
 | 📜 Scanned PDF | Draws white backgrounds over translated regions to cover original text in page images (only needed for scanned books) |
+| 📊 Translate Tables/Figures | Translates text inside tables and figure captions (for patent docs etc.) |
+| 🔍 OCR Recognition | Uses RapidOCR to recognize text in pure-image scanned PDFs before translating |
 
 ---
 
@@ -177,7 +187,8 @@ pdf2zh-desktop-win/
 | AI layout detection status? | Check progress bar message; details in `logs/translate.log` |
 | Out of memory on large docs? | Enable "Chunk Translation" and set an appropriate chunk size |
 | Scanned book text overlaps translation? | Enable "Scanned PDF" in advanced options — it draws white backgrounds over translated regions |
-| PDF finishes instantly with no translation? | Likely a pure image scan (no text layer). Use [PDF24 OCR](https://tools.pdf24.org/en/ocr-pdf) to add a text layer first, then translate |
+| PDF finishes instantly with no translation? | Enable "OCR Recognition" in advanced options to auto-detect text in images |
+| Patent tables not being translated? | Enable "Translate Tables and Figure Captions" in advanced options |
 | Need full diagnostics? | Double-click `diagnostic.bat` for a report 📋 |
 
 ---
