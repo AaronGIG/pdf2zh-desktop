@@ -134,6 +134,7 @@ def _find_zotero_data_dir():
 def resolve_zotero_items(item_ids):
     """从 Zotero SQLite 数据库把 itemID 列表解析为 PDF 文件路径列表。
 
+    每个父条目只取最早的 PDF 附件（原始论文），跳过后来添加的翻译件。
     参数 item_ids: 数值型 item ID 列表（来自 zotero/item MIME）
     返回: PDF 绝对路径列表
     """
@@ -160,29 +161,30 @@ def resolve_zotero_items(item_ids):
             pdf = _resolve_zotero_path(storage_dir, key, path)
             if pdf:
                 pdfs.append(pdf)
-        # 2) item_ids 是父条目 → 找其 PDF 子附件
+        # 2) item_ids 是父条目 → 只取每个父条目最早的 PDF 子附件
+        #    ORDER BY ia.itemID 确保最早添加的排在前面
         cur.execute(
-            f"SELECT i.key, ia.path FROM items i "
+            f"SELECT ia.parentItemID, i.key, ia.path FROM items i "
             f"JOIN itemAttachments ia ON i.itemID = ia.itemID "
             f"WHERE ia.contentType = 'application/pdf' "
-            f"AND ia.parentItemID IN ({placeholders})",
+            f"AND ia.parentItemID IN ({placeholders}) "
+            f"ORDER BY ia.itemID",
             item_ids,
         )
-        for key, path in cur.fetchall():
+        seen_parents = set()
+        for parent_id, key, path in cur.fetchall():
+            if parent_id in seen_parents:
+                continue  # 跳过同一父条目的后续附件（翻译件）
             pdf = _resolve_zotero_path(storage_dir, key, path)
             if pdf:
                 pdfs.append(pdf)
+                seen_parents.add(parent_id)
         conn.close()
     except Exception:
         pass
     # 去重保序
     seen = set()
-    unique = []
-    for p in pdfs:
-        if p not in seen:
-            seen.add(p)
-            unique.append(p)
-    return unique
+    return [p for p in pdfs if not (p in seen or seen.add(p))]
 
 
 def resolve_zotero_collection(collection_id_or_key):
@@ -218,19 +220,24 @@ def resolve_zotero_collection(collection_id_or_key):
             conn.close()
             return []
         coll_id = row[0]
-        # 集合里的父条目 → 它们的 PDF 附件
+        # 集合里的父条目 → 每个只取最早的 PDF 附件
         cur.execute(
-            "SELECT i.key, ia.path FROM items i "
+            "SELECT ia.parentItemID, i.key, ia.path FROM items i "
             "JOIN itemAttachments ia ON i.itemID = ia.itemID "
             "WHERE ia.contentType = 'application/pdf' "
             "AND ia.parentItemID IN "
-            "(SELECT itemID FROM collectionItems WHERE collectionID = ?)",
+            "(SELECT itemID FROM collectionItems WHERE collectionID = ?) "
+            "ORDER BY ia.itemID",
             (coll_id,),
         )
-        for key, path in cur.fetchall():
+        seen_parents = set()
+        for parent_id, key, path in cur.fetchall():
+            if parent_id in seen_parents:
+                continue
             pdf = _resolve_zotero_path(storage_dir, key, path)
             if pdf:
                 pdfs.append(pdf)
+                seen_parents.add(parent_id)
         conn.close()
     except Exception:
         pass
@@ -270,37 +277,37 @@ def resolve_zotero_by_title(text):
     try:
         conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
         cur = conn.cursor()
-        # 在 itemDataValues 中搜索标题匹配
-        # Zotero 的 text/plain 可能包含多行，每行一个条目的引用
-        # 取所有有 PDF 附件的条目，检查标题是否出现在 text 中
+        # 每个父条目只取最早的 PDF 附件（原始论文）
         cur.execute(
-            "SELECT DISTINCT ia.parentItemID, i.key, ia.path "
+            "SELECT ia.parentItemID, i.key, ia.path, ia.itemID "
             "FROM itemAttachments ia "
             "JOIN items i ON i.itemID = ia.itemID "
             "WHERE ia.contentType = 'application/pdf' "
-            "AND ia.parentItemID IS NOT NULL"
+            "AND ia.parentItemID IS NOT NULL "
+            "ORDER BY ia.itemID"
         )
-        # 预取所有有 PDF 的父条目
-        parent_to_pdfs = {}
-        for parent_id, key, path in cur.fetchall():
+        parent_to_pdf = {}  # parentID → 第一个 PDF 路径
+        for parent_id, key, path, _ in cur.fetchall():
+            if parent_id in parent_to_pdf:
+                continue
             pdf = _resolve_zotero_path(storage_dir, key, path)
             if pdf:
-                parent_to_pdfs.setdefault(parent_id, []).append(pdf)
-        if not parent_to_pdfs:
+                parent_to_pdf[parent_id] = pdf
+        if not parent_to_pdf:
             conn.close()
             return []
-        # 查父条目的标题（fieldID=110 是 title）
-        placeholders = ",".join("?" * len(parent_to_pdfs))
+        # 查父条目的标题
+        placeholders = ",".join("?" * len(parent_to_pdf))
         cur.execute(
             f"SELECT id.itemID, idv.value FROM itemData id "
             f"JOIN itemDataValues idv ON id.valueID = idv.valueID "
             f"WHERE id.fieldID IN (SELECT fieldID FROM fields WHERE fieldName='title') "
             f"AND id.itemID IN ({placeholders})",
-            list(parent_to_pdfs.keys()),
+            list(parent_to_pdf.keys()),
         )
         for item_id, title in cur.fetchall():
             if title and title in text:
-                pdfs.extend(parent_to_pdfs[item_id])
+                pdfs.append(parent_to_pdf[item_id])
         conn.close()
     except Exception:
         pass
@@ -334,17 +341,22 @@ def resolve_zotero_collection_by_name(name):
             return []
         coll_id = row[0]
         cur.execute(
-            "SELECT i.key, ia.path FROM items i "
+            "SELECT ia.parentItemID, i.key, ia.path FROM items i "
             "JOIN itemAttachments ia ON i.itemID = ia.itemID "
             "WHERE ia.contentType = 'application/pdf' "
             "AND ia.parentItemID IN "
-            "(SELECT itemID FROM collectionItems WHERE collectionID = ?)",
+            "(SELECT itemID FROM collectionItems WHERE collectionID = ?) "
+            "ORDER BY ia.itemID",
             (coll_id,),
         )
-        for key, path in cur.fetchall():
+        seen_parents = set()
+        for parent_id, key, path in cur.fetchall():
+            if parent_id in seen_parents:
+                continue
             pdf = _resolve_zotero_path(storage_dir, key, path)
             if pdf:
                 pdfs.append(pdf)
+                seen_parents.add(parent_id)
         conn.close()
     except Exception:
         pass
