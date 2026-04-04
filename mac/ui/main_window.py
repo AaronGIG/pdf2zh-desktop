@@ -473,25 +473,32 @@ class DropZone(QFrame):
         import glob
         fs = []
         md = e.mimeData()
-        urls = md.urls()
-        # Zotero 有时通过 text/plain 传路径
-        if not urls and md.hasText():
+
+        def _collect(p):
+            """从路径收集 PDF：文件直接加，文件夹递归扫描"""
+            if p.lower().endswith('.pdf') and os.path.isfile(p):
+                fs.append(p)
+            elif os.path.isdir(p):
+                fs.extend(sorted(glob.glob(
+                    os.path.join(p, '**', '*.pdf'), recursive=True)))
+
+        # 1) 标准 file URL（Finder 拖文件/文件夹、Zotero 拖 PDF 附件）
+        for u in md.urls():
+            p = u.toLocalFile()
+            if p:
+                _collect(p)
+
+        # 2) text/plain 中的 file:// 路径或本地路径
+        if not fs and md.hasText():
             for line in md.text().strip().splitlines():
                 line = line.strip()
                 if line.startswith("file://"):
                     from PyQt5.QtCore import QUrl
                     line = QUrl(line).toLocalFile()
-                if os.path.exists(line):
-                    urls.append(type('U', (), {'toLocalFile': lambda s=line: s})())
-        for u in urls:
-            p = u.toLocalFile()
-            if not p:
-                continue
-            if p.lower().endswith('.pdf') and os.path.isfile(p):
-                fs.append(p)
-            elif os.path.isdir(p):
-                fs.extend(sorted(glob.glob(os.path.join(p, '**', '*.pdf'), recursive=True)))
-        # Zotero 拖拽父条目/集合：通过 zotero/item MIME 解析
+                if line and os.path.exists(line):
+                    _collect(line)
+
+        # 3) Zotero 自定义 MIME（同进程或支持跨进程的平台）
         if not fs:
             from ui.translate_worker import resolve_zotero_items, resolve_zotero_collection
             zot_data = md.data("zotero/item")
@@ -499,10 +506,6 @@ class DropZone(QFrame):
                 try:
                     import json as _json
                     raw = bytes(zot_data).decode("utf-8", errors="ignore").strip()
-                    # Zotero 可能发:
-                    #   逗号分隔 "2,6"
-                    #   JSON 数组 "[2,6]"
-                    #   JSON 对象 {"libraryID":1,"itemIDs":[2,6]}
                     try:
                         parsed = _json.loads(raw)
                         if isinstance(parsed, dict) and "itemIDs" in parsed:
@@ -514,12 +517,12 @@ class DropZone(QFrame):
                         else:
                             item_ids = []
                     except (ValueError, TypeError):
-                        item_ids = [int(x) for x in raw.split(",") if x.strip().isdigit()]
+                        item_ids = [int(x) for x in raw.split(",")
+                                    if x.strip().isdigit()]
                     if item_ids:
                         fs = resolve_zotero_items(item_ids)
                 except Exception:
                     pass
-            # Zotero 集合拖拽
             if not fs:
                 zot_coll = md.data("zotero/collection")
                 if zot_coll and len(zot_coll):
@@ -529,7 +532,22 @@ class DropZone(QFrame):
                             fs = resolve_zotero_collection(raw)
                     except Exception:
                         pass
-        if fs: self.files_dropped.emit(fs)
+
+        # 4) macOS 跨进程 fallback：text/plain 匹配 Zotero 标题/集合名
+        if not fs and md.hasText():
+            try:
+                from ui.translate_worker import (
+                    resolve_zotero_by_title, resolve_zotero_collection_by_name)
+                txt = md.text().strip()
+                if txt:
+                    fs = resolve_zotero_by_title(txt)
+                if not fs and txt:
+                    fs = resolve_zotero_collection_by_name(txt)
+            except Exception:
+                pass
+
+        if fs:
+            self.files_dropped.emit(fs)
     def mousePressEvent(self, e):
         fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
         if fs: self.files_dropped.emit(fs)

@@ -254,6 +254,103 @@ def _resolve_zotero_path(storage_dir, key, db_path):
     return None
 
 
+def resolve_zotero_by_title(text):
+    """从 text/plain 中的标题文本匹配 Zotero 条目，返回对应 PDF 路径列表。
+
+    macOS 跨进程拖拽时 Zotero 自定义 MIME 不可用，只能靠 text/plain。
+    Zotero 拖拽条目时 text/plain 通常是引用文本，包含标题。
+    """
+    import sqlite3
+    data_dir = _find_zotero_data_dir()
+    if not data_dir:
+        return []
+    db_path = os.path.join(data_dir, "zotero.sqlite")
+    storage_dir = os.path.join(data_dir, "storage")
+    pdfs = []
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        cur = conn.cursor()
+        # 在 itemDataValues 中搜索标题匹配
+        # Zotero 的 text/plain 可能包含多行，每行一个条目的引用
+        # 取所有有 PDF 附件的条目，检查标题是否出现在 text 中
+        cur.execute(
+            "SELECT DISTINCT ia.parentItemID, i.key, ia.path "
+            "FROM itemAttachments ia "
+            "JOIN items i ON i.itemID = ia.itemID "
+            "WHERE ia.contentType = 'application/pdf' "
+            "AND ia.parentItemID IS NOT NULL"
+        )
+        # 预取所有有 PDF 的父条目
+        parent_to_pdfs = {}
+        for parent_id, key, path in cur.fetchall():
+            pdf = _resolve_zotero_path(storage_dir, key, path)
+            if pdf:
+                parent_to_pdfs.setdefault(parent_id, []).append(pdf)
+        if not parent_to_pdfs:
+            conn.close()
+            return []
+        # 查父条目的标题（fieldID=110 是 title）
+        placeholders = ",".join("?" * len(parent_to_pdfs))
+        cur.execute(
+            f"SELECT id.itemID, idv.value FROM itemData id "
+            f"JOIN itemDataValues idv ON id.valueID = idv.valueID "
+            f"WHERE id.fieldID IN (SELECT fieldID FROM fields WHERE fieldName='title') "
+            f"AND id.itemID IN ({placeholders})",
+            list(parent_to_pdfs.keys()),
+        )
+        for item_id, title in cur.fetchall():
+            if title and title in text:
+                pdfs.extend(parent_to_pdfs[item_id])
+        conn.close()
+    except Exception:
+        pass
+    # 去重保序
+    seen = set()
+    return [p for p in pdfs if not (p in seen or seen.add(p))]
+
+
+def resolve_zotero_collection_by_name(name):
+    """通过集合名称匹配 Zotero 集合，返回其中所有 PDF 路径。
+
+    macOS 跨进程拖拽时用：text/plain 可能包含集合名。
+    """
+    import sqlite3
+    data_dir = _find_zotero_data_dir()
+    if not data_dir:
+        return []
+    db_path = os.path.join(data_dir, "zotero.sqlite")
+    storage_dir = os.path.join(data_dir, "storage")
+    pdfs = []
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT collectionID FROM collections WHERE collectionName = ?",
+            (name.strip(),),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return []
+        coll_id = row[0]
+        cur.execute(
+            "SELECT i.key, ia.path FROM items i "
+            "JOIN itemAttachments ia ON i.itemID = ia.itemID "
+            "WHERE ia.contentType = 'application/pdf' "
+            "AND ia.parentItemID IN "
+            "(SELECT itemID FROM collectionItems WHERE collectionID = ?)",
+            (coll_id,),
+        )
+        for key, path in cur.fetchall():
+            pdf = _resolve_zotero_path(storage_dir, key, path)
+            if pdf:
+                pdfs.append(pdf)
+        conn.close()
+    except Exception:
+        pass
+    return pdfs
+
+
 def build_service_envs(svc_display_name):
     """从 GUI 配置构建翻译器 envs 字典
 
