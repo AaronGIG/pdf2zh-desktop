@@ -86,7 +86,7 @@
 | 平台 | 下载 | 大小 | 启动方式 |
 |------|------|------|---------|
 | 🪟 Windows | [`pdf2zh-desktop-win.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | 309MB | 解压 → 双击 `pdf2zh.bat` |
-| 🍎 macOS (Apple Silicon) | [`pdf2zh-desktop-mac.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | 144MB | 解压 → 双击 `pdf2zh.app` |
+| 🍎 macOS (Apple Silicon) | [`pdf2zh-desktop-mac.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | 209MB | 解压 → 双击 `pdf2zh.app` |
 
 ### 🖱️ 第二步：启动
 
@@ -101,7 +101,7 @@
 >
 > ⚠️ 请从 [Releases 页面](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) 下载 zip 压缩包，**不要**点 Source code，那个不能直接用。
 >
-> 🍎 **macOS 注意**：仅支持 Apple Silicon（M1/M2/M3/M4），首次翻译需联网下载 AI 模型。
+> 🍎 **macOS 注意**：仅支持 Apple Silicon（M 系列芯片），AI 模型已内置，解压即用。Intel Mac 暂不支持。
 
 ---
 
