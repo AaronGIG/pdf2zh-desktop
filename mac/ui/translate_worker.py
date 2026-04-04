@@ -118,6 +118,142 @@ def zotero_plugin_installed():
         return False
 
 
+def _find_zotero_data_dir():
+    """定位 Zotero 数据目录（含 zotero.sqlite）"""
+    import platform
+    candidates = [os.path.expanduser("~/Zotero")]
+    if platform.system() == "Darwin":
+        candidates.append(os.path.expanduser(
+            "~/Library/Application Support/Zotero"))
+    for d in candidates:
+        if os.path.isfile(os.path.join(d, "zotero.sqlite")):
+            return d
+    return None
+
+
+def resolve_zotero_items(item_ids):
+    """从 Zotero SQLite 数据库把 itemID 列表解析为 PDF 文件路径列表。
+
+    参数 item_ids: 数值型 item ID 列表（来自 zotero/item MIME）
+    返回: PDF 绝对路径列表
+    """
+    import sqlite3
+    data_dir = _find_zotero_data_dir()
+    if not data_dir:
+        return []
+    db_path = os.path.join(data_dir, "zotero.sqlite")
+    storage_dir = os.path.join(data_dir, "storage")
+    pdfs = []
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        cur = conn.cursor()
+        placeholders = ",".join("?" * len(item_ids))
+        # 1) item_ids 本身是 PDF 附件的情况
+        cur.execute(
+            f"SELECT i.key, ia.path FROM items i "
+            f"JOIN itemAttachments ia ON i.itemID = ia.itemID "
+            f"WHERE ia.contentType = 'application/pdf' "
+            f"AND i.itemID IN ({placeholders})",
+            item_ids,
+        )
+        for key, path in cur.fetchall():
+            pdf = _resolve_zotero_path(storage_dir, key, path)
+            if pdf:
+                pdfs.append(pdf)
+        # 2) item_ids 是父条目 → 找其 PDF 子附件
+        cur.execute(
+            f"SELECT i.key, ia.path FROM items i "
+            f"JOIN itemAttachments ia ON i.itemID = ia.itemID "
+            f"WHERE ia.contentType = 'application/pdf' "
+            f"AND ia.parentItemID IN ({placeholders})",
+            item_ids,
+        )
+        for key, path in cur.fetchall():
+            pdf = _resolve_zotero_path(storage_dir, key, path)
+            if pdf:
+                pdfs.append(pdf)
+        conn.close()
+    except Exception:
+        pass
+    # 去重保序
+    seen = set()
+    unique = []
+    for p in pdfs:
+        if p not in seen:
+            seen.add(p)
+            unique.append(p)
+    return unique
+
+
+def resolve_zotero_collection(collection_id_or_key):
+    """从 Zotero SQLite 数据库把集合 ID 或 key 解析为 PDF 文件路径列表。
+
+    参数: 数字型 collectionID 或 8 位 key（如 '7ZRBP23W'）
+    返回: PDF 绝对路径列表
+    """
+    import sqlite3
+    data_dir = _find_zotero_data_dir()
+    if not data_dir:
+        return []
+    db_path = os.path.join(data_dir, "zotero.sqlite")
+    storage_dir = os.path.join(data_dir, "storage")
+    pdfs = []
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        cur = conn.cursor()
+        # 支持 numeric ID 或 string key
+        raw = str(collection_id_or_key).strip()
+        if raw.isdigit():
+            cur.execute(
+                "SELECT collectionID FROM collections WHERE collectionID = ?",
+                (int(raw),),
+            )
+        else:
+            cur.execute(
+                "SELECT collectionID FROM collections WHERE key = ?",
+                (raw,),
+            )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return []
+        coll_id = row[0]
+        # 集合里的父条目 → 它们的 PDF 附件
+        cur.execute(
+            "SELECT i.key, ia.path FROM items i "
+            "JOIN itemAttachments ia ON i.itemID = ia.itemID "
+            "WHERE ia.contentType = 'application/pdf' "
+            "AND ia.parentItemID IN "
+            "(SELECT itemID FROM collectionItems WHERE collectionID = ?)",
+            (coll_id,),
+        )
+        for key, path in cur.fetchall():
+            pdf = _resolve_zotero_path(storage_dir, key, path)
+            if pdf:
+                pdfs.append(pdf)
+        conn.close()
+    except Exception:
+        pass
+    return pdfs
+
+
+def _resolve_zotero_path(storage_dir, key, db_path):
+    """把 Zotero 数据库中的 path 值解析为实际文件路径。
+
+    Zotero path 格式: 'storage:filename.pdf'
+    实际路径: {storage_dir}/{key}/{filename.pdf}
+    """
+    if not db_path:
+        return None
+    filename = db_path
+    if filename.startswith("storage:"):
+        filename = filename[len("storage:"):]
+    full = os.path.join(storage_dir, key, filename)
+    if os.path.isfile(full):
+        return full
+    return None
+
+
 def build_service_envs(svc_display_name):
     """从 GUI 配置构建翻译器 envs 字典
 

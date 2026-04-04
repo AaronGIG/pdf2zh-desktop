@@ -472,10 +472,11 @@ class DropZone(QFrame):
     def dropEvent(self, e):
         import glob
         fs = []
-        urls = e.mimeData().urls()
+        md = e.mimeData()
+        urls = md.urls()
         # Zotero 有时通过 text/plain 传路径
-        if not urls and e.mimeData().hasText():
-            for line in e.mimeData().text().strip().splitlines():
+        if not urls and md.hasText():
+            for line in md.text().strip().splitlines():
                 line = line.strip()
                 if line.startswith("file://"):
                     from PyQt5.QtCore import QUrl
@@ -490,6 +491,44 @@ class DropZone(QFrame):
                 fs.append(p)
             elif os.path.isdir(p):
                 fs.extend(sorted(glob.glob(os.path.join(p, '**', '*.pdf'), recursive=True)))
+        # Zotero 拖拽父条目/集合：通过 zotero/item MIME 解析
+        if not fs:
+            from ui.translate_worker import resolve_zotero_items, resolve_zotero_collection
+            zot_data = md.data("zotero/item")
+            if zot_data and len(zot_data):
+                try:
+                    import json as _json
+                    raw = bytes(zot_data).decode("utf-8", errors="ignore").strip()
+                    # Zotero 可能发:
+                    #   逗号分隔 "2,6"
+                    #   JSON 数组 "[2,6]"
+                    #   JSON 对象 {"libraryID":1,"itemIDs":[2,6]}
+                    try:
+                        parsed = _json.loads(raw)
+                        if isinstance(parsed, dict) and "itemIDs" in parsed:
+                            item_ids = [int(x) for x in parsed["itemIDs"]]
+                        elif isinstance(parsed, list):
+                            item_ids = [int(x) for x in parsed]
+                        elif isinstance(parsed, int):
+                            item_ids = [parsed]
+                        else:
+                            item_ids = []
+                    except (ValueError, TypeError):
+                        item_ids = [int(x) for x in raw.split(",") if x.strip().isdigit()]
+                    if item_ids:
+                        fs = resolve_zotero_items(item_ids)
+                except Exception:
+                    pass
+            # Zotero 集合拖拽
+            if not fs:
+                zot_coll = md.data("zotero/collection")
+                if zot_coll and len(zot_coll):
+                    try:
+                        raw = bytes(zot_coll).decode("utf-8", errors="ignore").strip()
+                        if raw:
+                            fs = resolve_zotero_collection(raw)
+                    except Exception:
+                        pass
         if fs: self.files_dropped.emit(fs)
     def mousePressEvent(self, e):
         fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
@@ -1708,6 +1747,9 @@ class TranslatePage(QWidget):
             self.prog_tip.setText(f"{caring[0]} {caring[1]}")
         else:
             self.prog_tip.setText(get_session_tip())
+
+        # 翻译完成后自动清空文件列表
+        self._clear_files()
 
         # 骰子系统
         try:
