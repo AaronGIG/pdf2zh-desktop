@@ -1,0 +1,8 @@
+dist/
+build/
+*.app/
+__pycache__/
+*.pyc
+*.onnx
+*.egg-info/
+.DS_Store
