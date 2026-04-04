@@ -465,16 +465,31 @@ class DropZone(QFrame):
         lo.addLayout(txt); lo.addStretch()
 
     def dragEnterEvent(self, e):
-        if e.mimeData().hasUrls(): e.acceptProposedAction()
+        if e.mimeData().hasUrls() or e.mimeData().hasText():
+            e.acceptProposedAction()
+    def dragMoveEvent(self, e):
+        e.acceptProposedAction()
     def dropEvent(self, e):
         import glob
         fs = []
-        for u in e.mimeData().urls():
+        urls = e.mimeData().urls()
+        # Zotero 有时通过 text/plain 传路径
+        if not urls and e.mimeData().hasText():
+            for line in e.mimeData().text().strip().splitlines():
+                line = line.strip()
+                if line.startswith("file://"):
+                    from PyQt5.QtCore import QUrl
+                    line = QUrl(line).toLocalFile()
+                if os.path.exists(line):
+                    urls.append(type('U', (), {'toLocalFile': lambda s=line: s})())
+        for u in urls:
             p = u.toLocalFile()
-            if p.lower().endswith('.pdf'):
+            if not p:
+                continue
+            if p.lower().endswith('.pdf') and os.path.isfile(p):
                 fs.append(p)
             elif os.path.isdir(p):
-                fs.extend(glob.glob(os.path.join(p, '**', '*.pdf'), recursive=True))
+                fs.extend(sorted(glob.glob(os.path.join(p, '**', '*.pdf'), recursive=True)))
         if fs: self.files_dropped.emit(fs)
     def mousePressEvent(self, e):
         fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
@@ -1495,9 +1510,10 @@ class TranslatePage(QWidget):
 
         self._save_config()
         self.pending_files = files
-
-        output_dir = os.path.expanduser("~/Documents/pdf2zh_files")
-        os.makedirs(output_dir, exist_ok=True)
+        self._batch_idx = 0
+        self._batch_results = []     # [(file_path, output_files_dict), ...]
+        self._output_dir = os.path.expanduser("~/Documents/pdf2zh_files")
+        os.makedirs(self._output_dir, exist_ok=True)
 
         self.go_btn.setEnabled(False); self.go_btn.setText("翻译中…")
         self.prog_card.setVisible(True); self.prog_bar.setValue(0)
@@ -1506,10 +1522,26 @@ class TranslatePage(QWidget):
         self.prog_icon.setText("⏳")
         self.prog_tip.setText("")
 
+        self._translate_next()
+
+    def _translate_next(self):
+        """启动队列中下一个文件的翻译"""
+        idx = self._batch_idx
+        total = len(self.pending_files)
+        if idx >= total:
+            self._on_batch_done()
+            return
+
+        fp = self.pending_files[idx]
+        if total > 1:
+            self.prog_label.setText(f"正在翻译 ({idx+1}/{total})…")
+            self.prog_detail.setText(os.path.basename(fp))
+        self.prog_bar.setValue(0); self.prog_pct.setText("0%")
+
         envs = build_service_envs(self.svc_combo.currentText())
         self.worker = TranslateWorker(
-            file_path=files[0],
-            output_dir=output_dir,
+            file_path=fp,
+            output_dir=self._output_dir,
             lang_in=LANG_MAP.get(self.src_combo.currentText(), ""),
             lang_out=LANG_MAP.get(self.tgt_combo.currentText(), "zh"),
             service=SERVICE_MAP.get(self.svc_combo.currentText(), "bing"),
@@ -1522,8 +1554,8 @@ class TranslatePage(QWidget):
         )
         self.worker.progress.connect(self._on_prog)
         self.worker.status.connect(self._on_status)
-        self.worker.finished.connect(self._on_done)
-        self.worker.error.connect(self._on_err)
+        self.worker.finished.connect(self._on_single_done)
+        self.worker.error.connect(self._on_single_err)
         self.worker.start()
 
     def _cancel(self):
@@ -1562,23 +1594,10 @@ class TranslatePage(QWidget):
     def _on_status(self, text):
         self.prog_detail.setText(text)
 
-    def _on_done(self, output_files):
-        self.prog_bar.setValue(100); self.prog_pct.setText("100%")
-        self.prog_label.setText("翻译完成")
-        self.prog_icon.setText("✅")
+    def _on_single_done(self, output_files):
+        """单文件翻译完成 — 回写 Zotero + 记录历史 + 推进队列"""
+        fp = self.pending_files[self._batch_idx]
 
-        # 关怀消息
-        from ui.caring import get_caring_message, get_session_tip
-        caring = get_caring_message()
-        if caring:
-            self.prog_detail.setText(f"{caring[0]} {caring[2]}")
-            self.prog_tip.setText(caring[1])
-        else:
-            self.prog_detail.setText("输出至 ~/Documents/pdf2zh_files")
-            self.prog_tip.setText(get_session_tip())
-
-        self.go_btn.setEnabled(True); self.go_btn.setText("开始翻译")
-        self.stop_btn.setVisible(False)
         if self.worker:
             self.worker.wait(2000)
             self.worker.deleteLater()
@@ -1586,7 +1605,7 @@ class TranslatePage(QWidget):
 
         # 保存历史
         HistoryManager.add_record({
-            "file": {"name": os.path.basename(self.pending_files[0]), "path": self.pending_files[0]},
+            "file": {"name": os.path.basename(fp), "path": fp},
             "translation": {
                 "service": self.svc_combo.currentText(),
                 "lang_in": self.src_combo.currentText(),
@@ -1597,50 +1616,100 @@ class TranslatePage(QWidget):
         })
         self.translation_done.emit(output_files)
 
-        # Zotero 回写：把用户选定格式的译文复制回 Zotero 原位 + 自动关联附件
-        try:
-            zotero_dir = detect_zotero_source(self.pending_files[0])
-            if zotero_dir:
-                import shutil
-                cfg = UserConfigManager.load()
-                modes = cfg.get("zotero_output_modes", ["side_by_side"])
-                keep_copy = cfg.get("zotero_keep_copy", True)
-                item_key = get_zotero_item_key(self.pending_files[0])
-                copied = []
-                linked = []
-                for mode in modes:
-                    src = output_files.get(mode)
-                    if src and os.path.exists(src):
-                        dst = os.path.join(zotero_dir, os.path.basename(src))
-                        if os.path.abspath(src) != os.path.abspath(dst):
-                            shutil.copy2(src, dst)
-                            copied.append(os.path.basename(dst))
-                            if not keep_copy:
-                                try:
-                                    os.remove(src)
-                                except OSError:
-                                    pass
-                        # 尝试通过 pdf2zh Connector 插件自动关联附件
-                        if item_key:
-                            mode_label = {"side_by_side": "并排", "dual": "双语", "mono": "译文"}.get(mode, mode)
-                            ok, msg = zotero_auto_link(item_key, dst, f"翻译 ({mode_label})")
-                            if ok:
-                                linked.append(mode_label)
-                if linked:
-                    self.prog_detail.setText(f"已关联到 Zotero: {', '.join(linked)}")
-                elif copied:
-                    self.prog_detail.setText(f"已保存到 Zotero: {', '.join(copied)}")
-                    # 插件未安装时，仅定位到对应条目
-                    if item_key:
-                        try:
-                            import subprocess
-                            subprocess.Popen(["open", f"zotero://select/library/items/{item_key}"])
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+        # Zotero 回写：按此文件自身的来源路径，把译文复制回原位
+        self._zotero_writeback(fp, output_files)
 
-        # 骰子系统：累加今日翻译页数（带签名）
+        self._batch_results.append((fp, output_files))
+
+        # 推进到下一个文件
+        self._batch_idx += 1
+        self._translate_next()
+
+    def _on_single_err(self, msg):
+        """单文件翻译出错 — 记录后继续下一个"""
+        fp = self.pending_files[self._batch_idx]
+
+        if self.worker:
+            self.worker.wait(2000)
+            self.worker.deleteLater()
+            self.worker = None
+
+        self._batch_results.append((fp, None))  # None = 失败
+
+        total = len(self.pending_files)
+        if total > 1:
+            # 批量模式：跳过出错的，继续下一个
+            self.prog_detail.setText(f"⚠️ {os.path.basename(fp)} 翻译出错，跳过")
+            self._batch_idx += 1
+            QTimer.singleShot(1000, self._translate_next)
+        else:
+            # 单文件模式：直接报错
+            self._on_err(msg)
+
+    def _zotero_writeback(self, file_path, output_files):
+        """把译文复制回 Zotero 原位 + 尝试自动关联附件"""
+        import shutil
+        zotero_dir = detect_zotero_source(file_path)
+        if not zotero_dir:
+            return
+        cfg = UserConfigManager.load()
+        modes = cfg.get("zotero_output_modes", ["side_by_side"])
+        keep_copy = cfg.get("zotero_keep_copy", True)
+        item_key = get_zotero_item_key(file_path)
+        for mode in modes:
+            src = output_files.get(mode)
+            if not src or not os.path.exists(src):
+                continue
+            dst = os.path.join(zotero_dir, os.path.basename(src))
+            if os.path.abspath(src) != os.path.abspath(dst):
+                shutil.copy2(src, dst)
+                if not keep_copy:
+                    try:
+                        os.remove(src)
+                    except OSError:
+                        pass
+            # 尝试通过 pdf2zh Connector 插件自动关联附件
+            if item_key:
+                mode_label = {"side_by_side": "并排", "dual": "双语", "mono": "译文"}.get(mode, mode)
+                zotero_auto_link(item_key, dst, f"翻译 ({mode_label})")
+
+    def _on_batch_done(self):
+        """全部文件翻译完成"""
+        self.prog_bar.setValue(100); self.prog_pct.setText("100%")
+        self.prog_icon.setText("✅")
+        self.go_btn.setEnabled(True); self.go_btn.setText("开始翻译")
+        self.stop_btn.setVisible(False)
+
+        total = len(self._batch_results)
+        ok = sum(1 for _, r in self._batch_results if r is not None)
+        failed = total - ok
+        has_zotero = any(detect_zotero_source(fp) for fp, _ in self._batch_results)
+
+        if total == 1 and ok == 1:
+            self.prog_label.setText("翻译完成")
+            if has_zotero:
+                self.prog_detail.setText("译文已保存回 Zotero 原位")
+            else:
+                self.prog_detail.setText("输出至 ~/Documents/pdf2zh_files")
+        elif failed == 0:
+            self.prog_label.setText(f"全部完成（{ok} 篇）")
+            if has_zotero:
+                self.prog_detail.setText("所有译文已保存回 Zotero 原位")
+            else:
+                self.prog_detail.setText("输出至 ~/Documents/pdf2zh_files")
+        else:
+            self.prog_label.setText(f"完成 {ok} 篇，失败 {failed} 篇")
+            self.prog_detail.setText("部分文件翻译出错，请检查")
+
+        # 关怀消息
+        from ui.caring import get_caring_message, get_session_tip
+        caring = get_caring_message()
+        if caring:
+            self.prog_tip.setText(f"{caring[0]} {caring[1]}")
+        else:
+            self.prog_tip.setText(get_session_tip())
+
+        # 骰子系统
         try:
             from datetime import date
             cfg = UserConfigManager.load()

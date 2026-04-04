@@ -57,8 +57,13 @@ OUTPUT_MODES = {
 
 
 def detect_zotero_source(file_path: str):
-    """检测文件是否来自 Zotero storage，返回 Zotero 子文件夹路径或 None"""
-    m = re.search(r'[/\\]Zotero[/\\]storage[/\\][A-Za-z0-9]{8}[/\\]', file_path)
+    """检测文件是否来自 Zotero storage，返回 Zotero 子文件夹路径或 None
+
+    匹配模式：
+      .../Zotero/storage/XXXXXXXX/...
+      .../zotero/storage/XXXXXXXX/...  (大小写不敏感)
+    """
+    m = re.search(r'[/\\][Zz]otero[/\\]storage[/\\][A-Za-z0-9]{8}[/\\]', file_path)
     if m:
         return file_path[:m.end()]
     return None
@@ -66,7 +71,7 @@ def detect_zotero_source(file_path: str):
 
 def get_zotero_item_key(file_path: str):
     """从 Zotero 路径提取 8 位 item key，如 'KSII2GGN'"""
-    m = re.search(r'[/\\]Zotero[/\\]storage[/\\]([A-Za-z0-9]{8})[/\\]', file_path)
+    m = re.search(r'[/\\][Zz]otero[/\\]storage[/\\]([A-Za-z0-9]{8})[/\\]', file_path)
     return m.group(1) if m else None
 
 
