@@ -19,7 +19,7 @@ def _res(*parts):
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QComboBox, QProgressBar, QFileDialog,
-    QStackedWidget, QFrame, QScrollArea, QGraphicsDropShadowEffect,
+    QStackedWidget, QStackedLayout, QFrame, QScrollArea, QGraphicsDropShadowEffect,
     QCheckBox, QListWidget, QListWidgetItem, QLineEdit, QSpinBox,
     QSizePolicy, QSlider, QSplitter, QTabBar, QMessageBox,
 )
@@ -455,18 +455,55 @@ class DropZone(QFrame):
     files_dropped = pyqtSignal(list)
     def __init__(self):
         super().__init__(); self.setObjectName("DZ"); self.setAcceptDrops(True)
-        self.setMinimumHeight(100); self.setMaximumHeight(140); self.setCursor(Qt.PointingHandCursor)
-        lo = QHBoxLayout(self); lo.setAlignment(Qt.AlignCenter); lo.setSpacing(16)
-        lo.setContentsMargins(32,20,32,20)
-        ic = QLabel("📥"); ic.setStyleSheet("font-size:36px;background:transparent;"); lo.addWidget(ic)
+        self.setFixedHeight(140); self.setCursor(Qt.PointingHandCursor)
+
+        self._stack = QStackedLayout(self)
+        self._stack.setContentsMargins(0,0,0,0)
+
+        # ── Page 0: 拖拽提示 ──
+        p0 = QWidget(); p0.setStyleSheet("background:transparent;")
+        lo0 = QHBoxLayout(p0); lo0.setAlignment(Qt.AlignCenter); lo0.setSpacing(16)
+        lo0.setContentsMargins(32,20,32,20)
+        ic = QLabel("📥"); ic.setStyleSheet("font-size:36px;background:transparent;"); lo0.addWidget(ic)
         txt = QVBoxLayout(); txt.setSpacing(3)
         t = QLabel("将 PDF 拖放至此处"); t.setObjectName("DZTitle"); txt.addWidget(t)
         s = QLabel("或点击浏览 · 支持批量"); s.setObjectName("DZSub"); txt.addWidget(s)
-        lo.addLayout(txt); lo.addStretch()
+        lo0.addLayout(txt); lo0.addStretch()
+        self._stack.addWidget(p0)
+
+        # ── Page 1: 文件列表 ──
+        p1 = QWidget(); p1.setStyleSheet("background:transparent;")
+        lo1 = QVBoxLayout(p1); lo1.setContentsMargins(10,6,10,4); lo1.setSpacing(3)
+
+        self._zotero_hint = QLabel("📚 Zotero 文献 · 译文自动保存回原位")
+        self._zotero_hint.setStyleSheet(
+            "font-size:10px;color:#1a56db;background:#e8f0fe;"
+            "border-radius:3px;padding:2px 6px;")
+        self._zotero_hint.setVisible(False)
+        lo1.addWidget(self._zotero_hint)
+
+        self.flist = QListWidget()
+        self.flist.setSelectionMode(QListWidget.ExtendedSelection)
+        lo1.addWidget(self.flist)
+
+        fbtn = QHBoxLayout(); fbtn.setSpacing(6)
+        self._fcount_label = QLabel(""); self._fcount_label.setObjectName("Cap")
+        self._fcount_label.setStyleSheet("font-size:10px;background:transparent;")
+        fbtn.addWidget(self._fcount_label); fbtn.addStretch()
+        self._add_btn = QPushButton("＋ 添加"); self._add_btn.setCursor(Qt.PointingHandCursor)
+        self._add_btn.setStyleSheet("font-size:10px;padding:1px 8px;border:1px solid #ccc;border-radius:3px;background:transparent;")
+        fbtn.addWidget(self._add_btn)
+        self._del_btn = QPushButton("删除选中"); self._del_btn.setObjectName("TB"); self._del_btn.setCursor(Qt.PointingHandCursor)
+        self._del_btn.setStyleSheet("font-size:10px;padding:1px 6px;")
+        fbtn.addWidget(self._del_btn)
+        self._clr_btn = QPushButton("清空"); self._clr_btn.setObjectName("GhDanger"); self._clr_btn.setCursor(Qt.PointingHandCursor)
+        self._clr_btn.setStyleSheet("font-size:10px;padding:1px 6px;")
+        fbtn.addWidget(self._clr_btn)
+        lo1.addLayout(fbtn)
+        self._stack.addWidget(p1)
 
     def dragEnterEvent(self, e):
-        if e.mimeData().hasUrls() or e.mimeData().hasText():
-            e.acceptProposedAction()
+        e.acceptProposedAction()
     def dragMoveEvent(self, e):
         e.acceptProposedAction()
     def dropEvent(self, e):
@@ -487,6 +524,12 @@ class DropZone(QFrame):
             p = u.toLocalFile()
             if p:
                 _collect(p)
+
+        # 检测是否来自 Zotero（macOS 拖多个条目时 URL 只含一个文件）
+        _from_zotero = False
+        if fs:
+            from ui.translate_worker import detect_zotero_source
+            _from_zotero = any(detect_zotero_source(f) for f in fs)
 
         # 2) text/plain 中的 file:// 路径或本地路径
         if not fs and md.hasText():
@@ -533,14 +576,20 @@ class DropZone(QFrame):
                     except Exception:
                         pass
 
-        # 4) macOS 跨进程 fallback：text/plain 匹配 Zotero 标题/集合名
-        if not fs and md.hasText():
+        # 4) macOS 跨进程 Zotero：text/plain 匹配标题/集合名
+        #    也在 layer 1 仅拿到部分 Zotero URL 时运行，补全缺失的文件
+        if (not fs or _from_zotero) and md.hasText():
             try:
                 from ui.translate_worker import (
                     resolve_zotero_by_title, resolve_zotero_collection_by_name)
                 txt = md.text().strip()
                 if txt:
-                    fs = resolve_zotero_by_title(txt)
+                    extra = resolve_zotero_by_title(txt)
+                    existing = set(fs)
+                    for f in extra:
+                        if f not in existing:
+                            fs.append(f)
+                            existing.add(f)
                 if not fs and txt:
                     fs = resolve_zotero_collection_by_name(txt)
             except Exception:
@@ -549,8 +598,9 @@ class DropZone(QFrame):
         if fs:
             self.files_dropped.emit(fs)
     def mousePressEvent(self, e):
-        fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
-        if fs: self.files_dropped.emit(fs)
+        if self._stack.currentIndex() == 0:
+            fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
+            if fs: self.files_dropped.emit(fs)
 
 
 class SB(QWidget):
@@ -758,7 +808,7 @@ class PreviewPage(QWidget):
         self.thumb_scroll.setWidgetResizable(True); self.thumb_scroll.setFrameShape(QFrame.NoFrame)
         self.thumb_scroll.setObjectName("PA"); self.thumb_scroll.setFocusPolicy(Qt.StrongFocus)
         self.thumb_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.thumb_container = QWidget()
+        self.thumb_container = QWidget(); self.thumb_container.setObjectName("PA")
         self.thumb_layout = QVBoxLayout(self.thumb_container)
         self.thumb_layout.setContentsMargins(4,6,4,6); self.thumb_layout.setSpacing(4)
         self.thumb_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
@@ -767,7 +817,7 @@ class PreviewPage(QWidget):
         self.body_splitter.addWidget(self.thumb_scroll)
 
         # 主视图容器
-        self._main_view = QWidget()
+        self._main_view = QWidget(); self._main_view.setObjectName("PA")
         _mv_lo = QHBoxLayout(self._main_view)
         _mv_lo.setContentsMargins(0,0,0,0); _mv_lo.setSpacing(0)
 
@@ -785,7 +835,7 @@ class PreviewPage(QWidget):
         # 主视图 — 连续滚动模式（默认显示）
         self.cont_scroll = QScrollArea(); self.cont_scroll.setWidgetResizable(True)
         self.cont_scroll.setObjectName("PA"); self.cont_scroll.setVisible(True)
-        self.cont_container = QWidget()
+        self.cont_container = QWidget(); self.cont_container.setObjectName("PA")
         self.cont_layout = QVBoxLayout(self.cont_container)
         self.cont_layout.setContentsMargins(0,0,0,0); self.cont_layout.setSpacing(4)
         self.cont_layout.setAlignment(Qt.AlignHCenter)
@@ -1282,43 +1332,16 @@ class TranslatePage(QWidget):
         st = QLabel(_subtitle); st.setObjectName("PT1"); hdr.addWidget(st)
         lo.addLayout(hdr)
 
-        # 拖拽区
-        self.drop = DropZone(); self.drop.files_dropped.connect(self.on_files_added); lo.addWidget(self.drop)
-
-        # 文件列表 + 操作按钮
-        flist_w = QWidget(); flist_w.setVisible(False)
-        self._flist_container = flist_w
-        fl = QVBoxLayout(flist_w); fl.setContentsMargins(0,0,0,0); fl.setSpacing(4)
-        self.flist = QListWidget(); self.flist.setMaximumHeight(120)
-        self.flist.setSelectionMode(QListWidget.ExtendedSelection)
-        fl.addWidget(self.flist)
-        fbtn_row = QHBoxLayout(); fbtn_row.setSpacing(6)
-        self._fcount_label = QLabel(""); self._fcount_label.setObjectName("Cap")
-        fbtn_row.addWidget(self._fcount_label)
-        fbtn_row.addStretch()
-        fdel = QPushButton("删除选中"); fdel.setObjectName("TB"); fdel.setCursor(Qt.PointingHandCursor)
-        fdel.setStyleSheet("font-size:11px;padding:2px 8px;")
-        fdel.clicked.connect(self._remove_selected_files)
-        fbtn_row.addWidget(fdel)
-        fclr = QPushButton("清空"); fclr.setObjectName("GhDanger"); fclr.setCursor(Qt.PointingHandCursor)
-        fclr.setStyleSheet("font-size:11px;padding:2px 8px;")
-        fclr.clicked.connect(self._clear_files)
-        fbtn_row.addWidget(fclr)
-        fl.addLayout(fbtn_row)
-        lo.addWidget(flist_w)
-
-        # ── Zotero 提示条（检测到 Zotero 来源时显示）──
-        self._zotero_hint = QFrame()
-        self._zotero_hint.setStyleSheet(
-            "background:#e8f0fe;border-radius:6px;padding:6px 10px;"
-        )
-        _zh_lo = QHBoxLayout(self._zotero_hint)
-        _zh_lo.setContentsMargins(8,4,8,4); _zh_lo.setSpacing(0)
-        _zh_lbl = QLabel("📚 检测到 Zotero 文献，译文将自动保存回原位")
-        _zh_lbl.setStyleSheet("font-size:11px;color:#1a56db;background:transparent;")
-        _zh_lo.addWidget(_zh_lbl)
-        self._zotero_hint.setVisible(False)
-        lo.addWidget(self._zotero_hint)
+        # 拖拽区（内含文件列表，高度固定，不影响下方布局）
+        self.drop = DropZone(); self.drop.files_dropped.connect(self.on_files_added)
+        self.drop._add_btn.clicked.connect(self._browse_more)
+        self.drop._del_btn.clicked.connect(self._remove_selected_files)
+        self.drop._clr_btn.clicked.connect(self._clear_files)
+        lo.addWidget(self.drop)
+        # 引用 DropZone 内嵌的控件
+        self.flist = self.drop.flist
+        self._fcount_label = self.drop._fcount_label
+        self._zotero_hint = self.drop._zotero_hint
 
         # ── 配置卡片 ──
         card = _card()
@@ -1510,14 +1533,18 @@ class TranslatePage(QWidget):
         self._update_fcount()
         self._check_zotero_source()
 
+    def _browse_more(self):
+        fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
+        if fs: self.on_files_added(fs)
+
     def _update_fcount(self):
         n = self.flist.count()
         if n > 0:
-            self._flist_container.setVisible(True)
+            self.drop._stack.setCurrentIndex(1)  # 切换到文件列表
             self.go_btn.setEnabled(True)
             self._fcount_label.setText(f"共 {n} 个文件")
         else:
-            self._flist_container.setVisible(False)
+            self.drop._stack.setCurrentIndex(0)  # 切换回拖拽提示
             self.go_btn.setEnabled(False)
             self._fcount_label.setText("")
 
@@ -2454,24 +2481,31 @@ class SettingsPage(QWidget):
         left.addWidget(c5)
         left.addStretch()
 
-        cols.addLayout(left, 5)
-
         # ══════════════════════════════════════════
-        # 右列：外观偏好 → 快捷键 → 使用指南
+        # 右列：偏好 → Zotero → 指南，三张卡片，不滚动
         # ══════════════════════════════════════════
+        from PyQt5.QtWidgets import QGridLayout
         right = QVBoxLayout(); right.setSpacing(2)
 
-        # ── 外观与偏好 ──
-        sl_app = QLabel("外观与偏好"); sl_app.setObjectName("SL"); right.addWidget(sl_app)
-        c = _card(); cl = QVBoxLayout(c); cl.setContentsMargins(12,8,12,8); cl.setSpacing(4)
-        self.dark_check = QCheckBox("深色模式"); self.dark_check.toggled.connect(self.dark_mode_changed.emit)
-        cl.addWidget(self.dark_check)
+        # ── 卡 1 ：偏好设置 ──
+        sl_app = QLabel("偏好设置"); sl_app.setObjectName("SL"); right.addWidget(sl_app)
+        c = _card(); cl = QVBoxLayout(c); cl.setContentsMargins(14,12,14,12); cl.setSpacing(6)
 
-        # ── 主题色选择（骰子 3x6 解锁）──
+        self.dark_check = QCheckBox("深色模式"); self.dark_check.toggled.connect(self.dark_mode_changed.emit)
+        self.cache_check = QCheckBox("翻译缓存"); self.cache_check.setChecked(True)
+        self.ai_check = QCheckBox("AI 布局检测"); self.ai_check.setChecked(True)
+        self.font_check = QCheckBox("字体子集化")
+        _pref_grid = QGridLayout(); _pref_grid.setSpacing(6)
+        _pref_grid.addWidget(self.dark_check, 0, 0)
+        _pref_grid.addWidget(self.cache_check, 0, 1)
+        _pref_grid.addWidget(self.ai_check, 1, 0)
+        _pref_grid.addWidget(self.font_check, 1, 1)
+        cl.addLayout(_pref_grid)
+
+        # 主题色（骰子 3x6 解锁）
         self.theme_row = QWidget(); tr_lo = QHBoxLayout(self.theme_row)
         tr_lo.setContentsMargins(0,2,0,2); tr_lo.setSpacing(6)
-        tr_lbl = QLabel("主题色"); tr_lbl.setStyleSheet("font-size:12px;")
-        tr_lo.addWidget(tr_lbl)
+        tr_lbl = QLabel("主题色"); tr_lo.addWidget(tr_lbl)
         THEME_COLORS = [
             ("#0071E3", "蓝"),  ("#FF6B6B", "红"),  ("#34C759", "绿"),
             ("#AF52DE", "紫"),  ("#FF9F0A", "橙"),  ("#FF2D55", "粉"),
@@ -2488,140 +2522,108 @@ class SettingsPage(QWidget):
             tr_lo.addWidget(dot); self._theme_dots.append(dot)
         tr_lo.addStretch()
         cl.addWidget(self.theme_row)
-        # 检查解锁状态
         cfg_theme = UserConfigManager.load()
         self.theme_row.setVisible(cfg_theme.get("theme_unlocked", False))
-
-        cl.addWidget(_div())
-        self.cache_check = QCheckBox("翻译缓存"); self.cache_check.setChecked(True); cl.addWidget(self.cache_check)
-        self.ai_check = QCheckBox("AI 布局检测"); self.ai_check.setChecked(True); cl.addWidget(self.ai_check)
-        self.font_check = QCheckBox("字体子集化"); cl.addWidget(self.font_check)
         right.addWidget(c)
 
-        # ── 快捷键 & 操作（两列紧凑网格）──
-        kb_card = _card(); kb_lo = QVBoxLayout(kb_card)
-        kb_lo.setContentsMargins(12,8,12,8); kb_lo.setSpacing(3)
-        kb_t = QLabel("快捷键 & 操作"); kb_t.setStyleSheet("font-size:12px;font-weight:600;"); kb_lo.addWidget(kb_t)
-        kb_lo.addWidget(_div())
-        from PyQt5.QtWidgets import QGridLayout
-        kb_grid = QGridLayout(); kb_grid.setHorizontalSpacing(12); kb_grid.setVerticalSpacing(3)
-        shortcuts = [
-            ("Ctrl+滚轮", "缩放预览"),
-            ("双指捏合", "触控板缩放"),
-            ("← →", "切换面板"),
-            ("↑↓/滚轮", "翻页浏览"),
-            ("页码+回车", "跳转页码"),
-            ("适宽/适页", "最佳排版"),
-        ]
-        self._kb_labels = []
-        for i, (key, desc) in enumerate(shortcuts):
-            row, col = divmod(i, 2)
-            kl = QLabel(key); kl.setObjectName("KBKey")
-            kd = QLabel(desc); kd.setObjectName("Cap"); kd.setStyleSheet("font-size:11px;")
-            kb_grid.addWidget(kl, row, col * 2)
-            kb_grid.addWidget(kd, row, col * 2 + 1)
-            self._kb_labels.append(kl)
-        kb_lo.addLayout(kb_grid)
-        right.addWidget(kb_card)
-
-        # ── 快速指南 & 性能建议（合并为一张卡）──
-        guide_card = _card(); guide_lo = QVBoxLayout(guide_card)
-        guide_lo.setContentsMargins(12,8,12,8); guide_lo.setSpacing(2)
-        gl = QLabel("快速指南"); gl.setStyleSheet("font-size:12px;font-weight:600;"); guide_lo.addWidget(gl)
-        guide_lo.addWidget(_div())
-        for tip in [
-            "Google / Bing 翻译无需配置，开箱即用",
-            "OpenAI 兼容接口可对接任意第三方服务",
-            "Ollama 本地模型需先启动 Ollama 服务",
-            "DeepSeek / 智谱等国产模型性价比高",
-            "Base URL 末尾不要加斜杠 /",
-        ]:
-            tl = QLabel(f"·  {tip}"); tl.setObjectName("Cap"); tl.setStyleSheet("font-size:11px;")
-            guide_lo.addWidget(tl)
-        guide_lo.addSpacing(2)
-        pl = QLabel("性能建议"); pl.setStyleSheet("font-size:12px;font-weight:600;"); guide_lo.addWidget(pl)
-        guide_lo.addWidget(_div())
-        for tip in [
-            "50 页以上建议开启分块翻译",
-            "线程数推荐 8–16，过高可能触发限流",
-            "Ollama 本地翻译不受并发限制",
-            "翻译服务不稳定时可降低线程数重试",
-        ]:
-            tl = QLabel(f"·  {tip}"); tl.setObjectName("Cap"); tl.setStyleSheet("font-size:11px;")
-            guide_lo.addWidget(tl)
-        right.addWidget(guide_card)
-
-        # ── 数据管理 ──
-        dm_card = _card(); dm_lo = QVBoxLayout(dm_card)
-        dm_lo.setContentsMargins(12,8,12,8); dm_lo.setSpacing(3)
-        dml = QLabel("数据管理"); dml.setStyleSheet("font-size:12px;font-weight:600;"); dm_lo.addWidget(dml)
-        dm_lo.addWidget(_div())
-        for info in [
-            "配置文件: ~/pdf2zh_gui_config.json",
-            "翻译历史: ~/pdf2zh_history.json",
-            "术语库目录: ~/pdf2zh_glossaries/",
-        ]:
-            il = QLabel(f"·  {info}"); il.setObjectName("Cap"); il.setStyleSheet("font-size:10px;")
-            dm_lo.addWidget(il)
-        dm_btn_row = QHBoxLayout(); dm_btn_row.setSpacing(4)
-        open_dir_btn = QPushButton("打开数据目录"); open_dir_btn.setObjectName("Gh")
-        open_dir_btn.setCursor(Qt.PointingHandCursor); open_dir_btn.setStyleSheet("font-size:11px;padding:2px 6px;")
-        open_dir_btn.clicked.connect(lambda: __import__('subprocess').run(['open', str(__import__('pathlib').Path.home())]))
-        dm_btn_row.addWidget(open_dir_btn); dm_btn_row.addStretch()
-        dm_lo.addLayout(dm_btn_row)
-        right.addWidget(dm_card)
-
-        # ── Zotero 译文输出 ──
+        # ── 卡 2 ：Zotero 联动 ──
+        sl_zot = QLabel("Zotero 联动"); sl_zot.setObjectName("SL"); right.addWidget(sl_zot)
         zot_card = _card(); zot_lo = QVBoxLayout(zot_card)
-        zot_lo.setContentsMargins(12,8,12,8); zot_lo.setSpacing(3)
-        zot_title = QLabel("Zotero 译文输出"); zot_title.setStyleSheet("font-size:12px;font-weight:600;")
-        zot_lo.addWidget(zot_title); zot_lo.addWidget(_div())
-        zot_desc = QLabel("从 Zotero 拖入的文献，翻译后自动放回原位")
-        zot_desc.setObjectName("Cap"); zot_desc.setStyleSheet("font-size:11px;"); zot_desc.setWordWrap(True)
+        zot_lo.setContentsMargins(14,10,14,10); zot_lo.setSpacing(5)
+
+        zot_desc = QLabel("从 Zotero 拖入文献，翻译后自动放回原位")
+        zot_desc.setObjectName("Cap"); zot_desc.setWordWrap(True)
         zot_lo.addWidget(zot_desc)
+
         self._zot_sbs = QCheckBox("左右并排 (Side by Side)")
         self._zot_dual = QCheckBox("双语对照 (Dual)")
         self._zot_mono = QCheckBox("仅翻译 (Mono)")
+        self._zot_keep_copy = QCheckBox("保留本地副本")
         cfg = UserConfigManager.load()
         _zot_modes = cfg.get("zotero_output_modes", ["side_by_side"])
         self._zot_sbs.setChecked("side_by_side" in _zot_modes)
         self._zot_dual.setChecked("dual" in _zot_modes)
         self._zot_mono.setChecked("mono" in _zot_modes)
-        for _cb in (self._zot_sbs, self._zot_dual, self._zot_mono):
-            _cb.setStyleSheet("font-size:11px;")
-            _cb.stateChanged.connect(self._save_zotero_modes)
-            zot_lo.addWidget(_cb)
-        zot_lo.addWidget(_div())
-        self._zot_keep_copy = QCheckBox("同时保留一份到本地输出目录")
-        self._zot_keep_copy.setStyleSheet("font-size:11px;")
         self._zot_keep_copy.setChecked(cfg.get("zotero_keep_copy", True))
-        self._zot_keep_copy.stateChanged.connect(self._save_zotero_modes)
-        zot_lo.addWidget(self._zot_keep_copy)
-        # ── 自动关联附件（pdf2zh Connector 插件） ──
+        _zot_grid = QGridLayout(); _zot_grid.setSpacing(4)
+        _zot_grid.addWidget(self._zot_sbs, 0, 0)
+        _zot_grid.addWidget(self._zot_dual, 0, 1)
+        _zot_grid.addWidget(self._zot_mono, 1, 0)
+        _zot_grid.addWidget(self._zot_keep_copy, 1, 1)
+        for _cb in (self._zot_sbs, self._zot_dual, self._zot_mono, self._zot_keep_copy):
+            _cb.stateChanged.connect(self._save_zotero_modes)
+        zot_lo.addLayout(_zot_grid)
         zot_lo.addWidget(_div())
-        zot_auto_title = QLabel("自动关联附件"); zot_auto_title.setStyleSheet("font-size:11px;font-weight:600;")
-        zot_lo.addWidget(zot_auto_title)
-        zot_auto_desc = QLabel("安装插件后，翻译完成自动将译文添加为 Zotero 附件，无需手动操作")
-        zot_auto_desc.setObjectName("Cap"); zot_auto_desc.setStyleSheet("font-size:10px;"); zot_auto_desc.setWordWrap(True)
-        zot_lo.addWidget(zot_auto_desc)
-        _zot_btn_row = QHBoxLayout(); _zot_btn_row.setSpacing(6)
-        self._zot_install_btn = QPushButton("一键安装到 Zotero")
+        _auto_row = QHBoxLayout(); _auto_row.setSpacing(6)
+        _auto_desc = QLabel("Zotero 插件"); _auto_desc.setObjectName("Cap")
+        _auto_row.addWidget(_auto_desc)
+        self._zot_status = QLabel(""); self._zot_status.setObjectName("Cap")
+        _auto_row.addWidget(self._zot_status)
+        _auto_row.addStretch()
+        self._zot_install_btn = QPushButton("一键安装")
         self._zot_install_btn.setObjectName("Gh")
         self._zot_install_btn.setCursor(Qt.PointingHandCursor)
-        self._zot_install_btn.setStyleSheet("font-size:11px;padding:3px 8px;")
         self._zot_install_btn.clicked.connect(self._install_zotero_plugin)
-        self._zot_status = QLabel("")
-        self._zot_status.setStyleSheet("font-size:10px;")
-        _zot_btn_row.addWidget(self._zot_install_btn)
-        _zot_btn_row.addWidget(self._zot_status)
-        _zot_btn_row.addStretch()
-        zot_lo.addLayout(_zot_btn_row)
-        # 检测插件状态
+        _auto_row.addWidget(self._zot_install_btn)
+        zot_lo.addLayout(_auto_row)
         QTimer.singleShot(500, self._check_zotero_plugin)
         right.addWidget(zot_card)
 
+        # ── 卡 3 ：使用指南 + 快捷键 + 数据路径 ──
+        sl_guide = QLabel("使用指南"); sl_guide.setObjectName("SL"); right.addWidget(sl_guide)
+        guide_card = _card(); guide_lo = QVBoxLayout(guide_card)
+        guide_lo.setContentsMargins(14,10,14,10); guide_lo.setSpacing(3)
+
+        for tip in [
+            "Google / Bing 无需配置，开箱即用",
+            "OpenAI 兼容接口可对接任意第三方服务",
+            "Ollama 本地模型需先启动 Ollama 服务",
+            "DeepSeek / 智谱等国产模型性价比高",
+            "50 页以上建议开启分块翻译",
+            "线程数推荐 8–16，过高可能触发限流",
+        ]:
+            tl = QLabel(f"·  {tip}"); tl.setObjectName("Cap")
+            guide_lo.addWidget(tl)
+
+        guide_lo.addWidget(_div())
+
+        # 快捷键
+        kb_grid = QGridLayout(); kb_grid.setHorizontalSpacing(8); kb_grid.setVerticalSpacing(3)
+        shortcuts = [
+            ("Ctrl+滚轮", "缩放"),   ("双指捏合", "缩放"),
+            ("← →",      "切换面板"), ("↑↓/滚轮", "翻页"),
+            ("页码+回车",  "跳转"),    ("适宽/适页", "排版"),
+        ]
+        self._kb_labels = []
+        for i, (key, desc) in enumerate(shortcuts):
+            row, col = divmod(i, 2)
+            kl = QLabel(key); kl.setObjectName("KBKey")
+            kd = QLabel(desc); kd.setObjectName("Cap")
+            kb_grid.addWidget(kl, row, col * 2)
+            kb_grid.addWidget(kd, row, col * 2 + 1)
+            self._kb_labels.append(kl)
+        guide_lo.addLayout(kb_grid)
+
+        guide_lo.addWidget(_div())
+
+        # 数据路径
+        _paths = QLabel("配置: ~/pdf2zh_gui_config.json · 历史: ~/pdf2zh_history.json")
+        _paths.setObjectName("Cap"); _paths.setWordWrap(True)
+        guide_lo.addWidget(_paths)
+        _dm_row = QHBoxLayout()
+        _paths2 = QLabel("术语库: ~/pdf2zh_glossaries/")
+        _paths2.setObjectName("Cap")
+        _dm_row.addWidget(_paths2); _dm_row.addStretch()
+        open_dir_btn = QPushButton("打开数据目录"); open_dir_btn.setObjectName("Gh")
+        open_dir_btn.setCursor(Qt.PointingHandCursor)
+        open_dir_btn.clicked.connect(lambda: __import__('subprocess').run(['open', str(__import__('pathlib').Path.home())]))
+        _dm_row.addWidget(open_dir_btn)
+        guide_lo.addLayout(_dm_row)
+        right.addWidget(guide_card)
+
         right.addStretch()
 
+        cols.addLayout(left, 5)
         cols.addLayout(right, 4)
         lo.addLayout(cols)
 
@@ -2682,6 +2684,7 @@ class SettingsPage(QWidget):
 
     def _test_connection(self, svc_name):
         """测试翻译服务连接"""
+        self._save()  # 先保存，确保 API Key 写入配置
         self._test_label.setText("测试中…")
         self._test_label.setStyleSheet("color:#FF9F0A;font-size:11px;")
         QApplication.processEvents()
@@ -2836,14 +2839,14 @@ class SettingsPage(QWidget):
         xpi = _res('assets', 'pdf2zh-connector.xpi')
         if not os.path.exists(xpi):
             self._zot_status.setText("插件文件缺失")
-            self._zot_status.setStyleSheet("font-size:10px;color:#FF3B30;")
+            self._zot_status.setStyleSheet("color:#FF3B30;")
             return
         # 查找 Zotero profile 目录
         profiles_dir = os.path.expanduser("~/Library/Application Support/Zotero/Profiles")
         profiles = glob.glob(os.path.join(profiles_dir, "*.default"))
         if not profiles:
             self._zot_status.setText("找不到 Zotero 配置目录")
-            self._zot_status.setStyleSheet("font-size:10px;color:#FF3B30;")
+            self._zot_status.setStyleSheet("color:#FF3B30;")
             return
         profile = profiles[0]
         # 1. 复制 XPI 到 extensions 目录
@@ -2878,21 +2881,21 @@ class SettingsPage(QWidget):
             QTimer.singleShot(2000, lambda: subprocess.Popen(["open", "-a", "Zotero"]))
             QTimer.singleShot(10000, self._check_zotero_plugin)
             self._zot_status.setText("正在重启 Zotero…")
-            self._zot_status.setStyleSheet("font-size:10px;color:#0071E3;")
+            self._zot_status.setStyleSheet("color:#0071E3;")
         else:
             self._zot_status.setText("下次启动 Zotero 后生效")
-            self._zot_status.setStyleSheet("font-size:10px;color:#0071E3;")
+            self._zot_status.setStyleSheet("color:#0071E3;")
 
     def _check_zotero_plugin(self):
         """检测 pdf2zh Connector 插件状态"""
         if zotero_plugin_installed():
             self._zot_status.setText("已安装")
-            self._zot_status.setStyleSheet("font-size:10px;color:#34C759;font-weight:600;")
-            self._zot_install_btn.setText("已安装")
-            self._zot_install_btn.setEnabled(False)
+            self._zot_status.setStyleSheet("color:#34C759;font-weight:600;")
+            self._zot_install_btn.hide()
         else:
-            self._zot_status.setText("")
-            self._zot_install_btn.setText("一键安装到 Zotero")
+            self._zot_status.setText("未安装")
+            self._zot_install_btn.setText("一键安装")
+            self._zot_install_btn.show()
             self._zot_install_btn.setEnabled(True)
 
     # ── 术语库操作 ──

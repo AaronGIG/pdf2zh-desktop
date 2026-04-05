@@ -306,7 +306,8 @@ def resolve_zotero_by_title(text):
             list(parent_to_pdf.keys()),
         )
         for item_id, title in cur.fetchall():
-            if title and title in text:
+            # 标题长度 >= 8 才做子串匹配，避免 "4"、"AI" 等短标题误中
+            if title and len(title) >= 8 and title in text:
                 pdfs.append(parent_to_pdf[item_id])
         conn.close()
     except Exception:
