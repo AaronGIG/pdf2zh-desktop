@@ -134,14 +134,14 @@ def main():
         app.setStyleSheet("""
             * {
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
-                font-size: 12px;
+                font-size: 14px;
             }
             QMainWindow {
                 background: #fafbfc;
             }
             QGroupBox {
                 font-weight: bold;
-                font-size: 13px;
+                font-size: 15px;
                 color: #333;
                 border: 1px solid #e0e4ea;
                 border-radius: 6px;
@@ -248,7 +248,7 @@ def main():
                 border-radius: 3px;
             }
             QTabBar::tab {
-                font-size: 13px;
+                font-size: 14px;
                 padding: 8px 6px;
                 border: none;
                 border-bottom: 2px solid transparent;
