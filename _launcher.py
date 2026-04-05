@@ -94,10 +94,14 @@ def preload_onnxruntime():
 
 
 def ensure_window_visible(window, app):
-    """确保窗口在可见屏幕范围内并居中显示。"""
+    """根据屏幕分辨率自适应窗口大小并居中显示。"""
     screen = app.primaryScreen().availableGeometry()
-    w = min(window.width(), screen.width())
-    h = min(window.height(), screen.height())
+    # 按屏幕大小自适应：占屏幕 85% 但不超过 1400x900
+    w = min(int(screen.width() * 0.85), 1400)
+    h = min(int(screen.height() * 0.85), 900)
+    # 最小保证 900x600
+    w = max(w, 900)
+    h = max(h, 600)
     window.resize(w, h)
     x = screen.x() + (screen.width() - w) // 2
     y = screen.y() + (screen.height() - h) // 2
