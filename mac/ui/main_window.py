@@ -249,15 +249,15 @@ def S(c):
     QToolTip{{background:transparent;border:none;padding:0;}}
     /* ── 侧边栏 ── */
     #Sidebar{{background:{c["sb"]};border-right:0.5px solid {c["brd"]};}}
-    #SB{{background:transparent;border:none;border-radius:7px;padding:6px 12px;text-align:left;font-size:13px;color:{c["t2"]};letter-spacing:0.2px;}}
+    #SB{{background:transparent;border:none;border-radius:7px;padding:6px 12px;text-align:left;font-size:13px;color:{c["t2"]};letter-spacing:0.2px;border-left:3px solid transparent;}}
     #SB:hover{{background:{c["sb_hov"]};color:{c["t1"]};}}
-    #SB[active="true"]{{background:{c["sb_act"]};color:{c["acc"]};font-weight:600;}}
+    #SB[active="true"]{{background:{c["sb_act"]};color:{c["acc"]};font-weight:600;border-left:3px solid {c["acc"]};border-top-left-radius:0;border-bottom-left-radius:0;}}
     #SBLink{{background:transparent;border:none;font-size:10px;color:{c["link"]};padding:1px 3px;}}
     #SBLink:hover{{color:{c["acc"]};}}
     /* ── 按钮 ── */
-    #Pr{{background:{c["acc_g"]};color:white;border:none;border-radius:12px;padding:12px 32px;font-size:15px;font-weight:600;}}
-    #Pr:hover{{background:{c["acc_h"]};}}#Pr:pressed{{background:{c["acc_p"]};}}
-    #Pr:disabled{{background:{c["bg3"]};color:{c["t4"]};}}
+    #Pr{{background:{c["acc_g"]};color:white;border:none;border-radius:12px;padding:12px 32px;font-size:15px;font-weight:600;letter-spacing:0.3px;}}
+    #Pr:hover{{background:{c["acc_h"]};}}#Pr:pressed{{background:{c["acc_p"]};padding:13px 32px 11px 32px;}}
+    #Pr:disabled{{background:{c["bg3"]};color:{c["t4"]};border:1px solid {c["brd"]};}}
     #Sc{{background:{c["bg2"]};color:{c["t1"]};border:0.5px solid {c["brd_s"]};border-radius:8px;padding:8px 18px;font-size:13px;font-weight:500;}}
     #Sc:hover{{background:{c["bg3"]};border-color:{c["acc"]};}}
     #Gh{{background:transparent;color:{c["acc"]};border:none;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:500;}}
@@ -268,18 +268,18 @@ def S(c):
     #TB:hover{{background:{c["sb_hov"]};color:{c["t1"]};}}
     #TB[active="true"]{{background:{c["acc_l"]};color:{c["acc"]};font-weight:600;}}
     /* ── 输入控件 ── */
-    QComboBox{{background:{c["inp"]};border:1px solid {c["inp_b"]};border-radius:8px;padding:8px 14px;font-size:13px;min-height:22px;color:{c["t1"]};}}
-    QComboBox:hover{{border-color:{c["brd_s"]};}}QComboBox:focus{{border-color:{c["acc"]};}}
+    QComboBox{{background:{c["inp"]};border:1.5px solid {c["inp_b"]};border-radius:8px;padding:8px 14px;font-size:13px;min-height:22px;color:{c["t1"]};}}
+    QComboBox:hover{{border-color:{c["brd_s"]};}}QComboBox:focus{{border-color:{c["acc"]};border-width:2px;}}
     QComboBox::drop-down{{border:none;width:32px;subcontrol-origin:padding;subcontrol-position:center right;}}
     QComboBox::down-arrow{{image:none;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid {c["acc"]};margin-right:10px;}}
     QComboBox QAbstractItemView{{background:{c["elev"]};border:1px solid {c["brd_s"]};border-radius:8px;padding:4px;selection-background-color:{c["acc"]};selection-color:white;color:{c["t1"]};}}
-    QLineEdit{{background:{c["inp"]};border:1px solid {c["inp_b"]};border-radius:8px;padding:8px 14px;font-size:13px;color:{c["t1"]};}}
-    QLineEdit:focus{{border-color:{c["acc"]};background:{c["elev"]};}}
+    QLineEdit{{background:{c["inp"]};border:1.5px solid {c["inp_b"]};border-radius:8px;padding:8px 14px;font-size:13px;color:{c["t1"]};}}
+    QLineEdit:focus{{border-color:{c["acc"]};border-width:2px;background:{c["elev"]};}}
     QLineEdit[readOnly="true"]{{color:{c["t2"]};}}
-    QSpinBox{{background:{c["inp"]};border:1px solid {c["inp_b"]};border-radius:8px;padding:6px 10px;font-size:13px;color:{c["t1"]};}}
-    QSpinBox:focus{{border-color:{c["acc"]};}}
-    QTextEdit{{background:{c["inp"]};color:{c["t1"]};border:1px solid {c["inp_b"]};border-radius:8px;}}
-    QTextEdit:focus{{border-color:{c["acc"]};}}
+    QSpinBox{{background:{c["inp"]};border:1.5px solid {c["inp_b"]};border-radius:8px;padding:6px 10px;font-size:13px;color:{c["t1"]};}}
+    QSpinBox:focus{{border-color:{c["acc"]};border-width:2px;}}
+    QTextEdit{{background:{c["inp"]};color:{c["t1"]};border:1.5px solid {c["inp_b"]};border-radius:8px;}}
+    QTextEdit:focus{{border-color:{c["acc"]};border-width:2px;}}
     /* ── 进度条 ── */
     QProgressBar{{background:{c["bg3"]};border:none;border-radius:3px;max-height:6px;min-height:6px;font-size:1px;}}
     QProgressBar::chunk{{background:{c["acc_g"]};border-radius:3px;}}
@@ -295,15 +295,15 @@ def S(c):
     QListWidget::item:hover:!selected{{background:{c["bg2"]};}}
     /* ── 滚动条 ── */
     QScrollArea{{border:none;background:transparent;}}
-    QScrollBar:vertical{{background:transparent;width:7px;margin:4px 1px;}}
-    QScrollBar::handle:vertical{{background:{c["scr"]};border-radius:3px;min-height:40px;}}
+    QScrollBar:vertical{{background:transparent;width:10px;margin:4px 2px;}}
+    QScrollBar::handle:vertical{{background:{c["scr"]};border-radius:4px;min-height:36px;}}
     QScrollBar::handle:vertical:hover{{background:{c["scr_h"]};}}
     QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical,QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{{height:0;background:transparent;}}
     QScrollBar:horizontal{{height:0;}}
     /* ── 复选框 ── */
     QCheckBox{{spacing:10px;font-size:13px;}}
-    QCheckBox::indicator{{width:20px;height:20px;border-radius:6px;border:1.5px solid {c["brd_s"]};background:{c["elev"]};}}
-    QCheckBox::indicator:hover{{border-color:{c["acc"]};}}
+    QCheckBox::indicator{{width:18px;height:18px;border-radius:5px;border:1.5px solid {c["brd_s"]};background:{c["elev"]};}}
+    QCheckBox::indicator:hover{{border-color:{c["acc"]};background:{c["acc_l"]};}}
     QCheckBox::indicator:checked{{background:{c["acc"]};border-color:{c["acc"]};}}
     /* ── 标签/分隔 ── */
     #Tag{{background:{c["tag_bg"]};color:{c["tag_fg"]};border:none;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;}}
@@ -562,7 +562,12 @@ class DropZone(QFrame):
         self._stack.addWidget(p1)
 
     def dragEnterEvent(self, e):
+        self.setStyleSheet(
+            f"#DZ{{background:{_C['acc_l']};border:2px solid {_C['acc']};"
+            f"border-radius:12px;}}")
         e.acceptProposedAction()
+    def dragLeaveEvent(self, e):
+        self.setStyleSheet("")
     def dragMoveEvent(self, e):
         e.acceptProposedAction()
     def dropEvent(self, e):
@@ -654,6 +659,7 @@ class DropZone(QFrame):
             except Exception:
                 pass
 
+        self.setStyleSheet("")  # 恢复默认样式
         if fs:
             self.files_dropped.emit(fs)
     def mousePressEvent(self, e):
@@ -914,13 +920,14 @@ class PreviewPage(QWidget):
 
         # 空状态
         self.empty = QWidget(); self.empty.setObjectName("PA")
-        el = QVBoxLayout(self.empty); el.setAlignment(Qt.AlignCenter); el.setSpacing(12)
-        ic = QLabel(); ic.setFixedSize(72,72); ic.setAlignment(Qt.AlignCenter)
-        ic.setStyleSheet(f"background:{_C['acc_l']};border-radius:22px;font-size:32px;")
+        el = QVBoxLayout(self.empty); el.setAlignment(Qt.AlignCenter); el.setSpacing(16)
+        el.setContentsMargins(40, 40, 40, 40)
+        ic = QLabel(); ic.setFixedSize(64, 64); ic.setAlignment(Qt.AlignCenter)
+        ic.setStyleSheet(f"background:{_C['acc_l']};border-radius:32px;font-size:28px;")
         ic.setText("👀"); self._empty_icon = ic; el.addWidget(ic, alignment=Qt.AlignCenter)
-        m = QLabel("翻译完成后在此预览"); m.setStyleSheet("font-size:16px;font-weight:600;"); m.setAlignment(Qt.AlignCenter); el.addWidget(m)
+        m = QLabel("翻译完成后在此预览"); m.setStyleSheet(f"font-size:15px;font-weight:600;color:{_C['t1']};"); m.setAlignment(Qt.AlignCenter); el.addWidget(m)
         s = QLabel("支持 Dual · Mono · Side by Side 三种模式切换"); s.setObjectName("Cap"); s.setAlignment(Qt.AlignCenter); el.addWidget(s)
-        s2 = QLabel("← 也可点击左侧历史记录直接打开"); s2.setObjectName("Cap"); s2.setStyleSheet("font-size:11px;"); s2.setAlignment(Qt.AlignCenter); el.addWidget(s2)
+        s2 = QLabel("← 也可点击左侧历史记录直接打开"); s2.setStyleSheet(f"font-size:11px;color:{_C['t3']};"); s2.setAlignment(Qt.AlignCenter); el.addWidget(s2)
         self.body_widget.setVisible(False); lo.addWidget(self.empty)
         self._thumb_labels = []
 
@@ -1389,7 +1396,7 @@ class PreviewPage(QWidget):
 
     def update_theme(self, c):
         """深色/浅色切换时更新内联样式"""
-        self._empty_icon.setStyleSheet(f"background:{c['acc_l']};border-radius:22px;font-size:32px;")
+        self._empty_icon.setStyleSheet(f"background:{c['acc_l']};border-radius:32px;font-size:28px;")
         self._thumb_color = c['acc']
         if self._thumb_labels:
             self._highlight_thumb(self.current_page)
@@ -1550,11 +1557,11 @@ class TranslatePage(QWidget):
         self.prog_card = _card("lg")
         self.prog_card.setVisible(False)
         pc_lo = QVBoxLayout(self.prog_card)
-        pc_lo.setContentsMargins(20, 14, 20, 14)
-        pc_lo.setSpacing(8)
+        pc_lo.setContentsMargins(24, 18, 24, 18)
+        pc_lo.setSpacing(10)
 
         # 第一行：状态图标 + 标题 + 百分比
-        row1 = QHBoxLayout(); row1.setSpacing(10)
+        row1 = QHBoxLayout(); row1.setSpacing(12)
         self.prog_icon = QLabel("⏳"); self.prog_icon.setObjectName("ProgIcon")
         row1.addWidget(self.prog_icon)
         self.prog_label = QLabel("正在翻译…"); self.prog_label.setObjectName("ProgLabel")
