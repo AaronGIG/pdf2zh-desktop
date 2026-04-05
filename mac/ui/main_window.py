@@ -21,10 +21,11 @@ from PyQt5.QtWidgets import (
     QPushButton, QLabel, QComboBox, QProgressBar, QFileDialog,
     QStackedWidget, QStackedLayout, QFrame, QScrollArea, QGraphicsDropShadowEffect,
     QCheckBox, QListWidget, QListWidgetItem, QLineEdit, QSpinBox,
-    QSizePolicy, QSlider, QSplitter, QTabBar, QMessageBox,
+    QSizePolicy, QSlider, QSplitter, QTabBar, QMessageBox, QMenu, QAction,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize, QEvent
-from PyQt5.QtGui import QColor, QDragEnterEvent, QDropEvent, QImage, QPixmap, QScreen, QIcon
+from PyQt5.QtGui import (QColor, QDragEnterEvent, QDropEvent, QImage, QPixmap,
+                         QScreen, QIcon, QPainter, QPainterPath, QPen, QRegion)
 
 from ui.config_manager import UserConfigManager, HistoryManager
 from ui.translate_worker import (
@@ -50,7 +51,7 @@ L = {
     "dz_bg":"#FAFBFF","dz_b":"rgba(0,113,227,0.20)",
     "tag_bg":"rgba(0,113,227,0.08)","tag_fg":"#0071E3",
     "scr":"rgba(0,0,0,0.12)","scr_h":"rgba(0,0,0,0.24)",
-    "pv_bg":"#E8E8ED","pv_tb":"qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #FBFBFD,stop:1 #F2F2F7)",
+    "pv_bg":"#FFFFFF","pv_tb":"qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #FBFBFD,stop:1 #F2F2F7)",
     "pv_l_bg":"rgba(0,113,227,0.07)","pv_l_fg":"#0071E3",
     "link":"#6E6E73","link_h":"#0071E3",
 }
@@ -183,10 +184,21 @@ class _Tip(QWidget):
         # 先确保 tooltip 自身不可见，再截取目标位置的屏幕
         tip.hide()
         pad = tip._PAD
-        tx, ty = pos.x() + 8 + pad, pos.y() + 14 + pad
+        tx, ty = pos.x() + 8, pos.y() + 14
+        # 边界检测：确保不超出屏幕
+        screen = QApplication.primaryScreen()
+        if screen:
+            sg = screen.availableGeometry()
+            if tx + tip.width() > sg.right():
+                tx = sg.right() - tip.width()
+            if ty + tip.height() > sg.bottom():
+                ty = pos.y() - tip.height() - 4  # 移到光标上方
+            tx = max(sg.left(), tx)
+            ty = max(sg.top(), ty)
+        bx, by = tx + pad, ty + pad
         tw, th = tip.width() - pad * 2, tip.height() - pad * 2
-        tip._grab_and_blur(tx, ty, tw, th)
-        tip.move(pos.x() + 8, pos.y() + 14)
+        tip._grab_and_blur(bx, by, tw, th)
+        tip.move(tx, ty)
         tip.show()
         tip.update()
 
@@ -272,13 +284,13 @@ def S(c):
     QProgressBar{{background:{c["bg3"]};border:none;border-radius:3px;max-height:6px;min-height:6px;font-size:1px;}}
     QProgressBar::chunk{{background:{c["acc_g"]};border-radius:3px;}}
     /* ── 卡片 ── */
-    #Card{{background:{c["card"]};border:0.5px solid {c["card_b"]};border-radius:14px;}}
+    #Card{{background:{c["card"]};border:0.5px solid {c["card_b"]};border-radius:12px;}}
     #Card:hover{{border-color:{c["acc"]};}}
-    #DZ{{background:{c["dz_bg"]};border:2px dashed {c["dz_b"]};border-radius:16px;}}
+    #DZ{{background:{c["dz_bg"]};border:2px dashed {c["dz_b"]};border-radius:12px;}}
     #DZ:hover{{border-color:{c["acc"]};}}
     /* ── 列表 ── */
     QListWidget{{background:transparent;border:none;outline:none;}}
-    QListWidget::item{{background:{c["card"]};border:0.5px solid {c["card_b"]};border-radius:10px;padding:4px 10px;margin:2px 0;}}
+    QListWidget::item{{background:{c["card"]};border:0.5px solid {c["card_b"]};border-radius:8px;padding:4px 10px;margin:2px 0;}}
     QListWidget::item:selected{{background:{c["acc"]};color:white;border-color:{c["acc"]};}}
     QListWidget::item:hover:!selected{{background:{c["bg2"]};}}
     /* ── 滚动条 ── */
@@ -304,6 +316,11 @@ def S(c):
     QSplitter::handle:hover{{background:{c["acc"]};}}
     QSlider::groove:horizontal{{background:{c["bg3"]};height:4px;border-radius:2px;}}
     QSlider::handle:horizontal{{background:{c["acc"]};width:14px;height:14px;margin:-5px 0;border-radius:7px;}}
+    QSlider::handle:horizontal:hover{{background:{c["acc_h"]};width:16px;height:16px;margin:-6px 0;border-radius:8px;}}
+    QMenu{{background:{c["elev"]};border:1px solid {c["brd_s"]};border-radius:10px;padding:6px 4px;}}
+    QMenu::item{{padding:4px 28px 4px 14px;border-radius:6px;font-size:13px;margin:1px 4px;}}
+    QMenu::item:selected{{background:{c["acc"]};color:white;}}
+    QMenu::separator{{height:1px;background:{c["brd"]};margin:4px 12px;}}
     /* ── 字体层级: 24 / 15 / 13 / 11 ── */
     #PT0{{font-size:24px;font-weight:700;letter-spacing:-0.3px;}}
     #PT1{{font-size:15px;color:{c["t2"]};}}
@@ -438,10 +455,52 @@ class _EggLogo(QLabel):
             anim.start(); lbl._anim = anim
 
 
+class _RoundMenu(QMenu):
+    """圆角右键菜单 — FramelessWindowHint + 自绘圆角背景 + mask 裁切"""
+    _R = 10  # corner radius
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            self.windowFlags() | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        # 让 Qt 的默认 QMenu 绘制不画背景，只画菜单项
+        self.setStyleSheet("QMenu{background:transparent;border:none;}")
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(),
+                            self._R, self._R)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = self._R
+        rect = self.rect()
+        is_dark = isinstance(_C, dict) and _C.get("bg") == "#1C1C1E"
+        bg = QColor(_C.get("elev", "#FFF")) if isinstance(_C, dict) else QColor("#FFF")
+        brd = QColor(0, 0, 0, 18) if not is_dark else QColor(255, 255, 255, 18)
+        path = QPainterPath()
+        path.addRoundedRect(
+            rect.x() + 0.5, rect.y() + 0.5,
+            rect.width() - 1.0, rect.height() - 1.0,
+            float(r), float(r))
+        p.fillPath(path, bg)
+        p.setPen(QPen(brd, 0.5))
+        p.drawPath(path)
+        p.end()
+        super().paintEvent(e)
+
+
 def _div():
     d = QFrame(); d.setObjectName("Div"); d.setFrameShape(QFrame.HLine); return d
 
-def _card(blur=24, y=4, a=12):
+def _card(level="md"):
+    """统一阴影层级: sm=微弱, md=默认卡片, lg=悬浮"""
+    _SHADOW = {"sm":(12,2,8), "md":(20,4,12), "lg":(28,6,16)}
+    blur, y, a = _SHADOW.get(level, _SHADOW["md"])
     c = QFrame(); c.setObjectName("Card")
     s = QGraphicsDropShadowEffect(); s.setBlurRadius(blur); s.setOffset(0,y); s.setColor(QColor(0,0,0,a))
     c.setGraphicsEffect(s); return c
@@ -1156,13 +1215,18 @@ class PreviewPage(QWidget):
         if self.doc:
             self.current_page = len(self.doc) - 1; self.render_page()
     def _jump_to_page(self):
-        """页码输入框回车跳转"""
+        """页码输入框回车跳转，超范围闪红提示"""
         try:
             n = int(self.page_input.text()) - 1
             if self.doc and 0 <= n < len(self.doc):
                 self.current_page = n; self.render_page()
+                return
         except ValueError:
             pass
+        # 输入无效：闪红 + 重置
+        self.page_input.setStyleSheet(f"border:1.5px solid {_C['err']};border-radius:6px;")
+        self.page_input.setText(str(self.current_page + 1) if self.doc else "")
+        QTimer.singleShot(800, lambda: self.page_input.setStyleSheet(""))
     def _update_page_display(self):
         total = len(self.doc) if self.doc else 0
         self.page_input.setText(str(self.current_page + 1) if total else "")
@@ -1177,6 +1241,22 @@ class PreviewPage(QWidget):
     def open_file(self):
         p, _ = QFileDialog.getOpenFileName(self, "选择 PDF", "", "PDF (*.pdf)")
         if p: self.load_pdf(p)
+    def contextMenuEvent(self, event):
+        if not self.doc:
+            return
+        menu = _RoundMenu(self)
+        menu.addAction("打开其他 PDF…", self.open_file)
+        menu.addSeparator()
+        menu.addAction("放大", lambda: self._apply_zoom(min(self.zoom + 0.1, 4.0)))
+        menu.addAction("缩小", lambda: self._apply_zoom(max(self.zoom - 0.1, 0.3)))
+        menu.addAction("适合宽度", self._switch_to_fit_width)
+        menu.addAction("适合页面", self._switch_to_fit_page)
+        menu.addSeparator()
+        lp = getattr(self, '_loaded_path', None)
+        if lp and os.path.exists(lp):
+            menu.addAction("在 Finder 中显示",
+                           lambda: __import__("subprocess").Popen(["open", "-R", lp]))
+        menu.exec_(event.globalPos())
     def _toggle_fullscreen(self):
         self._is_fullscreen = not self._is_fullscreen
         self.fs_btn.setText("退出" if self._is_fullscreen else "全屏")
@@ -1243,31 +1323,55 @@ class PreviewPage(QWidget):
             QTimer.singleShot(0, self._fit_and_render)
 
     def _render_continuous(self):
-        """渲染所有页面到连续滚动容器"""
+        """分帧渲染所有页面到连续滚动容器（避免大文件卡 UI）"""
         if not self.doc:
             return
         # 清空旧内容
         for w in self._cont_page_widgets:
             w.setParent(None)
         self._cont_page_widgets = []
+        self._cont_render_idx = 0
+        self._cont_render_dpr = QApplication.instance().devicePixelRatio() if QApplication.instance() else 2.0
 
-        dpr = QApplication.instance().devicePixelRatio() if QApplication.instance() else 2.0
-        for i in range(len(self.doc)):
-            pg = self.doc[i]
+        # 先放置占位标签
+        total = len(self.doc)
+        for i in range(total):
+            lbl = QLabel("加载中…" if i == 0 else "")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet(f"background:transparent;color:{_C['t3']};font-size:11px;min-height:200px;")
+            self.cont_layout.addWidget(lbl, alignment=Qt.AlignHCenter)
+            self._cont_page_widgets.append(lbl)
+        self._update_page_display()
+
+        # 分帧渲染：每帧渲染 2 页
+        self._render_batch_continuous()
+
+    def _render_batch_continuous(self):
+        """每次渲染 2 页，释放 UI 事件循环"""
+        if not self.doc:
+            return
+        idx = getattr(self, '_cont_render_idx', 0)
+        total = len(self.doc)
+        dpr = self._cont_render_dpr
+        batch = 2  # 每帧渲染页数
+        for _ in range(batch):
+            if idx >= total:
+                return
+            pg = self.doc[idx]
             render_zoom = self.zoom * dpr
             mat = fitz.Matrix(render_zoom, render_zoom)
             pix = pg.get_pixmap(matrix=mat, alpha=False)
             img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
             qpix = QPixmap.fromImage(img)
             qpix.setDevicePixelRatio(dpr)
-            lbl = QLabel()
+            lbl = self._cont_page_widgets[idx]
             lbl.setPixmap(qpix)
             lbl.setFixedSize(int(pix.width / dpr), int(pix.height / dpr))
-            lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("background:transparent;")
-            self.cont_layout.addWidget(lbl, alignment=Qt.AlignHCenter)
-            self._cont_page_widgets.append(lbl)
-        self._update_page_display()
+            idx += 1
+        self._cont_render_idx = idx
+        if idx < total:
+            QTimer.singleShot(0, self._render_batch_continuous)
 
     def _on_cont_scroll(self, value):
         """连续滚动时更新页码和缩略图高亮"""
@@ -1342,10 +1446,13 @@ class TranslatePage(QWidget):
         self.flist = self.drop.flist
         self._fcount_label = self.drop._fcount_label
         self._zotero_hint = self.drop._zotero_hint
+        # 文件列表右键菜单
+        self.flist.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.flist.customContextMenuRequested.connect(self._flist_context_menu)
 
         # ── 配置卡片 ──
         card = _card()
-        cl = QVBoxLayout(card); cl.setContentsMargins(20,16,20,16); cl.setSpacing(0)
+        cl = QVBoxLayout(card); cl.setContentsMargins(16,12,16,12); cl.setSpacing(0)
 
         # 语言行
         r1 = QHBoxLayout(); r1.setSpacing(12)
@@ -1440,7 +1547,7 @@ class TranslatePage(QWidget):
         lo.addWidget(card)
 
         # ── 进度卡片 ──
-        self.prog_card = _card(28, 6, 14)
+        self.prog_card = _card("lg")
         self.prog_card.setVisible(False)
         pc_lo = QVBoxLayout(self.prog_card)
         pc_lo.setContentsMargins(20, 14, 20, 14)
@@ -1533,6 +1640,28 @@ class TranslatePage(QWidget):
         self._update_fcount()
         self._check_zotero_source()
 
+    def _flist_context_menu(self, pos):
+        item = self.flist.itemAt(pos)
+        menu = _RoundMenu(self)
+        menu.addAction("添加文件…", self._browse_more)
+        if item:
+            fp = item.data(Qt.UserRole)
+            menu.addSeparator()
+            menu.addAction("在 Finder 中显示", lambda: self._reveal_in_finder(fp))
+            menu.addAction("移除", lambda: self._remove_item(item))
+        if self.flist.count() > 0:
+            menu.addSeparator()
+            menu.addAction("清空全部", self._clear_files)
+        menu.exec_(self.flist.viewport().mapToGlobal(pos))
+
+    def _reveal_in_finder(self, path):
+        import subprocess
+        subprocess.Popen(["open", "-R", path])
+
+    def _remove_item(self, item):
+        self.flist.takeItem(self.flist.row(item))
+        self._update_fcount(); self._check_zotero_source()
+
     def _browse_more(self):
         fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
         if fs: self.on_files_added(fs)
@@ -1591,6 +1720,10 @@ class TranslatePage(QWidget):
             p = self.flist.item(i).data(Qt.UserRole)
             if p: files.append(p)
         if not files: return
+        # 确保按钮连接正常（重试模式可能改过）
+        try: self.go_btn.clicked.disconnect()
+        except TypeError: pass
+        self.go_btn.clicked.connect(self._start)
 
         self._save_config()
         self.pending_files = files
@@ -1683,9 +1816,9 @@ class TranslatePage(QWidget):
         fp = self.pending_files[self._batch_idx]
 
         if self.worker:
-            self.worker.wait(2000)
-            self.worker.deleteLater()
-            self.worker = None
+            w = self.worker; self.worker = None
+            w.quit()
+            QTimer.singleShot(100, lambda: w.deleteLater() if not w.isRunning() else None)
 
         # 保存历史
         HistoryManager.add_record({
@@ -1714,9 +1847,9 @@ class TranslatePage(QWidget):
         fp = self.pending_files[self._batch_idx]
 
         if self.worker:
-            self.worker.wait(2000)
-            self.worker.deleteLater()
-            self.worker = None
+            w = self.worker; self.worker = None
+            w.quit()
+            QTimer.singleShot(100, lambda: w.deleteLater() if not w.isRunning() else None)
 
         self._batch_results.append((fp, None))  # None = 失败
 
@@ -1769,6 +1902,9 @@ class TranslatePage(QWidget):
         failed = total - ok
         has_zotero = any(detect_zotero_source(fp) for fp, _ in self._batch_results)
 
+        # 收集失败的文件用于重试
+        self._failed_files = [fp for fp, r in self._batch_results if r is None]
+
         if total == 1 and ok == 1:
             self.prog_label.setText("翻译完成")
             if has_zotero:
@@ -1783,7 +1919,13 @@ class TranslatePage(QWidget):
                 self.prog_detail.setText("输出至 ~/Documents/pdf2zh_files")
         else:
             self.prog_label.setText(f"完成 {ok} 篇，失败 {failed} 篇")
-            self.prog_detail.setText("部分文件翻译出错，请检查")
+            self.prog_detail.setText("部分文件翻译出错")
+            # 显示重试按钮
+            self.go_btn.setText(f"重试失败 ({failed} 篇)")
+            try: self.go_btn.clicked.disconnect()
+            except TypeError: pass
+            self.go_btn.clicked.connect(self._retry_failed)
+            self.go_btn.setEnabled(True)
 
         # 关怀消息
         from ui.caring import get_caring_message, get_session_tip
@@ -1810,6 +1952,20 @@ class TranslatePage(QWidget):
         except Exception:
             pass
 
+    def _retry_failed(self):
+        """重试上次批量翻译中失败的文件"""
+        failed = getattr(self, '_failed_files', [])
+        if not failed:
+            return
+        # 恢复按钮到正常状态
+        try: self.go_btn.clicked.disconnect()
+        except TypeError: pass
+        self.go_btn.clicked.connect(self._start)
+        # 把失败文件重新加入列表并启动
+        self.on_files_added(failed)
+        self._failed_files = []
+        self._start()
+
     def _on_err(self, msg):
         self.prog_icon.setText("❌")
         self.prog_label.setText("翻译出错")
@@ -1819,9 +1975,9 @@ class TranslatePage(QWidget):
         self.go_btn.setEnabled(True); self.go_btn.setText("重试翻译")
         self.stop_btn.setVisible(False)
         if self.worker:
-            self.worker.wait(2000)
-            self.worker.deleteLater()
-            self.worker = None
+            w = self.worker; self.worker = None
+            w.quit()
+            QTimer.singleShot(100, lambda: w.deleteLater() if not w.isRunning() else None)
 
     # ── 骰子系统（静默、无文字、四叶草） ──
 
@@ -2027,6 +2183,8 @@ class ReaderPage(QWidget):
         self.list_w.currentItemChanged.connect(self._on_select)
         self.list_w.itemClicked.connect(lambda item: self._on_select(item, None))
         self.list_w.installEventFilter(self)
+        self.list_w.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_w.customContextMenuRequested.connect(self._hist_context_menu)
         ll.addWidget(self.list_w)
 
         # 详情面板
@@ -2222,6 +2380,29 @@ class ReaderPage(QWidget):
             w._l1 = l1; w._l2 = l2  # 存引用，选中时变色用
             self.list_w.setItemWidget(item, w)
 
+    def _hist_context_menu(self, pos):
+        item = self.list_w.itemAt(pos)
+        if not item:
+            return
+        r = item.data(Qt.UserRole)
+        if not r:
+            return
+        menu = _RoundMenu(self)
+        # 在 Finder 中显示译文
+        files = r.get("output_files", {})
+        has_output = any(os.path.exists(files.get(m, "")) for m in ["dual","mono","side_by_side"])
+        if has_output:
+            menu.addAction("在 Finder 中显示译文", self._reveal_in_finder)
+        # 打开原文
+        src = r.get("file", {}).get("path", "")
+        if src and os.path.exists(src):
+            menu.addAction("打开原文", self._open_source)
+            menu.addAction("在 Finder 中显示原文",
+                           lambda: __import__("subprocess").Popen(["open", "-R", src]))
+        menu.addSeparator()
+        menu.addAction("清空全部历史", self._clear)
+        menu.exec_(self.list_w.viewport().mapToGlobal(pos))
+
     def _on_select(self, current, previous):
         # 恢复上一个
         if previous:
@@ -2366,7 +2547,7 @@ class SettingsPage(QWidget):
         sl3 = QLabel("翻译服务配置"); sl3.setObjectName("SL"); left.addWidget(sl3)
         self.svc_card = _card()
         svc_outer = QVBoxLayout(self.svc_card)
-        svc_outer.setContentsMargins(12,8,12,8); svc_outer.setSpacing(4)
+        svc_outer.setContentsMargins(16,12,16,12); svc_outer.setSpacing(4)
         self.svc_selector = QComboBox()
         self.svc_selector.addItems(list(self.SERVICE_CONFIGS.keys()))
         self.svc_selector.currentTextChanged.connect(self._show_service_config)
@@ -2403,7 +2584,7 @@ class SettingsPage(QWidget):
         from ui.prompt_manager import PromptTemplateManager
         from PyQt5.QtWidgets import QTextEdit
         sl4 = QLabel("翻译提示词"); sl4.setObjectName("SL"); left.addWidget(sl4)
-        c4 = _card(); cl4 = QVBoxLayout(c4); cl4.setContentsMargins(12,8,12,8); cl4.setSpacing(2)
+        c4 = _card(); cl4 = QVBoxLayout(c4); cl4.setContentsMargins(16,12,16,12); cl4.setSpacing(2)
 
         pr = QHBoxLayout(); pr.setSpacing(4)
         self.prompt_preset = QComboBox()
@@ -2446,7 +2627,7 @@ class SettingsPage(QWidget):
         # ── 术语库 ──
         from ui.glossary_manager import GlossaryManager
         sl5 = QLabel("术语库"); sl5.setObjectName("SL"); left.addWidget(sl5)
-        c5 = _card(); cl5 = QVBoxLayout(c5); cl5.setContentsMargins(12,8,12,8); cl5.setSpacing(2)
+        c5 = _card(); cl5 = QVBoxLayout(c5); cl5.setContentsMargins(16,12,16,12); cl5.setSpacing(2)
 
         gr = QHBoxLayout(); gr.setSpacing(6)
         self.gloss_selector = QComboBox()
@@ -2489,7 +2670,7 @@ class SettingsPage(QWidget):
 
         # ── 卡 1 ：偏好设置 ──
         sl_app = QLabel("偏好设置"); sl_app.setObjectName("SL"); right.addWidget(sl_app)
-        c = _card(); cl = QVBoxLayout(c); cl.setContentsMargins(14,12,14,12); cl.setSpacing(6)
+        c = _card(); cl = QVBoxLayout(c); cl.setContentsMargins(16,12,16,12); cl.setSpacing(6)
 
         self.dark_check = QCheckBox("深色模式"); self.dark_check.toggled.connect(self.dark_mode_changed.emit)
         self.cache_check = QCheckBox("翻译缓存"); self.cache_check.setChecked(True)
@@ -3234,8 +3415,22 @@ class MainWindow(QMainWindow):
         tp.translation_done.connect(self._on_translate_done)
         rp.fullscreen_changed.connect(self._on_reader_fullscreen)
 
-        self.switch("翻译"); self._apply()
+        # 恢复上次窗口状态
+        cfg = UserConfigManager.load()
+        saved_page = cfg.get("last_page", "翻译")
+        if saved_page not in self.pages:
+            saved_page = "翻译"
+        self.switch(saved_page); self._apply()
         _install_tip_filter(QApplication.instance())
+
+        # 恢复窗口尺寸和位置
+        if cfg.get("window_geometry"):
+            try:
+                from PyQt5.QtCore import QByteArray
+                geo = QByteArray.fromHex(cfg["window_geometry"].encode())
+                self.restoreGeometry(geo)
+            except Exception:
+                pass
 
         # 静默预加载阅读页：用户点击时已渲染好，无闪烁
         QTimer.singleShot(100, self._preload_reader)
@@ -3398,7 +3593,24 @@ class MainWindow(QMainWindow):
         self.repaint()
 
     def _toggle_dark(self, dark):
-        self.is_dark = dark; self._apply()
+        self.is_dark = dark
+        # 淡入淡出过渡
+        from PyQt5.QtCore import QPropertyAnimation
+        anim = QPropertyAnimation(self, b"windowOpacity")
+        anim.setDuration(150)
+        anim.setStartValue(1.0); anim.setEndValue(0.85)
+        anim.finished.connect(lambda: self._finish_theme_switch(anim))
+        self._theme_anim = anim  # prevent GC
+        anim.start()
+
+    def _finish_theme_switch(self, prev_anim):
+        self._apply()
+        from PyQt5.QtCore import QPropertyAnimation
+        anim = QPropertyAnimation(self, b"windowOpacity")
+        anim.setDuration(200)
+        anim.setStartValue(0.85); anim.setEndValue(1.0)
+        self._theme_anim = anim
+        anim.start()
 
     def _set_accent(self, hex_color):
         """应用自定义主题色"""
@@ -3447,6 +3659,17 @@ class MainWindow(QMainWindow):
     def _on_reader_fullscreen(self, fs):
         """全屏阅读：隐藏/显示侧边栏"""
         self.sidebar.setVisible(not fs)
+
+    def closeEvent(self, event):
+        """保存窗口几何尺寸和当前页面"""
+        cfg = UserConfigManager.load()
+        cfg["window_geometry"] = bytes(self.saveGeometry().toHex()).decode()
+        # 保存当前页面
+        for name, page in self.pages.items():
+            if self.stack.currentWidget() is page:
+                cfg["last_page"] = name; break
+        UserConfigManager.save(cfg)
+        event.accept()
 
     def _on_translate_done(self, output_files):
         reader = self.pages["阅读"]
