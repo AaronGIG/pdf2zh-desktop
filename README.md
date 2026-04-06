@@ -118,12 +118,12 @@
 
 | 平台 | 下载 | 大小 | 启动方式 |
 |------|------|------|---------|
-| 🪟 Windows | [`pdf2zh-desktop-win-v2.2.0.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | ~340MB | 解压 → 双击 `pdf2zh.bat` |
+| 🪟 Windows | [`pdf2zh-desktop-win-v2.2.0.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | ~340MB | 解压 → 双击 `pdf2zh.exe` |
 | 🍎 macOS | [`pdf2zh-desktop-mac-v2.2.0.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | ~620MB | 解压 → 双击 `pdf2zh.app` |
 
 ### 🖱️ 第二步：启动
 
-- **Windows**：双击 `pdf2zh.bat`
+- **Windows**：双击 `pdf2zh.exe`（备用：`pdf2zh.bat`）
 - **macOS**：双击 `pdf2zh.app`（首次需右键 → 打开）
 
 ### 📄 第三步：翻译
@@ -216,7 +216,7 @@
 
 | 😰 遇到了啥？ | 💡 这样解决 |
 | --- | --- |
-| 双击 vbs 报"不兼容" | Windows 11 24H2 废弃了 VBScript，请改用 `pdf2zh.bat` |
+| 双击 vbs 报"不兼容" | Windows 11 24H2 废弃了 VBScript，请改用 `pdf2zh.exe` 或 `pdf2zh.bat` |
 | macOS 提示"无法验证开发者" | 右键 → 打开 → 确认（仅需一次） |
 | 翻译中途断了 | 检查磁盘空间，重启后自动从缓存续接 |
 | 排版错乱 / 乱码 | 试试勾选「跳过字体子集」 |
