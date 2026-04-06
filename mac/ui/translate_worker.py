@@ -19,8 +19,9 @@ LANG_MAP = {
 }
 
 SERVICE_MAP = {
-    "Bing 翻译": "bing",
     "Google 翻译": "google",
+    "Bing 翻译": "bing",
+    "DeepSeek": "deepseek",
     "DeepL": "deepl",
     "DeepLX": "deeplx",
     "OpenAI": "openai",
@@ -31,7 +32,6 @@ SERVICE_MAP = {
     "Xinference": "xinference",
     "Zhipu (智谱)": "zhipu",
     "Tencent (腾讯)": "tencent",
-    "DeepSeek": "deepseek",
     "Dify": "dify",
     "AnythingLLM": "anythingllm",
     "Argos Translate": "argos",
@@ -686,3 +686,66 @@ class TranslateWorker(QThread):
         self.cancelled = True
         if self._cancel_event:
             self._cancel_event.set()
+
+
+# ─── AI 摘要 Worker ──────────────────────────────────────────
+
+class SummaryWorker(QThread):
+    """后台提取 PDF 文本 → 调用 LLM 生成结构化摘要"""
+    result = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, pdf_path: str, parent=None):
+        super().__init__(parent)
+        self.pdf_path = pdf_path
+
+    def run(self):
+        try:
+            doc = fitz.open(self.pdf_path)
+            text = ""
+            for i in range(min(8, len(doc))):
+                text += doc[i].get_text()
+            doc.close()
+            text = text[:6000]  # 控制 token 用量
+
+            from ui.ai_client import chat_completion
+            system = (
+                "你是学术论文摘要助手。请根据以下论文内容，用中文生成结构化摘要。\n"
+                "严格按照以下格式输出（每个部分 2-3 句话）：\n\n"
+                "📌 研究目标\n...\n\n"
+                "🔬 研究方法\n...\n\n"
+                "📊 核心结论\n...\n\n"
+                "💡 主要贡献\n...\n\n"
+                "如果论文不是中文的，请翻译为中文。"
+            )
+            result = chat_completion([
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"论文内容：\n{text}"}
+            ])
+            self.result.emit(result)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+# ─── AI 问答 Worker ──────────────────────────────────────────
+
+class QAWorker(QThread):
+    """后台流式调用 LLM 问答"""
+    chunk = pyqtSignal(str)     # 流式文本片段
+    finished = pyqtSignal(str)  # 完整回答
+    error = pyqtSignal(str)
+
+    def __init__(self, messages: list, parent=None):
+        super().__init__(parent)
+        self.messages = messages
+
+    def run(self):
+        try:
+            from ui.ai_client import chat_completion_stream
+            full = ""
+            for text in chat_completion_stream(self.messages):
+                full += text
+                self.chunk.emit(text)
+            self.finished.emit(full)
+        except Exception as e:
+            self.error.emit(str(e))

@@ -5,8 +5,10 @@ pdf2zh for Mac — 完整版主窗口
 
 import sys
 import os
+import json
 import webbrowser
 import time
+from pathlib import Path
 import fitz
 
 
@@ -17,13 +19,13 @@ def _res(*parts):
     return os.path.join(os.path.dirname(os.path.dirname(__file__)), *parts)
 
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QComboBox, QProgressBar, QFileDialog,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLayout,
+    QPushButton, QLabel, QComboBox, QProgressBar, QFileDialog, QDialog,
     QStackedWidget, QStackedLayout, QFrame, QScrollArea, QGraphicsDropShadowEffect,
-    QCheckBox, QListWidget, QListWidgetItem, QLineEdit, QSpinBox,
+    QCheckBox, QListWidget, QListWidgetItem, QLineEdit, QSpinBox, QPlainTextEdit,
     QSizePolicy, QSlider, QSplitter, QTabBar, QMessageBox, QMenu, QAction,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize, QEvent
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize, QEvent, QRect
 from PyQt5.QtGui import (QColor, QDragEnterEvent, QDropEvent, QImage, QPixmap,
                          QScreen, QIcon, QPainter, QPainterPath, QPen, QRegion)
 
@@ -32,7 +34,7 @@ from ui.translate_worker import (
     TranslateWorker, LANG_MAP, SERVICE_MAP, PAGE_PRESETS,
     OUTPUT_MODES, parse_page_range, detect_zotero_source,
     get_zotero_item_key, zotero_auto_link, zotero_plugin_installed,
-    build_service_envs
+    build_service_envs, SummaryWorker, QAWorker,
 )
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
@@ -207,8 +209,13 @@ class _Tip(QWidget):
         if cls._inst: cls._inst.hide()
 
 
+def _fix_combo_popup(combo):
+    """去掉 QComboBox 的 macOS 焦点虚线框"""
+    combo.setAttribute(Qt.WA_MacShowFocusRect, False)
+
+
 def _install_tip_filter(app):
-    """安装全局 tooltip 拦截"""
+    """安装全局 tooltip 拦截 + combo 修复"""
     from PyQt5.QtCore import QObject
 
     class F(QObject):
@@ -269,10 +276,13 @@ def S(c):
     #TB[active="true"]{{background:{c["acc_l"]};color:{c["acc"]};font-weight:600;}}
     /* ── 输入控件 ── */
     QComboBox{{background:{c["inp"]};border:1.5px solid {c["inp_b"]};border-radius:8px;padding:8px 14px;font-size:13px;min-height:22px;color:{c["t1"]};}}
-    QComboBox:hover{{border-color:{c["brd_s"]};}}QComboBox:focus{{border-color:{c["acc"]};border-width:2px;}}
-    QComboBox::drop-down{{border:none;width:32px;subcontrol-origin:padding;subcontrol-position:center right;}}
-    QComboBox::down-arrow{{image:none;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid {c["acc"]};margin-right:10px;}}
-    QComboBox QAbstractItemView{{background:{c["elev"]};border:1px solid {c["brd_s"]};border-radius:8px;padding:4px;selection-background-color:{c["acc"]};selection-color:white;color:{c["t1"]};}}
+    QComboBox:hover{{border-color:{c["brd_s"]};}}QComboBox:focus{{border-color:{c["acc"]};border-width:1.5px;outline:none;}}
+    QComboBox::drop-down{{border:none;width:28px;subcontrol-origin:padding;subcontrol-position:center right;}}
+    QComboBox::down-arrow{{image:none;width:8px;height:5px;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid {c["t3"]};margin-right:10px;}}
+    QComboBox QAbstractItemView{{background:{c["elev"]};border:none;border-radius:10px;padding:6px 4px;color:{c["t1"]};outline:0;}}
+    QComboBox QAbstractItemView::item{{padding:6px 12px;border:none;border-radius:6px;margin:1px 2px;}}
+    QComboBox QAbstractItemView::item:hover{{background:{c["acc_l"]};}}
+    QComboBox QAbstractItemView::item:selected{{background:{c["acc"]};color:white;}}
     QLineEdit{{background:{c["inp"]};border:1.5px solid {c["inp_b"]};border-radius:8px;padding:8px 14px;font-size:13px;color:{c["t1"]};}}
     QLineEdit:focus{{border-color:{c["acc"]};border-width:2px;background:{c["elev"]};}}
     QLineEdit[readOnly="true"]{{color:{c["t2"]};}}
@@ -497,6 +507,28 @@ class _RoundMenu(QMenu):
 def _div():
     d = QFrame(); d.setObjectName("Div"); d.setFrameShape(QFrame.HLine); return d
 
+
+def _md2html(text):
+    """Markdown → HTML — 让 AI 回复像 Claude 一样优雅"""
+    import re as _re
+    # 转义 HTML
+    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    # 加粗
+    text = _re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+    # 斜体
+    text = _re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', text)
+    # 行内代码
+    text = _re.sub(r'`([^`]+)`', r'<code style="background:rgba(0,0,0,0.06);border-radius:3px;padding:1px 4px;font-family:Menlo,monospace;font-size:10px;">\1</code>', text)
+    # 列表项 (- item)
+    text = _re.sub(r'^- (.+)$', r'<div style="margin:2px 0;padding-left:12px;text-indent:-8px;">·  \1</div>', text, flags=_re.MULTILINE)
+    # 数字列表 (1. item)
+    text = _re.sub(r'^(\d+)\. (.+)$', r'<div style="margin:2px 0;padding-left:12px;text-indent:-12px;">\1. \2</div>', text, flags=_re.MULTILINE)
+    # 段落换行
+    text = text.replace('\n\n', '<div style="height:8px;"></div>')
+    text = text.replace('\n', '<br>')
+    return text
+
+
 def _card(level="md"):
     """统一阴影层级: sm=微弱, md=默认卡片, lg=悬浮"""
     _SHADOW = {"sm":(12,2,8), "md":(20,4,12), "lg":(28,6,16)}
@@ -562,15 +594,31 @@ class DropZone(QFrame):
         self._stack.addWidget(p1)
 
     def dragEnterEvent(self, e):
+        c = _C
         self.setStyleSheet(
-            f"#DZ{{background:{_C['acc_l']};border:2px solid {_C['acc']};"
-            f"border-radius:12px;}}")
+            f"#DZ{{background:{c['acc_l']};border:2.5px solid {c['acc']};"
+            f"border-radius:14px;}}")
+        # 呼吸脉动动画
+        from PyQt5.QtCore import QPropertyAnimation
+        anim = QPropertyAnimation(self, b"windowOpacity")
+        anim.setDuration(600); anim.setLoopCount(-1)  # 无限循环
+        anim.setStartValue(1.0); anim.setEndValue(0.85)
+        # QWidget 没有 windowOpacity，用 graphicsEffect 模拟缩放
+        effect = QGraphicsDropShadowEffect(self)
+        effect.setBlurRadius(20); effect.setOffset(0, 0)
+        effect.setColor(QColor(c['acc']))
+        self.setGraphicsEffect(effect)
+        self._drag_effect = effect
         e.acceptProposedAction()
     def dragLeaveEvent(self, e):
         self.setStyleSheet("")
+        self.setGraphicsEffect(None)
+        self._drag_effect = None
     def dragMoveEvent(self, e):
         e.acceptProposedAction()
     def dropEvent(self, e):
+        self.setStyleSheet("")
+        self.setGraphicsEffect(None)
         import glob
         fs = []
         md = e.mimeData()
@@ -668,6 +716,95 @@ class DropZone(QFrame):
             if fs: self.files_dropped.emit(fs)
 
 
+class SummaryCard(QFrame):
+    """智能摘要卡片 — 可折叠，点击按钮调用 AI 生成结构化摘要"""
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("Card")
+        lo = QVBoxLayout(self); lo.setContentsMargins(16, 10, 16, 10); lo.setSpacing(6)
+        # 头部
+        hdr = QHBoxLayout(); hdr.setSpacing(8)
+        ic = QLabel("✨"); ic.setStyleSheet("font-size:14px;background:transparent;")
+        hdr.addWidget(ic)
+        t = QLabel("智能摘要"); t.setStyleSheet("font-size:13px;font-weight:600;background:transparent;")
+        hdr.addWidget(t); hdr.addStretch()
+        self._svc_label = QLabel("")
+        self._svc_label.setStyleSheet("font-size:10px;color:gray;background:transparent;")
+        hdr.addWidget(self._svc_label)
+        self.gen_btn = QPushButton("生成摘要"); self.gen_btn.setObjectName("Sc")
+        self.gen_btn.setCursor(Qt.PointingHandCursor)
+        self.gen_btn.setStyleSheet("font-size:11px;padding:3px 12px;")
+        self.gen_btn.clicked.connect(self._generate)
+        hdr.addWidget(self.gen_btn)
+        self._collapse_btn = QPushButton("▼"); self._collapse_btn.setObjectName("Gh")
+        self._collapse_btn.setFixedSize(24, 24); self._collapse_btn.setCursor(Qt.PointingHandCursor)
+        self._collapse_btn.setStyleSheet("font-size:10px;padding:0;")
+        self._collapse_btn.clicked.connect(self._toggle_collapse)
+        hdr.addWidget(self._collapse_btn)
+        lo.addLayout(hdr)
+        # 内容区
+        self._body = QLabel("")
+        self._body.setWordWrap(True); self._body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._body.setStyleSheet("font-size:12px;line-height:160%;background:transparent;padding:4px 0;")
+        self._body.setVisible(False)
+        lo.addWidget(self._body)
+        self._collapsed = False
+        self._worker = None
+        self._pdf_path = None
+        # 检测 AI 服务（优先使用独立助手配置）
+        from ui.ai_client import detect_assistant_service
+        svc = detect_assistant_service()
+        if svc:
+            self._svc_label.setText(f"via {svc['name']}")
+        else:
+            self.gen_btn.setEnabled(False)
+            self.gen_btn.setToolTip("请在设置中配置 AI 服务 API Key")
+
+    def set_pdf(self, path):
+        self._pdf_path = path
+        self._body.setText(""); self._body.setVisible(False)
+        self._collapse_btn.setText("▼")
+
+    def _toggle_collapse(self):
+        self._collapsed = not self._collapsed
+        self._body.setVisible(not self._collapsed and bool(self._body.text()))
+        self._collapse_btn.setText("▶" if self._collapsed else "▼")
+
+    def _generate(self):
+        if not self._pdf_path or not os.path.exists(self._pdf_path):
+            return
+        # 刷新服务检测（优先使用独立助手配置）
+        from ui.ai_client import detect_assistant_service
+        svc = detect_assistant_service()
+        if not svc:
+            self._body.setText("⚠️ 未配置 AI 服务。请在设置页配置 API Key（如 DeepSeek、OpenAI 等）")
+            self._body.setVisible(True)
+            return
+        self._svc_label.setText(f"via {svc['name']}")
+        self.gen_btn.setEnabled(False); self.gen_btn.setText("生成中…")
+        self._body.setText("⏳ 正在分析论文，请稍候…"); self._body.setVisible(True)
+        self._collapsed = False; self._collapse_btn.setText("▼")
+        self._worker = SummaryWorker(self._pdf_path)
+        self._worker.result.connect(self._on_result)
+        self._worker.error.connect(self._on_error)
+        self._worker.finished.connect(lambda: self._cleanup())
+        self._worker.start()
+
+    def _on_result(self, text):
+        self._body.setText(text)
+        self._body.setVisible(True)
+
+    def _on_error(self, err):
+        self._body.setText(f"⚠️ {err}")
+        self._body.setVisible(True)
+
+    def _cleanup(self):
+        self.gen_btn.setEnabled(True); self.gen_btn.setText("生成摘要")
+        if self._worker:
+            w = self._worker; self._worker = None
+            w.quit(); QTimer.singleShot(100, lambda: w.deleteLater() if not w.isRunning() else None)
+
+
 class SB(QWidget):
     """侧边栏按钮 — 图标固定宽度 + 文字对齐"""
     clicked = pyqtSignal()
@@ -748,6 +885,911 @@ class _PinchFilter(QObject):
         except (RuntimeError, AttributeError):
             pass
         return False
+
+
+class _AutoGrowTextEdit(QWidget):
+    """自适应高度的输入框 — 内容少时单行，多时自动向上增长（最多 5 行）"""
+    returnPressed = pyqtSignal()
+
+    def __init__(self, placeholder=""):
+        super().__init__()
+        lo = QVBoxLayout(self); lo.setContentsMargins(0, 0, 0, 0); lo.setSpacing(0)
+        from PyQt5.QtWidgets import QTextEdit
+        self._te = QTextEdit()
+        self._te.setPlaceholderText(placeholder)
+        self._te.setAcceptRichText(False)
+        self._te.setStyleSheet(
+            f"QTextEdit{{background:transparent;border:none;"
+            f"padding:4px 6px;font-size:13px;font-family:'Helvetica Neue','PingFang SC';"
+            f"color:{_C['t1']};}}")
+        self._te.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._te.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._te.document().contentsChanged.connect(self._adjust_height)
+        self._te.installEventFilter(self)
+        lo.addWidget(self._te)
+        self._min_h = 36; self._max_h = 120
+        self._te.setFixedHeight(self._min_h)
+
+    def text(self):
+        return self._te.toPlainText()
+
+    def clear(self):
+        self._te.clear()
+
+    def setPlaceholderText(self, t):
+        self._te.setPlaceholderText(t)
+
+    def _adjust_height(self):
+        """只在实际行数变化时调整高度（按行跳变，不逐像素增长）"""
+        line_h = 20  # 13px font ≈ 20px line height
+        doc_h = self._te.document().size().height()
+        new_lines = max(1, round(doc_h / line_h))
+        if not hasattr(self, '_cur_lines'):
+            self._cur_lines = 1
+        if new_lines != self._cur_lines:
+            self._cur_lines = new_lines
+            target_h = max(self._min_h, min(new_lines * line_h + 8, self._max_h))
+            self._te.setFixedHeight(target_h)
+
+    def eventFilter(self, obj, event):
+        if obj == self._te and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not event.modifiers():
+                self.returnPressed.emit()
+                return True
+        return super().eventFilter(obj, event)
+
+
+class _FlowLayout(QLayout):
+    """自动换行布局 — 按钮放不下时自动折行，避免文字被截断"""
+    def __init__(self, parent=None, margin=0, spacing=-1):
+        super().__init__(parent)
+        if parent is not None:
+            self.setContentsMargins(margin, margin, margin, margin)
+        self._items = []
+        self._spacing = spacing
+
+    def addItem(self, item): self._items.append(item)
+    def count(self): return len(self._items)
+    def itemAt(self, idx): return self._items[idx] if 0 <= idx < len(self._items) else None
+    def takeAt(self, idx):
+        if 0 <= idx < len(self._items):
+            return self._items.pop(idx)
+        return None
+
+    def expandingDirections(self): return Qt.Orientations()
+    def hasHeightForWidth(self): return True
+    def heightForWidth(self, w): return self._do_layout(QRect(0, 0, w, 0), test=True)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, test=False)
+
+    def sizeHint(self): return self.minimumSize()
+    def minimumSize(self):
+        s = QSize()
+        for item in self._items:
+            s = s.expandedTo(item.minimumSize())
+        m = self.contentsMargins()
+        s += QSize(m.left() + m.right(), m.top() + m.bottom())
+        return s
+
+    def _do_layout(self, rect, test=False):
+        m = self.contentsMargins()
+        effective = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
+        x, y = effective.x(), effective.y()
+        line_h = 0
+        sp = self._spacing if self._spacing >= 0 else 4
+        for item in self._items:
+            w = item.sizeHint().width()
+            h = item.sizeHint().height()
+            if x + w > effective.right() + 1 and line_h > 0:
+                x = effective.x()
+                y += line_h + sp
+                line_h = 0
+            if not test:
+                item.setGeometry(QRect(x, y, w, h))
+            x += w + sp
+            line_h = max(line_h, h)
+        return y + line_h - rect.y() + m.bottom()
+
+
+# ── AI 快捷操作 预设库 ──────────────────────────────────────────
+# id 用于标识，label 显示在按钮上，prompt 是发给 LLM 的指令
+# type="summary" 走 SummaryWorker（内置摘要引擎），其余走 QAWorker
+
+_BUILTIN_PROMPTS = [
+    {
+        "id": "summary", "label": "📝 摘要", "prompt": "", "type": "summary",
+        "desc": "结构化论文摘要（内置引擎）",
+    },
+    {
+        "id": "explain", "label": "📖 讲解",
+        "desc": "通俗讲解论文核心内容",
+        "prompt": (
+            "请用通俗易懂的语言讲解这篇论文，假设读者具有本科水平但不熟悉该细分领域。\n\n"
+            "请按以下结构输出：\n"
+            "## 一句话总结\n用一句话概括论文在做什么。\n\n"
+            "## 研究背景\n这个领域之前遇到了什么问题？为什么需要这项研究？\n\n"
+            "## 核心方法\n作者提出了什么方法或思路？用类比或直觉解释，避免公式。\n\n"
+            "## 主要发现\n实验结果说明了什么？和之前的方法相比有什么提升？\n\n"
+            "## 为什么重要\n这项工作对该领域或实际应用有什么意义？"
+        ),
+    },
+    {
+        "id": "questions", "label": "❓ 深度提问",
+        "desc": "生成 5 个深度问题帮助理解",
+        "prompt": (
+            "请基于这篇论文，提出 5 个有深度的问题，帮助读者批判性地理解论文内容。\n\n"
+            "要求：\n"
+            "- 每个问题聚焦论文的不同方面（方法、实验、假设、局限性、应用前景等）\n"
+            "- 每个问题后附 2-3 句解释，说明为什么这个问题值得思考\n"
+            "- 问题应该有启发性，而非简单的事实复述\n\n"
+            "格式：\n**Q1: [问题]**\n[为什么值得思考]\n\n依此类推。"
+        ),
+    },
+    {
+        "id": "critique", "label": "🔍 批判分析",
+        "desc": "评估论文的优缺点和局限性",
+        "prompt": (
+            "请对这篇论文进行批判性分析，像一位资深审稿人一样思考。\n\n"
+            "请从以下维度评价：\n"
+            "## 主要优点\n论文在方法、实验设计、写作等方面做得好的地方（2-3 点）\n\n"
+            "## 潜在不足\n方法论上的局限、实验设计的缺陷、未讨论的边界条件（2-3 点）\n\n"
+            "## 可信度评估\n实验结果是否充分支撑了论文的结论？有没有过度声称？\n\n"
+            "## 改进建议\n如果你是作者，你会在哪些方面做进一步的工作？"
+        ),
+    },
+    {
+        "id": "methods", "label": "🧪 方法详解",
+        "desc": "深入解析论文的技术方法",
+        "prompt": (
+            "请深入解析这篇论文的技术方法，适合有一定基础的读者。\n\n"
+            "请涵盖：\n"
+            "## 问题形式化\n论文要解决的问题是如何数学/形式化定义的？\n\n"
+            "## 方法流程\n按步骤描述方法的完整流程，用编号列表。\n\n"
+            "## 关键创新点\n和现有方法相比，核心创新在哪里？\n\n"
+            "## 实验设置\n用了什么数据集、基线方法、评估指标？\n\n"
+            "## 核心结果\n最重要的实验结论是什么？数据支撑如何？"
+        ),
+    },
+    {
+        "id": "related", "label": "🔗 相关工作",
+        "desc": "梳理论文引用的相关研究脉络",
+        "prompt": (
+            "请梳理这篇论文的相关工作和研究脉络。\n\n"
+            "请输出：\n"
+            "## 研究领域定位\n这篇论文属于哪个研究方向？\n\n"
+            "## 关键前置工作\n论文建立在哪些重要的前人工作之上？列出 3-5 篇最重要的，并说明关系。\n\n"
+            "## 方法演进\n该领域的方法是如何一步步发展到本文的？用时间线或逻辑链描述。\n\n"
+            "## 与竞争方法的对比\n本文方法与最相近的竞争方法有什么本质区别？"
+        ),
+    },
+    {
+        "id": "application", "label": "💡 应用场景",
+        "desc": "分析论文成果的实际应用可能性",
+        "prompt": (
+            "请分析这篇论文的研究成果可以如何应用到实际场景中。\n\n"
+            "请涵盖：\n"
+            "## 直接应用\n基于论文当前的成果，最可能直接落地的应用场景是什么？\n\n"
+            "## 潜在扩展\n如果进一步发展，还可能应用在哪些领域？\n\n"
+            "## 落地挑战\n从研究到实际部署，可能遇到哪些技术或工程上的困难？\n\n"
+            "## 商业价值\n这项技术对行业可能产生什么影响？"
+        ),
+    },
+    {
+        "id": "keyterms", "label": "📚 术语表",
+        "desc": "提取并解释论文中的关键术语",
+        "prompt": (
+            "请提取这篇论文中的关键专业术语和概念，生成一个术语表。\n\n"
+            "要求：\n"
+            "- 提取 8-12 个最重要的术语\n"
+            "- 每个术语给出：中文翻译（如适用）、一句话定义、在论文中的具体含义\n"
+            "- 按照术语在论文中出现的逻辑顺序排列\n\n"
+            "格式：\n**术语名** (English Term)\n定义：...\n论文中的含义：..."
+        ),
+    },
+]
+
+# 默认激活的 3 个（显示在快捷栏上）
+_DEFAULT_ACTIVE_IDS = ["summary", "explain", "questions"]
+
+
+class QAPanelWidget(QWidget):
+    """AI 论文助手面板 — 可自定义快捷操作库 + 聊天界面"""
+
+    def __init__(self):
+        super().__init__()
+        self.setMinimumWidth(260); self.setMaximumWidth(420)
+        self._busy = False  # 是否有 worker 在运行
+        lo = QVBoxLayout(self); lo.setContentsMargins(12, 10, 12, 12); lo.setSpacing(0)
+
+        # ── 头部 ──
+        hdr = QHBoxLayout(); hdr.setSpacing(6)
+        t = QLabel("AI 助手"); t.setStyleSheet(
+            "font-size:13px;font-weight:600;background:transparent;letter-spacing:0.3px;")
+        hdr.addWidget(t); hdr.addStretch()
+        self._svc_label = QLabel("")
+        self._svc_label.setStyleSheet(f"font-size:10px;color:{_C['t3']};background:transparent;")
+        hdr.addWidget(self._svc_label)
+        clr = QPushButton("清空"); clr.setObjectName("Gh")
+        clr.setStyleSheet("font-size:10px;padding:2px 6px;")
+        clr.setCursor(Qt.PointingHandCursor); clr.clicked.connect(self._clear)
+        hdr.addWidget(clr)
+        self._cfg_btn = QPushButton("⚙")
+        self._cfg_btn.setCursor(Qt.PointingHandCursor)
+        self._cfg_btn.setStyleSheet(
+            f"QPushButton{{background:transparent;border:none;font-size:13px;"
+            f"padding:2px 5px;color:{_C['t3']};}}"
+            f"QPushButton:hover{{color:{_C['acc']};}}")
+        self._cfg_btn.clicked.connect(self._open_settings)
+        hdr.addWidget(self._cfg_btn)
+        lo.addLayout(hdr)
+        lo.addSpacing(6)
+
+        # ── 快捷操作栏 ──
+        self._quick_frame = QFrame()
+        self._quick_frame.setStyleSheet("QFrame{background:transparent;border:none;}")
+        self._quick_layout = QHBoxLayout(self._quick_frame)
+        self._quick_layout.setContentsMargins(0, 0, 0, 0)
+        self._quick_layout.setSpacing(6)
+        self._quick_btns = []
+        lo.addWidget(self._quick_frame)
+        lo.addSpacing(8)
+
+        # ── 聊天区 ──
+        self._chat_scroll = QScrollArea(); self._chat_scroll.setWidgetResizable(True)
+        self._chat_scroll.setFrameShape(QFrame.NoFrame)
+        self._chat_container = QWidget()
+        self._chat_layout = QVBoxLayout(self._chat_container)
+        self._chat_layout.setContentsMargins(0, 4, 0, 4); self._chat_layout.setSpacing(12)
+        self._chat_layout.setAlignment(Qt.AlignTop)
+        self._chat_scroll.setWidget(self._chat_container)
+        lo.addWidget(self._chat_scroll, 1)
+        lo.addSpacing(8)
+
+        # ── 输入区 ──
+        self._inp_frame = QFrame()
+        self._inp_frame.setStyleSheet(
+            f"QFrame{{background:{_C['card']};border:0.5px solid {_C['brd']};"
+            f"border-radius:12px;}}")
+        inp_lo = QHBoxLayout(self._inp_frame)
+        inp_lo.setContentsMargins(10, 6, 6, 6); inp_lo.setSpacing(6)
+        self._input = _AutoGrowTextEdit("输入问题…")
+        inp_lo.addWidget(self._input, 1)
+        self._send_btn = QPushButton("发送"); self._send_btn.setObjectName("Pr")
+        self._send_btn.setStyleSheet("font-size:11px;padding:6px 16px;border-radius:8px;")
+        self._send_btn.setCursor(Qt.PointingHandCursor)
+        self._send_btn.clicked.connect(self._send)
+        self._send_btn.setFixedHeight(32)
+        inp_lo.addWidget(self._send_btn, 0, Qt.AlignBottom)
+        lo.addWidget(self._inp_frame)
+        self._input.returnPressed.connect(self._send)
+        self._char_count = None
+
+        # ── 状态 ──
+        self._paper_text = ""
+        self._pdf_path = None
+        self._messages = []
+        self._worker = None
+        self._summary_worker = None
+        self._current_ai_bubble = None
+        self._streaming_text = ""
+
+        # 加载 prompt 库 & 激活列表
+        self._load_library()
+
+    # ══════════════════════════════════════════════════════════════
+    #  Prompt 库 & 持久化
+    # ══════════════════════════════════════════════════════════════
+
+    def _load_library(self):
+        """从配置加载 prompt 库和激活列表"""
+        cfg = UserConfigManager.load()
+        # 库：内置 + 用户自定义
+        saved_lib = cfg.get("ai_prompt_library", None)
+        if saved_lib is not None:
+            self._library = saved_lib
+        else:
+            self._library = [dict(p) for p in _BUILTIN_PROMPTS]
+        # 激活的 ID 列表（显示在快捷栏，最多 3 个）
+        self._active_ids = cfg.get("ai_active_ids", list(_DEFAULT_ACTIVE_IDS))
+        self._rebuild_quick_bar()
+
+    def _save_library(self):
+        cfg = UserConfigManager.load()
+        cfg["ai_prompt_library"] = self._library
+        cfg["ai_active_ids"] = self._active_ids
+        UserConfigManager.save(cfg)
+
+    def _get_active_prompts(self):
+        """返回当前激活的 prompt 列表（按 _active_ids 顺序）"""
+        id_map = {p["id"]: p for p in self._library}
+        return [id_map[aid] for aid in self._active_ids if aid in id_map]
+
+    # ══════════════════════════════════════════════════════════════
+    #  快捷栏
+    # ══════════════════════════════════════════════════════════════
+
+    def _rebuild_quick_bar(self):
+        """根据激活列表重建快捷按钮 — 等宽圆角药丸"""
+        while self._quick_layout.count():
+            item = self._quick_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+        self._quick_btns = []
+        c = _C
+        for prompt_data in self._get_active_prompts():
+            b = QPushButton(prompt_data["label"])
+            b.setCursor(Qt.PointingHandCursor)
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            b.setFixedHeight(32)
+            b.setStyleSheet(
+                f"QPushButton{{background:{c['card']};border:0.5px solid {c['card_b']};"
+                f"border-radius:16px;padding:0 10px;font-size:12px;color:{c['t1']};}}"
+                f"QPushButton:hover{{background:{c['acc_l']};border-color:{c['acc']};}}"
+                f"QPushButton:pressed{{background:{c['acc']};color:white;"
+                f"border-color:{c['acc']};}}"
+                f"QPushButton:disabled{{opacity:0.5;}}")
+            pid = prompt_data["id"]
+            b.clicked.connect(lambda _, _pid=pid: self._exec_by_id(_pid))
+            self._quick_layout.addWidget(b, 1)  # stretch=1 等宽分布
+            self._quick_btns.append(b)
+
+    def _exec_by_id(self, prompt_id):
+        """执行指定 ID 的快捷操作"""
+        try:
+            if self._busy:
+                return
+            id_map = {p["id"]: p for p in self._library}
+            act = id_map.get(prompt_id)
+            if not act:
+                return
+            if act.get("type") == "summary":
+                self._run_summary()
+            else:
+                prompt = act.get("prompt", "")
+                if prompt:
+                    self._run_preset(prompt, act.get("label", ""))
+        except Exception:
+            pass
+
+    # ══════════════════════════════════════════════════════════════
+    #  ⚙ 设置弹窗 — prompt 库管理 + 激活选择
+    # ══════════════════════════════════════════════════════════════
+
+    def _open_settings(self):
+        """打开 prompt 库配置弹窗"""
+        try:
+            self._do_open_settings()
+        except Exception:
+            pass
+
+    def _do_open_settings(self):
+        c = _C
+        dlg = QDialog(self)
+        dlg.setWindowTitle("AI 快捷操作配置")
+        dlg.setMinimumSize(520, 580)
+        dlg.resize(560, 660)
+        dlg.setStyleSheet(f"""
+            QDialog{{background:{c['bg']};}}
+            QLabel{{color:{c['t1']};background:transparent;}}
+            QScrollArea{{background:{c['bg']};border:none;}}
+            QWidget#scroll_inner{{background:{c['bg']};}}
+            QLineEdit{{background:{c['inp']};border:1px solid {c['inp_b']};
+                border-radius:6px;padding:6px 10px;font-size:13px;color:{c['t1']};
+                min-height:20px;}}
+            QLineEdit:focus{{border-color:{c['acc']};}}
+            QPlainTextEdit{{background:{c['inp']};border:1px solid {c['inp_b']};
+                border-radius:8px;padding:8px 10px;font-size:12px;color:{c['t1']};
+                line-height:160%;}}
+            QPlainTextEdit:focus{{border-color:{c['acc']};}}
+            QCheckBox{{color:{c['t1']};spacing:6px;}}
+            QCheckBox::indicator{{width:18px;height:18px;border-radius:5px;
+                border:1.5px solid {c['inp_b']};background:{c['inp']};}}
+            QCheckBox::indicator:checked{{background:{c['acc']};border-color:{c['acc']};}}
+        """)
+        dlo = QVBoxLayout(dlg); dlo.setContentsMargins(24, 20, 24, 18); dlo.setSpacing(14)
+
+        # ── 标题行 ──
+        hdr = QHBoxLayout()
+        title = QLabel("快捷操作库"); title.setStyleSheet("font-size:16px;font-weight:600;")
+        hdr.addWidget(title); hdr.addStretch()
+        hint_l = QLabel("勾选最多 3 个显示在快捷栏")
+        hint_l.setStyleSheet(f"font-size:11px;color:{c['t3']};")
+        hdr.addWidget(hint_l)
+        dlo.addLayout(hdr)
+
+        # ── 滚动区 ──
+        scroll = QScrollArea(); scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        container = QWidget(); container.setObjectName("scroll_inner")
+        clo = QVBoxLayout(container); clo.setContentsMargins(0, 0, 0, 0); clo.setSpacing(10)
+        clo.setAlignment(Qt.AlignTop)
+
+        _cards = []  # list of entry dicts
+
+        def _make_card(p, parent_layout):
+            pid = p.get("id", "")
+            tp = p.get("type", "")
+            card = QFrame()
+            card.setStyleSheet(
+                f"QFrame{{background:{c['card']};border:0.5px solid {c['card_b']};"
+                f"border-radius:12px;}}")
+            card_lo = QVBoxLayout(card)
+            card_lo.setContentsMargins(14, 12, 14, 12); card_lo.setSpacing(8)
+
+            # ── 第一行：勾选 + 名称 + 删除 ──
+            r1 = QHBoxLayout(); r1.setSpacing(10)
+            cb = QCheckBox()
+            cb.setFixedSize(22, 22)
+            cb.setChecked(pid in self._active_ids)
+            cb.setToolTip("勾选后显示在快捷栏")
+            r1.addWidget(cb, 0, Qt.AlignVCenter)
+            name_inp = QLineEdit(p.get("label", "")); name_inp.setMaxLength(12)
+            name_inp.setPlaceholderText("按钮名称")
+            name_inp.setFixedHeight(32)
+            r1.addWidget(name_inp, 1, Qt.AlignVCenter)
+            is_builtin = any(bp["id"] == pid for bp in _BUILTIN_PROMPTS)
+            del_btn = QPushButton("×")
+            del_btn.setCursor(Qt.PointingHandCursor)
+            del_btn.setFixedSize(26, 26)
+            del_btn.setStyleSheet(
+                f"QPushButton{{background:transparent;border:none;color:{c['t3']};"
+                f"font-size:16px;font-weight:600;border-radius:13px;}}"
+                f"QPushButton:hover{{background:rgba(255,59,48,0.1);color:{c['err']};}}")
+            if is_builtin:
+                del_btn.setVisible(False)
+            r1.addWidget(del_btn, 0, Qt.AlignVCenter)
+            card_lo.addLayout(r1)
+
+            # ── 第二行：描述 ──
+            desc = p.get("desc", "")
+            if desc:
+                dl = QLabel(desc)
+                dl.setStyleSheet(f"font-size:11px;color:{c['t3']};padding-left:32px;")
+                card_lo.addWidget(dl)
+
+            # ── 第三行：Prompt 编辑 ──
+            if tp == "summary":
+                hl = QLabel("🔧 内置摘要引擎，自动分析论文结构并生成结构化摘要")
+                hl.setStyleSheet(
+                    f"font-size:11px;color:{c['t3']};padding:6px 10px;"
+                    f"background:{c['bg2']};border-radius:6px;")
+                hl.setWordWrap(True)
+                card_lo.addWidget(hl)
+                prompt_inp = None
+            else:
+                prompt_inp = QPlainTextEdit()
+                prompt_inp.setPlainText(p.get("prompt", ""))
+                prompt_inp.setPlaceholderText("输入提示词…\n\n描述你希望 AI 对论文做什么分析")
+                prompt_inp.setMinimumHeight(90)
+                prompt_inp.setMaximumHeight(200)
+                card_lo.addWidget(prompt_inp)
+
+            parent_layout.addWidget(card)
+            entry = {"cb": cb, "name": name_inp, "prompt": prompt_inp,
+                     "id": pid, "type": tp, "card": card}
+            _cards.append(entry)
+
+            # 删除
+            def _del(_, _e=entry):
+                _e["card"].setVisible(False)
+                _e["card"].deleteLater()
+                _e["deleted"] = True
+            del_btn.clicked.connect(_del)
+
+            # 勾选约束：最多 3 个
+            def _on_check(state, _e=entry):
+                checked = [e for e in _cards
+                           if not e.get("deleted") and e["cb"].isChecked()]
+                if len(checked) > 3:
+                    _e["cb"].setChecked(False)
+            cb.stateChanged.connect(_on_check)
+
+        for p in self._library:
+            _make_card(p, clo)
+
+        scroll.setWidget(container)
+        dlo.addWidget(scroll, 1)
+
+        # ── 底部按钮区 ──
+        blo = QHBoxLayout(); blo.setSpacing(8)
+        # 新建
+        add_btn = QPushButton("＋ 新建")
+        add_btn.setCursor(Qt.PointingHandCursor)
+        add_btn.setStyleSheet(
+            f"QPushButton{{background:{c['acc_l']};border:none;border-radius:8px;"
+            f"padding:8px 14px;font-size:12px;color:{c['acc']};}}"
+            f"QPushButton:hover{{background:{c['acc']};color:white;}}")
+        _counter = [0]
+        def _on_add():
+            _counter[0] += 1
+            new_p = {"id": f"custom_{_counter[0]}_{id(dlg)}",
+                     "label": "🔧 自定义", "prompt": "", "desc": "自定义提示词"}
+            _make_card(new_p, clo)
+            QTimer.singleShot(50, lambda: scroll.verticalScrollBar().setValue(
+                scroll.verticalScrollBar().maximum()))
+        add_btn.clicked.connect(_on_add)
+        blo.addWidget(add_btn)
+
+        # 导入
+        imp_btn = QPushButton("📥 导入")
+        imp_btn.setCursor(Qt.PointingHandCursor)
+        imp_btn.setStyleSheet(
+            f"QPushButton{{background:transparent;border:1px solid {c['inp_b']};"
+            f"border-radius:8px;padding:8px 14px;font-size:12px;color:{c['t2']};}}"
+            f"QPushButton:hover{{border-color:{c['acc']};color:{c['acc']};}}")
+        def _on_import():
+            path, _ = QFileDialog.getOpenFileName(
+                dlg, "导入提示词",
+                str(Path.home()),
+                "文本文件 (*.txt *.md);;JSON (*.json);;所有文件 (*)")
+            if not path:
+                return
+            try:
+                content = Path(path).read_text(encoding="utf-8")
+                fname = Path(path).stem
+                # 尝试 JSON
+                try:
+                    data = json.loads(content)
+                    items = data if isinstance(data, list) else [data]
+                    for item in items:
+                        _counter[0] += 1
+                        new_p = {
+                            "id": f"import_{_counter[0]}_{id(dlg)}",
+                            "label": item.get("label", f"📥 {fname}"),
+                            "prompt": item.get("prompt", content),
+                            "desc": item.get("desc", "导入的提示词"),
+                        }
+                        _make_card(new_p, clo)
+                except (json.JSONDecodeError, AttributeError):
+                    # 纯文本 → 整个文件内容作为 prompt
+                    _counter[0] += 1
+                    new_p = {
+                        "id": f"import_{_counter[0]}_{id(dlg)}",
+                        "label": f"📥 {fname[:8]}",
+                        "prompt": content,
+                        "desc": "导入的提示词",
+                    }
+                    _make_card(new_p, clo)
+                QTimer.singleShot(50, lambda: scroll.verticalScrollBar().setValue(
+                    scroll.verticalScrollBar().maximum()))
+            except Exception as e:
+                QMessageBox.warning(dlg, "导入失败", str(e))
+        imp_btn.clicked.connect(_on_import)
+        blo.addWidget(imp_btn)
+
+        # 恢复默认
+        reset_btn = QPushButton("恢复默认")
+        reset_btn.setCursor(Qt.PointingHandCursor)
+        reset_btn.setStyleSheet(
+            f"QPushButton{{background:transparent;border:1px solid {c['inp_b']};"
+            f"border-radius:8px;padding:8px 14px;font-size:12px;color:{c['t2']};}}"
+            f"QPushButton:hover{{border-color:{c['acc']};color:{c['acc']};}}")
+        def _on_reset():
+            for entry in _cards:
+                entry["deleted"] = True
+                entry["card"].setVisible(False)
+                entry["card"].deleteLater()
+            _cards.clear()
+            for p in _BUILTIN_PROMPTS:
+                _make_card(dict(p), clo)
+            for entry in _cards:
+                entry["cb"].setChecked(entry["id"] in _DEFAULT_ACTIVE_IDS)
+        reset_btn.clicked.connect(_on_reset)
+        blo.addWidget(reset_btn)
+
+        blo.addStretch()
+        ok_btn = QPushButton("保存")
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setStyleSheet(
+            f"QPushButton{{background:{c['acc']};color:white;border:none;"
+            f"font-size:13px;padding:8px 30px;border-radius:8px;}}"
+            f"QPushButton:hover{{background:{c['acc_h']};}}")
+        ok_btn.clicked.connect(dlg.accept)
+        blo.addWidget(ok_btn)
+        dlo.addLayout(blo)
+
+        # ── 执行弹窗 ──
+        if dlg.exec_() == QDialog.Accepted:
+            new_library = []
+            new_active = []
+            for entry in _cards:
+                if entry.get("deleted"):
+                    continue
+                try:
+                    label = entry["name"].text().strip()
+                except RuntimeError:
+                    continue
+                if not label:
+                    continue
+                p = {"id": entry["id"], "label": label, "type": entry["type"]}
+                p["desc"] = next((bp.get("desc", "") for bp in _BUILTIN_PROMPTS
+                                  if bp["id"] == entry["id"]), "自定义提示词")
+                if entry["type"] == "summary":
+                    p["prompt"] = ""
+                else:
+                    p["prompt"] = entry["prompt"].toPlainText() if entry["prompt"] else ""
+                new_library.append(p)
+                if entry["cb"].isChecked():
+                    new_active.append(entry["id"])
+            if new_active:
+                self._library = new_library
+                self._active_ids = new_active[:3]
+                self._save_library()
+                self._rebuild_quick_bar()
+
+    # ══════════════════════════════════════════════════════════════
+    #  论文上下文 & 聊天
+    # ══════════════════════════════════════════════════════════════
+
+    def set_paper_context(self, pdf_path):
+        """提取 PDF 文本作为问答上下文"""
+        self._pdf_path = pdf_path
+        try:
+            doc = fitz.open(pdf_path)
+            text = ""
+            for i in range(min(15, len(doc))):
+                text += doc[i].get_text()
+            doc.close()
+            self._paper_text = text[:10000]
+        except Exception:
+            self._paper_text = ""
+        self._messages = []
+        self._clear()
+        try:
+            from ui.ai_client import detect_assistant_service
+            svc = detect_assistant_service()
+            self._svc_label.setText(f"via {svc['name']} · {svc['model']}" if svc else "未配置")
+            self._send_btn.setEnabled(bool(svc))
+        except Exception:
+            pass
+
+    def _clear(self):
+        try:
+            self._messages = []
+            self._current_ai_bubble = None
+            self._stop_workers()
+            while self._chat_layout.count():
+                w = self._chat_layout.takeAt(0).widget()
+                if w:
+                    w.deleteLater()
+        except Exception:
+            pass
+
+    def _add_bubble(self, text, is_user=True):
+        """添加消息气泡"""
+        row = QWidget(); row.setStyleSheet("background:transparent;")
+        row_lo = QHBoxLayout(row)
+        row_lo.setContentsMargins(0, 0, 0, 0); row_lo.setSpacing(0)
+        bubble = QLabel()
+        bubble.setWordWrap(True)
+        bubble.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        bubble.setMaximumWidth(300)
+        c = _C
+        if is_user:
+            bubble.setText(text)
+            bubble.setStyleSheet(
+                f"background:{c['acc']};color:white;border-radius:12px;"
+                f"border-bottom-right-radius:4px;"
+                f"padding:8px 12px;font-size:12px;"
+                f"font-family:'Helvetica Neue','PingFang SC';")
+            row_lo.addStretch(); row_lo.addWidget(bubble)
+        else:
+            bubble.setTextFormat(Qt.RichText)
+            html = _md2html(text) if text and not text.startswith('⏳') else text
+            bubble.setText(html)
+            bubble.setStyleSheet(
+                f"background:{c['card']};border:0.5px solid {c['card_b']};"
+                f"border-radius:12px;border-top-left-radius:4px;"
+                f"padding:10px 14px;font-size:12px;line-height:165%;"
+                f"font-family:'Helvetica Neue','PingFang SC';")
+            row_lo.addWidget(bubble); row_lo.addStretch()
+        self._chat_layout.addWidget(row)
+        QTimer.singleShot(50, lambda: self._safe_scroll_bottom())
+        return bubble
+
+    def _safe_scroll_bottom(self):
+        try:
+            sb = self._chat_scroll.verticalScrollBar()
+            sb.setValue(sb.maximum())
+        except Exception:
+            pass
+
+    # ══════════════════════════════════════════════════════════════
+    #  AI Worker 管理（摘要 / 问答 / 流式）
+    # ══════════════════════════════════════════════════════════════
+
+    def _set_busy(self, busy):
+        self._busy = busy
+        try:
+            self._send_btn.setEnabled(not busy)
+            for b in self._quick_btns:
+                b.setEnabled(not busy)
+        except Exception:
+            pass
+
+    def _run_summary(self):
+        """使用 SummaryWorker 生成结构化摘要"""
+        try:
+            if not self._pdf_path or not os.path.exists(self._pdf_path):
+                return
+            from ui.ai_client import detect_assistant_service
+            svc = detect_assistant_service()
+            if not svc:
+                self._add_bubble("⚠️ 未配置 AI 服务", is_user=False)
+                return
+            self._stop_workers()
+            self._set_busy(True)
+            self._add_bubble("📝 生成摘要", is_user=True)
+            self._current_ai_bubble = self._add_bubble("⏳ 正在分析论文…", is_user=False)
+            self._summary_worker = SummaryWorker(self._pdf_path)
+            self._summary_worker.result.connect(self._on_summary_result)
+            self._summary_worker.error.connect(self._on_qa_error)
+            self._summary_worker.finished.connect(self._on_summary_done)
+            self._summary_worker.start()
+        except Exception:
+            self._set_busy(False)
+
+    def _run_preset(self, prompt, label=""):
+        """用预设 prompt 发起问答"""
+        try:
+            if not self._paper_text:
+                return
+            from ui.ai_client import detect_assistant_service
+            svc = detect_assistant_service()
+            if not svc:
+                self._add_bubble("⚠️ 未配置 AI 服务", is_user=False)
+                return
+            self._stop_workers()
+            self._set_busy(True)
+            self._add_bubble(label or (prompt[:15] + "…"), is_user=True)
+            self._messages = [
+                {"role": "system", "content": (
+                    "你是论文阅读助手。以下是论文全文内容（可能被截断），请根据论文内容回答用户问题。\n"
+                    "回答要准确、有深度，用中文。使用 Markdown 格式化输出。\n"
+                    "如果论文中没有相关信息，请如实说明。\n\n"
+                    f"论文内容：\n{self._paper_text}"
+                )},
+                {"role": "user", "content": prompt},
+            ]
+            self._current_ai_bubble = self._add_bubble("⏳ 思考中…", is_user=False)
+            self._worker = QAWorker(list(self._messages))
+            self._worker.chunk.connect(self._on_chunk)
+            self._worker.finished.connect(self._on_qa_done)
+            self._worker.error.connect(self._on_qa_error)
+            self._worker.start()
+            self._streaming_text = ""
+        except Exception:
+            self._set_busy(False)
+
+    def _stop_workers(self):
+        """断开并停止所有 AI worker"""
+        for attr in ('_worker', '_summary_worker'):
+            w = getattr(self, attr, None)
+            if w:
+                for sig in ('chunk', 'result', 'finished', 'error'):
+                    try:
+                        getattr(w, sig).disconnect()
+                    except Exception:
+                        pass
+                setattr(self, attr, None)
+                try:
+                    w.quit()
+                except Exception:
+                    pass
+
+    @staticmethod
+    def _widget_alive(w):
+        try:
+            w.objectName()
+            return True
+        except RuntimeError:
+            return False
+
+    def _on_summary_result(self, text):
+        try:
+            if self._current_ai_bubble and self._widget_alive(self._current_ai_bubble):
+                self._current_ai_bubble.setText(_md2html(text))
+                QTimer.singleShot(0, self._safe_scroll_bottom)
+        except Exception:
+            pass
+
+    def _on_summary_done(self):
+        try:
+            self._set_busy(False)
+            self._current_ai_bubble = None
+            if self._summary_worker:
+                w = self._summary_worker; self._summary_worker = None
+                w.quit()
+        except Exception:
+            self._set_busy(False)
+
+    def _on_chunk(self, text):
+        try:
+            self._streaming_text += text
+            if self._current_ai_bubble and self._widget_alive(self._current_ai_bubble):
+                self._current_ai_bubble.setText(_md2html(self._streaming_text))
+                QTimer.singleShot(0, self._safe_scroll_bottom)
+        except Exception:
+            pass
+
+    def _on_qa_done(self, full_text):
+        try:
+            if self._current_ai_bubble and self._widget_alive(self._current_ai_bubble):
+                self._current_ai_bubble.setText(_md2html(full_text))
+            self._messages.append({"role": "assistant", "content": full_text})
+            self._set_busy(False)
+            self._current_ai_bubble = None
+            if self._worker:
+                w = self._worker; self._worker = None
+                w.quit()
+        except Exception:
+            self._set_busy(False)
+
+    def _on_qa_error(self, err):
+        try:
+            if self._current_ai_bubble and self._widget_alive(self._current_ai_bubble):
+                self._current_ai_bubble.setText(f"⚠️ {err}")
+            self._set_busy(False)
+            self._current_ai_bubble = None
+            for attr in ('_worker', '_summary_worker'):
+                w = getattr(self, attr, None)
+                if w:
+                    setattr(self, attr, None)
+                    w.quit()
+        except Exception:
+            self._set_busy(False)
+
+    def _send(self):
+        try:
+            q = self._input.text().strip()
+            if not q or not self._paper_text or self._busy:
+                return
+            self._stop_workers()
+            self._input.clear()
+            self._set_busy(True)
+            self._add_bubble(q, is_user=True)
+            if not self._messages:
+                self._messages.append({
+                    "role": "system",
+                    "content": (
+                        "你是论文阅读助手。以下是论文全文内容（可能被截断），请根据论文内容回答用户问题。\n"
+                        "回答要准确、有深度，用中文。使用 Markdown 格式化输出。\n"
+                        "如果论文中没有相关信息，请如实说明。\n\n"
+                        f"论文内容：\n{self._paper_text}"
+                    )
+                })
+            self._messages.append({"role": "user", "content": q})
+            self._current_ai_bubble = self._add_bubble("⏳ 思考中…", is_user=False)
+            self._worker = QAWorker(list(self._messages))
+            self._worker.chunk.connect(self._on_chunk)
+            self._worker.finished.connect(self._on_qa_done)
+            self._worker.error.connect(self._on_qa_error)
+            self._worker.start()
+            self._streaming_text = ""
+        except Exception:
+            self._set_busy(False)
+
+    # ══════════════════════════════════════════════════════════════
+    #  主题切换
+    # ══════════════════════════════════════════════════════════════
+
+    def update_theme(self, c):
+        try:
+            self._svc_label.setStyleSheet(f"font-size:10px;color:{c['t3']};background:transparent;")
+            self._inp_frame.setStyleSheet(
+                f"QFrame{{background:{c['card']};border:0.5px solid {c['brd']};"
+                f"border-radius:12px;}}")
+            self._quick_frame.setStyleSheet("QFrame{background:transparent;border:none;}")
+            self._rebuild_quick_bar()
+            self._cfg_btn.setStyleSheet(
+                f"QPushButton{{background:transparent;border:none;font-size:13px;"
+                f"padding:2px 5px;color:{c['t3']};}}"
+                f"QPushButton:hover{{color:{c['acc']};}}")
+        except Exception:
+            pass
 
 
 class PreviewPage(QWidget):
@@ -854,6 +1896,24 @@ class PreviewPage(QWidget):
         self.hist_btn.setVisible(False)
         self.hist_btn.clicked.connect(self.history_toggled.emit)
         tl.addWidget(self.hist_btn)
+        # AI 问答按钮
+        self.qa_btn = QPushButton("AI 问答"); self.qa_btn.setObjectName("TB")
+        self.qa_btn.setCursor(Qt.PointingHandCursor)
+        self.qa_btn.clicked.connect(self._toggle_qa_panel)
+        tl.addWidget(self.qa_btn)
+        # 高亮按钮
+        self.hl_btn = QPushButton("高亮"); self.hl_btn.setObjectName("TB")
+        self.hl_btn.setCursor(Qt.PointingHandCursor)
+        self.hl_btn.setCheckable(True)
+        self.hl_btn.clicked.connect(self._toggle_highlight)
+        tl.addWidget(self.hl_btn)
+        # 擦除按钮
+        self.hl_erase_btn = QPushButton("擦除"); self.hl_erase_btn.setObjectName("TB")
+        self.hl_erase_btn.setCursor(Qt.PointingHandCursor)
+        self.hl_erase_btn.setCheckable(True)
+        self.hl_erase_btn.clicked.connect(self._toggle_erase)
+        self.hl_erase_btn.setVisible(False)  # 进入高亮模式才显示
+        tl.addWidget(self.hl_erase_btn)
         # 全屏按钮
         self.fs_btn = QPushButton("全屏"); self.fs_btn.setObjectName("TB")
         self.fs_btn.setCursor(Qt.PointingHandCursor)
@@ -894,6 +1954,10 @@ class PreviewPage(QWidget):
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(28); shadow.setOffset(0,4)
         shadow.setColor(QColor(0,0,0,30)); self.page_widget.setGraphicsEffect(shadow)
         self.scroll.setWidget(self.page_widget)
+        self._highlight_mode = False
+        self._hl_erase_mode = False
+        self._hl_start = None
+        self._hl_overlay = None
         self.scroll.setVisible(False)  # 默认连续模式，隐藏单页
         _mv_lo.addWidget(self.scroll)
 
@@ -910,9 +1974,14 @@ class PreviewPage(QWidget):
         self._cont_page_widgets = []
 
         self.body_splitter.addWidget(self._main_view)
-        self.body_splitter.setSizes([140, 800])
+        # AI 问答面板（右侧，默认隐藏）
+        self.qa_panel = QAPanelWidget()
+        self.qa_panel.setVisible(False)
+        self.body_splitter.addWidget(self.qa_panel)
+        self.body_splitter.setSizes([140, 800, 0])
         self.body_splitter.setCollapsible(0, True)   # 缩略图可折叠
         self.body_splitter.setCollapsible(1, False)
+        self.body_splitter.setCollapsible(2, True)   # QA 面板可折叠
         # 拖拽缩略图面板宽度时自动重建缩略图
         self.body_splitter.splitterMoved.connect(self._on_thumb_panel_resized)
         self.body_widget = self.body_splitter  # 兼容引用
@@ -1036,8 +2105,275 @@ class PreviewPage(QWidget):
                 self._fit_and_render()
             else:
                 QTimer.singleShot(0, self._fit_and_render)
+            # 设置 AI 面板上下文
+            if not same_file:
+                self.qa_panel.set_paper_context(path)
         except Exception as e:
             self.page_widget.setText(f"加载失败: {e}")
+
+    def _toggle_qa_panel(self):
+        """切换 AI 问答面板 — 即时更新布局"""
+        vis = not self.qa_panel.isVisible()
+        self.qa_panel.setVisible(vis)
+        self.qa_btn.setProperty("active", vis)
+        self.qa_btn.style().unpolish(self.qa_btn); self.qa_btn.style().polish(self.qa_btn)
+        if vis:
+            sizes = self.body_splitter.sizes()
+            self.body_splitter.setSizes([sizes[0], max(sizes[1] - 300, 400), 300])
+        else:
+            sizes = self.body_splitter.sizes()
+            self.body_splitter.setSizes([sizes[0], sizes[1] + sizes[2], 0])
+        # 立即重新适配渲染，确保 PDF 视图即时伸缩
+        QTimer.singleShot(0, self._fit_and_render)
+
+    def _toggle_highlight(self):
+        """切换高亮标注模式"""
+        self._highlight_mode = self.hl_btn.isChecked()
+        self._hl_erase_mode = False
+        self.hl_btn.setProperty("active", self._highlight_mode)
+        self.hl_btn.style().unpolish(self.hl_btn); self.hl_btn.style().polish(self.hl_btn)
+        # 显示/隐藏擦除按钮
+        self.hl_erase_btn.setVisible(self._highlight_mode)
+        if not self._highlight_mode:
+            self.hl_erase_btn.setChecked(False)
+            self.hl_erase_btn.setProperty("active", False)
+            self.hl_erase_btn.style().unpolish(self.hl_erase_btn)
+            self.hl_erase_btn.style().polish(self.hl_erase_btn)
+        cursor = Qt.CrossCursor if self._highlight_mode else Qt.ArrowCursor
+        if self._continuous:
+            for w in self._cont_page_widgets:
+                w.setCursor(cursor)
+        else:
+            self.page_widget.setCursor(cursor)
+
+    def _toggle_erase(self):
+        """切换擦除模式（高亮模式的子模式）"""
+        self._hl_erase_mode = self.hl_erase_btn.isChecked()
+        self.hl_erase_btn.setProperty("active", self._hl_erase_mode)
+        self.hl_erase_btn.style().unpolish(self.hl_erase_btn)
+        self.hl_erase_btn.style().polish(self.hl_erase_btn)
+
+    # ── 高亮标注 ──
+
+    def _hl_mouse_press(self, e, page_idx, label):
+        if not getattr(self, '_highlight_mode', False):
+            return
+        if e.button() == Qt.LeftButton:
+            self._hl_start = e.pos()
+            self._hl_page_idx = page_idx
+            self._hl_label = label
+            # 擦除模式：按了擦除按钮 或 按住 Option 键
+            is_erase = getattr(self, '_hl_erase_mode', False) or (e.modifiers() & Qt.AltModifier)
+            self._hl_dragging_delete = bool(is_erase)
+            if is_erase:
+                # 红色半透明删除覆盖层
+                if not hasattr(self, '_hl_del_overlay') or self._hl_del_overlay is None:
+                    self._hl_del_overlay = QWidget(label)
+                    self._hl_del_overlay.setStyleSheet(
+                        "background:rgba(255,59,48,0.18);border:1.5px solid rgba(255,59,48,0.6);border-radius:3px;")
+                from PyQt5.QtCore import QRect
+                self._hl_del_overlay.setGeometry(QRect(self._hl_start, QSize()))
+                self._hl_del_overlay.show()
+                self._hl_del_overlay.raise_()
+            else:
+                # 蓝色添加高亮覆盖层
+                if not hasattr(self, '_hl_overlay') or self._hl_overlay is None:
+                    from PyQt5.QtWidgets import QRubberBand
+                    self._hl_overlay = QRubberBand(QRubberBand.Rectangle, label)
+                from PyQt5.QtCore import QRect
+                self._hl_overlay.setGeometry(QRect(self._hl_start, QSize()))
+                self._hl_overlay.show()
+
+    def _hl_mouse_move(self, e, label):
+        if not getattr(self, '_highlight_mode', False) or not hasattr(self, '_hl_start'):
+            return
+        if self._hl_start is None:
+            return
+        from PyQt5.QtCore import QRect
+        if getattr(self, '_hl_dragging_delete', False):
+            if hasattr(self, '_hl_del_overlay') and self._hl_del_overlay:
+                self._hl_del_overlay.setGeometry(QRect(self._hl_start, e.pos()).normalized())
+        elif hasattr(self, '_hl_overlay') and self._hl_overlay:
+            self._hl_overlay.setGeometry(QRect(self._hl_start, e.pos()).normalized())
+
+    def _hl_mouse_release(self, e, page_idx, label):
+        if not getattr(self, '_highlight_mode', False) or not hasattr(self, '_hl_start'):
+            return
+        try:
+            # 隐藏覆盖层
+            if hasattr(self, '_hl_overlay') and self._hl_overlay:
+                self._hl_overlay.hide()
+            if hasattr(self, '_hl_del_overlay') and self._hl_del_overlay:
+                self._hl_del_overlay.hide()
+
+            end = e.pos()
+            start = self._hl_start
+            is_delete = getattr(self, '_hl_dragging_delete', False)
+            self._hl_start = None
+            self._hl_dragging_delete = False
+
+            if not self.doc:
+                return
+
+            is_small = abs(end.x() - start.x()) < 8 and abs(end.y() - start.y()) < 8
+
+            if is_delete:
+                # 擦除模式
+                if is_small:
+                    # 小范围点击 → 删除点击处的高亮
+                    self._hl_delete_at(page_idx, end)
+                else:
+                    # 大范围框选 → 批量删除
+                    self._hl_delete_in_rect(page_idx, start, end)
+                return
+
+            # 左键：添加高亮
+            if is_small:
+                return
+            # 屏幕坐标 → PDF 坐标
+            x0 = min(start.x(), end.x()) / self.zoom
+            y0 = min(start.y(), end.y()) / self.zoom
+            x1 = max(start.x(), end.x()) / self.zoom
+            y1 = max(start.y(), end.y()) / self.zoom
+            sel_rect = fitz.Rect(x0, y0, x1, y1)
+            page = self.doc[page_idx]
+            # 在选区内查找文字，按文字位置创建高亮
+            words = page.get_text("words")
+            quads = []
+            for w in words:
+                wr = fitz.Rect(w[:4])
+                if sel_rect.intersects(wr):
+                    quads.append(wr.quad)
+            if not quads:
+                return  # 选区内无文字（如图片 PDF），不添加
+            annot = page.add_highlight_annot(quads=quads)
+            annot.set_colors(stroke=(1, 0.85, 0.2))
+            try:
+                annot.set_opacity(0.35)
+            except AttributeError:
+                pass  # 旧版 PyMuPDF 无此方法
+            annot.update()
+            self._hl_save_and_render(page_idx)
+        except Exception:
+            pass  # 防止任何异常导致闪退
+
+    def _hl_delete_in_rect(self, page_idx, start, end):
+        """批量删除框选区域内的所有高亮"""
+        try:
+            if not self.doc:
+                return
+            x0 = min(start.x(), end.x()) / self.zoom
+            y0 = min(start.y(), end.y()) / self.zoom
+            x1 = max(start.x(), end.x()) / self.zoom
+            y1 = max(start.y(), end.y()) / self.zoom
+            sel_rect = fitz.Rect(x0, y0, x1, y1)
+            page = self.doc[page_idx]
+            annots = page.annots()
+            if not annots:
+                return
+            # 收集要删除的高亮（不能边遍历边删除）
+            to_del = [a for a in annots if a.type[0] == 8 and sel_rect.intersects(a.rect)]
+            if not to_del:
+                return
+            for a in to_del:
+                page.delete_annot(a)
+            self._hl_save_and_render(page_idx)
+        except Exception:
+            pass
+
+    def _hl_save_and_render(self, page_idx):
+        """高亮变更后：保存文件 + 重新渲染"""
+        path = getattr(self, '_loaded_path', None)
+        if path:
+            try:
+                self.doc.save(path, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+            except Exception:
+                try:
+                    self.doc.save(path)
+                except Exception:
+                    pass
+        if self._continuous:
+            self._render_single_cont_page(page_idx)
+        else:
+            self.render_page()
+
+    def _hl_delete_at(self, page_idx, pos):
+        """删除点击位置的高亮注释"""
+        try:
+            if not self.doc:
+                return
+            page = self.doc[page_idx]
+            px, py = pos.x() / self.zoom, pos.y() / self.zoom
+            point = fitz.Point(px, py)
+            annots = page.annots()
+            if not annots:
+                return
+            for annot in annots:
+                if annot.type[0] == 8 and annot.rect.contains(point):
+                    page.delete_annot(annot)
+                    self._hl_save_and_render(page_idx)
+                    return
+        except Exception:
+            pass
+
+    def _render_single_cont_page(self, page_idx):
+        """重新渲染连续模式中的单个页面"""
+        if page_idx < len(self._cont_page_widgets):
+            label = self._cont_page_widgets[page_idx]
+            dpr = label.devicePixelRatioF() if hasattr(label, 'devicePixelRatioF') else 1.0
+            rz = self.zoom * dpr
+            page = self.doc[page_idx]
+            pix = page.get_pixmap(matrix=fitz.Matrix(rz, rz))
+            img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+            pm = QPixmap.fromImage(img)
+            pm.setDevicePixelRatio(dpr)
+            label.setPixmap(pm)
+            label.setFixedSize(pm.size() / dpr)
+
+    def _install_highlight_events(self, label, page_idx):
+        """给页面 widget 安装高亮鼠标事件
+        高亮模式：左键拖拽添加 | 擦除模式/Option+拖拽：框选批量删除
+        """
+        orig_press = label.mousePressEvent
+        orig_move = label.mouseMoveEvent
+        orig_release = label.mouseReleaseEvent
+        def _press(e):
+            if getattr(self, '_highlight_mode', False):
+                self._hl_mouse_press(e, page_idx, label)
+            else:
+                orig_press(e)
+        def _move(e):
+            if getattr(self, '_highlight_mode', False):
+                self._hl_mouse_move(e, label)
+            else:
+                orig_move(e)
+        def _release(e):
+            if getattr(self, '_highlight_mode', False):
+                self._hl_mouse_release(e, page_idx, label)
+            else:
+                orig_release(e)
+        label.mousePressEvent = _press
+        label.mouseMoveEvent = _move
+        label.mouseReleaseEvent = _release
+
+    def _hl_show_delete_menu(self, e, page_idx, label):
+        """右键菜单：删除点击位置的高亮"""
+        if not self.doc:
+            return
+        page = self.doc[page_idx]
+        px, py = e.pos().x() / self.zoom, e.pos().y() / self.zoom
+        point = fitz.Point(px, py)
+        # 检查是否有高亮在此位置
+        found = False
+        for annot in page.annots():
+            if annot.type[0] == 8 and annot.rect.contains(point):
+                found = True; break
+        if not found:
+            return
+        menu = _RoundMenu(label)
+        act = menu.addAction("删除高亮")
+        act.triggered.connect(lambda: self._hl_delete_at(page_idx, e.pos()))
+        menu.exec_(label.mapToGlobal(e.pos()))
 
     def _fit_and_render(self):
         """统一：计算贴合 + 渲染（只在尺寸真正变化时才重新渲染）"""
@@ -1205,6 +2541,7 @@ class PreviewPage(QWidget):
         self.page_widget.set_pixmap(qpix)
         # setFixedSize 用逻辑尺寸（物理尺寸 / dpr）
         self.page_widget.setFixedSize(int(pix.width / dpr), int(pix.height / dpr))
+        self._install_highlight_events(self.page_widget, self.current_page)
         self._update_page_display()
         self._highlight_thumb(self.current_page)
         self.scroll.verticalScrollBar().setValue(0)
@@ -1274,11 +2611,16 @@ class PreviewPage(QWidget):
         QTimer.singleShot(80, self._on_resize_done)
 
     def _on_thumb_panel_resized(self):
-        """拖拽缩略图面板后重建缩略图"""
+        """拖拽分割线后重建缩略图 + 重新适配 PDF 视图"""
         if not hasattr(self, '_thumb_resize_timer'):
             self._thumb_resize_timer = QTimer(); self._thumb_resize_timer.setSingleShot(True)
             self._thumb_resize_timer.timeout.connect(self._rebuild_thumbs_fit)
         self._thumb_resize_timer.start(200)
+        # 立即适配 PDF 视图大小（QA 面板伸缩时也需要）
+        if not hasattr(self, '_fit_timer'):
+            self._fit_timer = QTimer(); self._fit_timer.setSingleShot(True)
+            self._fit_timer.timeout.connect(self._fit_and_render)
+        self._fit_timer.start(50)
 
     def _rebuild_thumbs_fit(self):
         if self.doc and self.thumb_scroll.isVisible():
@@ -1375,6 +2717,7 @@ class PreviewPage(QWidget):
             lbl.setPixmap(qpix)
             lbl.setFixedSize(int(pix.width / dpr), int(pix.height / dpr))
             lbl.setStyleSheet("background:transparent;")
+            self._install_highlight_events(lbl, idx)
             idx += 1
         self._cont_render_idx = idx
         if idx < total:
@@ -1400,6 +2743,8 @@ class PreviewPage(QWidget):
         self._thumb_color = c['acc']
         if self._thumb_labels:
             self._highlight_thumb(self.current_page)
+        # 更新 AI 面板
+        self.qa_panel.update_theme(c)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1512,7 +2857,9 @@ class TranslatePage(QWidget):
         col = QVBoxLayout(); col.setSpacing(4)
         lb = QLabel("输出格式"); lb.setObjectName("FL"); col.addWidget(lb)
         self.fmt_combo = QComboBox(); self.fmt_combo.addItems(list(OUTPUT_MODES.keys()))
-        self.fmt_combo.setCurrentIndex(2)  # 默认：左右并排
+        _saved_fmt = self.cfg.get("output_format", "左右并排 (Side by Side)")
+        _fmt_idx = self.fmt_combo.findText(_saved_fmt)
+        self.fmt_combo.setCurrentIndex(_fmt_idx if _fmt_idx >= 0 else 2)
         self.fmt_combo.setMinimumWidth(180)
         col.addWidget(self.fmt_combo); r3.addLayout(col)
 
@@ -1553,14 +2900,18 @@ class TranslatePage(QWidget):
 
         lo.addWidget(card)
 
-        # ── 进度卡片 ──
+        # ── 进度卡片（固定高度占位，避免布局跳动） ──
+        self._prog_holder = QWidget()
+        self._prog_holder.setFixedHeight(130)
+        ph_lo = QVBoxLayout(self._prog_holder)
+        ph_lo.setContentsMargins(0,0,0,0); ph_lo.setSpacing(0)
+
         self.prog_card = _card("lg")
         self.prog_card.setVisible(False)
         pc_lo = QVBoxLayout(self.prog_card)
-        pc_lo.setContentsMargins(24, 18, 24, 18)
-        pc_lo.setSpacing(10)
+        pc_lo.setContentsMargins(24, 14, 24, 14)
+        pc_lo.setSpacing(8)
 
-        # 第一行：状态图标 + 标题 + 百分比
         row1 = QHBoxLayout(); row1.setSpacing(12)
         self.prog_icon = QLabel("⏳"); self.prog_icon.setObjectName("ProgIcon")
         row1.addWidget(self.prog_icon)
@@ -1571,7 +2922,6 @@ class TranslatePage(QWidget):
         row1.addWidget(self.prog_pct)
         pc_lo.addLayout(row1)
 
-        # 进度条
         self.prog_bar = QProgressBar(); self.prog_bar.setRange(0, 100)
         self.prog_bar.setObjectName("ProgBar")
         pc_lo.addWidget(self.prog_bar)
@@ -1579,7 +2929,6 @@ class TranslatePage(QWidget):
         self.prog_tip = QLabel(""); self.prog_tip.setObjectName("ProgTip")
         pc_lo.addWidget(self.prog_tip)
 
-        # 第二行：详情 + 取消按钮
         row2 = QHBoxLayout(); row2.setSpacing(10)
         self.prog_detail = QLabel(""); self.prog_detail.setObjectName("ProgDetail")
         row2.addWidget(self.prog_detail)
@@ -1591,7 +2940,8 @@ class TranslatePage(QWidget):
         row2.addWidget(self.stop_btn)
         pc_lo.addLayout(row2)
 
-        lo.addWidget(self.prog_card)
+        ph_lo.addWidget(self.prog_card)
+        lo.addWidget(self._prog_holder)
 
         # ── 开始按钮 ──
         br = QHBoxLayout(); br.setSpacing(10)
@@ -1601,7 +2951,6 @@ class TranslatePage(QWidget):
         self.go_btn.setEnabled(False)
         self.go_btn.clicked.connect(self._start)
         br.addWidget(self.go_btn)
-        # 骰子（无提示，让用户自己探索）
         self.dice_btn = QPushButton("🎲")
         self.dice_btn.setCursor(Qt.PointingHandCursor)
         self.dice_btn.setStyleSheet("font-size:18px;padding:6px;border:none;background:transparent;")
@@ -1715,6 +3064,7 @@ class TranslatePage(QWidget):
         self.cfg["service"] = self.svc_combo.currentText()
         self.cfg["lang_in"] = self.src_combo.currentText()
         self.cfg["lang_out"] = self.tgt_combo.currentText()
+        self.cfg["output_format"] = self.fmt_combo.currentText()
         self.cfg["thread_count"] = self.thread_spin.value()
         self.cfg["chunk_enabled"] = self.chunk_check.isChecked()
         self.cfg["chunk_size"] = self.chunk_size_spin.value()
@@ -1740,7 +3090,8 @@ class TranslatePage(QWidget):
         os.makedirs(self._output_dir, exist_ok=True)
 
         self.go_btn.setEnabled(False); self.go_btn.setText("翻译中…")
-        self.prog_card.setVisible(True); self.prog_bar.setValue(0)
+        self.prog_card.setVisible(True); self.stop_btn.setVisible(True)
+        self.prog_bar.setValue(0)
         self.prog_pct.setText("0%")
         self.prog_label.setText("正在翻译…")
         self.prog_icon.setText("⏳")
@@ -1933,6 +3284,17 @@ class TranslatePage(QWidget):
             except TypeError: pass
             self.go_btn.clicked.connect(self._retry_failed)
             self.go_btn.setEnabled(True)
+
+        # macOS 系统通知 — 翻译完成后通知用户（适合长时间翻译时切到其他 app）
+        try:
+            import subprocess
+            msg = f"{ok} 篇翻译完成" if failed == 0 else f"完成 {ok} 篇，失败 {failed} 篇"
+            subprocess.Popen([
+                "osascript", "-e",
+                f'display notification "{msg}" with title "pdf2zh" sound name "Glass"'
+            ])
+        except Exception:
+            pass
 
         # 关怀消息
         from ui.caring import get_caring_message, get_session_tip
@@ -2182,6 +3544,30 @@ class ReaderPage(QWidget):
         cb.clicked.connect(self._clear); hdr.addWidget(cb)
         ll.addLayout(hdr)
 
+        # ── 分组筛选栏：左侧可滚动按钮区 + 右侧固定"＋" ──
+        _group_row = QHBoxLayout(); _group_row.setContentsMargins(0, 0, 0, 0); _group_row.setSpacing(4)
+        self._group_bar = QScrollArea()
+        self._group_bar.setMaximumHeight(34); self._group_bar.setFrameShape(QFrame.NoFrame)
+        self._group_bar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._group_bar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._group_bar.setWidgetResizable(True)
+        self._group_container = QWidget()
+        self._group_layout = QHBoxLayout(self._group_container)
+        self._group_layout.setContentsMargins(0, 0, 0, 0); self._group_layout.setSpacing(4)
+        self._group_bar.setWidget(self._group_container)
+        _group_row.addWidget(self._group_bar, 1)
+        # "＋"按钮 — 独立于 scroll area，绝对不参与 group_layout
+        self._add_btn = QPushButton("＋"); self._add_btn.setObjectName("Gh")
+        self._add_btn.setCursor(Qt.PointingHandCursor)
+        self._add_btn.setStyleSheet("font-size:10px;padding:4px 8px;")
+        self._add_btn.setToolTip("新建分组")
+        self._add_btn.setFixedSize(28, 26)
+        self._add_btn.clicked.connect(self._create_group)
+        _group_row.addWidget(self._add_btn, 0)  # stretch=0, 固定尺寸
+        ll.addLayout(_group_row)
+        self._current_group_id = None  # None = 全部
+        self._current_tag_filter = None
+
         # 历史列表
         self.list_w = QListWidget()
         self.list_w.setObjectName("HistList")
@@ -2189,6 +3575,7 @@ class ReaderPage(QWidget):
         self.list_w.setSelectionMode(QListWidget.SingleSelection)
         self.list_w.currentItemChanged.connect(self._on_select)
         self.list_w.itemClicked.connect(lambda item: self._on_select(item, None))
+        self.list_w.itemDoubleClicked.connect(self._open_in_reader)
         self.list_w.installEventFilter(self)
         self.list_w.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_w.customContextMenuRequested.connect(self._hist_context_menu)
@@ -2357,14 +3744,30 @@ class ReaderPage(QWidget):
 
     def refresh(self):
         self.list_w.clear()
-        records = HistoryManager.load()
-        if not records:
+        data = HistoryManager.load_all()
+        records = data.get("records", [])
+        groups = data.get("groups", [])
+        all_tags = data.get("tags", [])
+
+        # ── 重建分组筛选栏 ──
+        self._rebuild_group_bar(groups)
+
+        # ── 按分组/标签筛选 ──
+        filtered = records
+        gid = self._current_group_id
+        if gid is not None:
+            filtered = [r for r in filtered if r.get("group_id") == gid]
+        tid = self._current_tag_filter
+        if tid is not None:
+            filtered = [r for r in filtered if tid in r.get("tags", [])]
+
+        if not filtered:
             item = QListWidgetItem("暂无翻译记录")
             item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
             item.setForeground(QColor(_C["t3"]))
             self.list_w.addItem(item)
             return
-        for r in records:
+        for r in filtered:
             ts = r.get("timestamp", "")[:16].replace("T", " ")
             fname = r.get("file", {}).get("name", "?")
             svc = r.get("translation", {}).get("service", "?")
@@ -2375,17 +3778,168 @@ class ReaderPage(QWidget):
             item = QListWidgetItem()
             item.setData(Qt.UserRole, r)
             item.setToolTip(f"{fname}\n{svc} · {lang_in}→{lang_out} · {ts[5:]}")
-            item.setSizeHint(QSize(0, 44))
+            # 有标签时行高多留空间
+            has_tags = bool(r.get("tags"))
+            item.setSizeHint(QSize(0, 56 if has_tags else 44))
             self.list_w.addItem(item)
             # 自定义 widget 双行布局
             w = QWidget(); wl = QVBoxLayout(w)
-            wl.setContentsMargins(2,2,2,2); wl.setSpacing(0)
+            wl.setContentsMargins(2, 2, 2, 2); wl.setSpacing(0)
             l1 = QLabel(f"{status} {fname}"); l1.setStyleSheet(f"font-size:12px;color:{_C['t1']};background:transparent;")
             l2 = QLabel(f"{svc} · {lang_in}→{lang_out} · {ts[5:]}")
             l2.setStyleSheet(f"font-size:11px;color:{_C['t2']};background:transparent;")
             wl.addWidget(l1); wl.addWidget(l2)
-            w._l1 = l1; w._l2 = l2  # 存引用，选中时变色用
+            # 标签行
+            rec_tags = r.get("tags", [])
+            if rec_tags and all_tags:
+                tag_row = QHBoxLayout(); tag_row.setSpacing(4); tag_row.setContentsMargins(0, 1, 0, 0)
+                for td in all_tags:
+                    if td["id"] in rec_tags:
+                        dot = QLabel(f"● {td['name']}")
+                        dot.setStyleSheet(f"font-size:9px;color:{td['color']};background:transparent;")
+                        tag_row.addWidget(dot)
+                tag_row.addStretch()
+                wl.addLayout(tag_row)
+            w._l1 = l1; w._l2 = l2
             self.list_w.setItemWidget(item, w)
+
+    def _rebuild_group_bar(self, groups):
+        """重建分组筛选按钮栏 — 支持右键菜单（重命名/删除/图标）"""
+        while self._group_layout.count():
+            w = self._group_layout.takeAt(0).widget()
+            if w: w.deleteLater()
+        self._group_btns = []
+        c = _C
+        # ── "全部"按钮（固定，不可删除） ──
+        btn_all = QPushButton("全部"); btn_all.setObjectName("TB")
+        btn_all.setCursor(Qt.PointingHandCursor)
+        btn_all.setStyleSheet("font-size:10px;padding:4px 10px;")
+        btn_all.setProperty("active", self._current_group_id is None)
+        btn_all.clicked.connect(lambda: self._select_group(None))
+        self._group_layout.addWidget(btn_all)
+        # ── 动态分组按钮 ──
+        for g in groups:
+            b = QPushButton(f"{g['icon']} {g['name']}"); b.setObjectName("TB")
+            b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet("font-size:10px;padding:4px 10px;")
+            b.setProperty("active", self._current_group_id == g["id"])
+            gid = g["id"]
+            b.clicked.connect(lambda checked, _id=gid: self._select_group(_id))
+            # 右键菜单
+            b.setContextMenuPolicy(Qt.CustomContextMenu)
+            b.customContextMenuRequested.connect(
+                lambda pos, _id=gid, _btn=b: self._group_context_menu(_id, _btn, pos))
+            self._group_layout.addWidget(b)
+            self._group_btns.append((gid, b))
+        self._group_layout.addStretch()
+
+    def _select_group(self, group_id):
+        self._current_group_id = group_id
+        self.refresh()
+
+    def _create_group(self):
+        from PyQt5.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "新建分组", "分组名称：")
+        if ok and name.strip():
+            g = HistoryManager.add_group(name.strip())
+            # 在 stretch 前面插入新按钮（"＋"在 layout 外，不受影响）
+            stretch_idx = self._group_layout.count() - 1  # 最后一个是 stretch
+            b = QPushButton(f"{g['icon']} {g['name']}"); b.setObjectName("TB")
+            b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet("font-size:10px;padding:4px 10px;")
+            b.setProperty("active", False)
+            gid = g["id"]
+            b.clicked.connect(lambda checked, _id=gid: self._select_group(_id))
+            b.setContextMenuPolicy(Qt.CustomContextMenu)
+            b.customContextMenuRequested.connect(
+                lambda pos, _id=gid, _btn=b: self._group_context_menu(_id, _btn, pos))
+            self._group_layout.insertWidget(stretch_idx, b)
+            self._group_btns.append((gid, b))
+
+    def _group_context_menu(self, group_id, btn, pos):
+        """分组按钮右键菜单：重命名 / 修改图标 / 上移 / 下移 / 删除"""
+        try:
+            menu = _RoundMenu(self)
+            menu.addAction("重命名", lambda: self._rename_group(group_id))
+            menu.addAction("修改图标", lambda: self._change_group_icon(group_id))
+            menu.addSeparator()
+            # 上移 / 下移
+            ids = [gid for gid, _ in self._group_btns]
+            idx = ids.index(group_id) if group_id in ids else -1
+            if idx > 0:
+                menu.addAction("↑ 上移", lambda: self._move_group(group_id, -1))
+            if idx < len(ids) - 1:
+                menu.addAction("↓ 下移", lambda: self._move_group(group_id, 1))
+            menu.addSeparator()
+            menu.addAction("删除分组", lambda: self._delete_group(group_id))
+            menu.exec_(btn.mapToGlobal(pos))
+        except Exception:
+            pass
+
+    def _rename_group(self, group_id):
+        from PyQt5.QtWidgets import QInputDialog
+        data = HistoryManager.load_all()
+        old_name = ""
+        for g in data.get("groups", []):
+            if g["id"] == group_id:
+                old_name = g["name"]
+                break
+        name, ok = QInputDialog.getText(self, "重命名分组", "新名称：", text=old_name)
+        if ok and name.strip():
+            HistoryManager.rename_group(group_id, name.strip())
+            self.refresh()
+
+    def _change_group_icon(self, group_id):
+        from PyQt5.QtWidgets import QInputDialog
+        icons = ["📁", "📂", "📚", "📖", "🔬", "🧪", "💻", "🎓", "📝", "⭐",
+                 "🔖", "📌", "🏷️", "💡", "🔍", "📊", "🧬", "🌐", "🤖", "📐"]
+        icon, ok = QInputDialog.getItem(self, "选择图标", "分组图标：", icons, 0, False)
+        if ok:
+            HistoryManager.update_group_icon(group_id, icon)
+            self.refresh()
+
+    def _move_group(self, group_id, direction):
+        """上移 direction=-1，下移 direction=1"""
+        data = HistoryManager.load_all()
+        groups = data.get("groups", [])
+        ids = [g["id"] for g in groups]
+        idx = ids.index(group_id) if group_id in ids else -1
+        if idx < 0:
+            return
+        new_idx = idx + direction
+        if 0 <= new_idx < len(ids):
+            ids[idx], ids[new_idx] = ids[new_idx], ids[idx]
+            HistoryManager.reorder_groups(ids)
+            self.refresh()
+
+    def _delete_group(self, group_id):
+        data = HistoryManager.load_all()
+        name = ""
+        count = 0
+        for g in data.get("groups", []):
+            if g["id"] == group_id:
+                name = g["name"]
+                break
+        for r in data.get("records", []):
+            if r.get("group_id") == group_id:
+                count += 1
+        reply = QMessageBox.question(
+            self, "删除分组",
+            f"确定删除分组「{name}」吗？\n该分组下的 {count} 个文件将移至「全部」。",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            HistoryManager.delete_group(group_id)
+            if self._current_group_id == group_id:
+                self._current_group_id = None
+            self.refresh()
+
+    def _move_to_group(self, record_id, group_id):
+        HistoryManager.move_to_group(record_id, group_id)
+        self.refresh()
+
+    def _toggle_tag(self, record_id, tag_id):
+        HistoryManager.toggle_record_tag(record_id, tag_id)
+        self.refresh()
 
     def _hist_context_menu(self, pos):
         item = self.list_w.itemAt(pos)
@@ -2407,8 +3961,41 @@ class ReaderPage(QWidget):
             menu.addAction("在 Finder 中显示原文",
                            lambda: __import__("subprocess").Popen(["open", "-R", src]))
         menu.addSeparator()
+        # 移到分组
+        record_id = r.get("id")
+        data = HistoryManager.load_all()
+        groups = data.get("groups", [])
+        if groups:
+            grp_menu = _RoundMenu(self); grp_menu.setTitle("移到分组")
+            grp_menu.addAction("无分组", lambda: self._move_to_group(record_id, None))
+            for g in groups:
+                gid = g["id"]
+                grp_menu.addAction(f"{g['icon']} {g['name']}",
+                    lambda _id=gid: self._move_to_group(record_id, _id))
+            menu.addMenu(grp_menu)
+        # 标签
+        all_tags = data.get("tags", [])
+        tag_menu = _RoundMenu(self); tag_menu.setTitle("标签")
+        for t in all_tags:
+            a = tag_menu.addAction(f"● {t['name']}")
+            a.setCheckable(True)
+            a.setChecked(t["id"] in r.get("tags", []))
+            tid = t["id"]
+            a.toggled.connect(lambda checked, _tid=tid: self._toggle_tag(record_id, _tid))
+        tag_menu.addSeparator()
+        tag_menu.addAction("新建标签…", self._create_tag)
+        menu.addMenu(tag_menu)
+        menu.addSeparator()
         menu.addAction("清空全部历史", self._clear)
         menu.exec_(self.list_w.viewport().mapToGlobal(pos))
+
+    def _create_tag(self):
+        from PyQt5.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "新建标签", "标签名称：")
+        if ok and name.strip():
+            colors = ["#FF3B30", "#FF9F0A", "#34C759", "#007AFF", "#AF52DE", "#FF2D55"]
+            import random
+            HistoryManager.add_tag(name.strip(), random.choice(colors))
 
     def _on_select(self, current, previous):
         # 恢复上一个
@@ -2442,6 +4029,15 @@ class ReaderPage(QWidget):
         # 加载预览
         if "output_files" in r:
             self.preview.set_output_files(r["output_files"])
+
+    def _open_in_reader(self, item):
+        """双击历史记录 → 加载到预览并聚焦预览区"""
+        r = item.data(Qt.UserRole) if item else None
+        if not r or "output_files" not in r:
+            return
+        self.preview.set_output_files(r["output_files"])
+        self._preview_active = True
+        self.preview.setFocus()
 
     def set_output_files(self, files):
         """外部调用（翻译完成后）"""
@@ -2508,14 +4104,15 @@ class SettingsPage(QWidget):
     theme_color_changed = pyqtSignal(str)
 
     SERVICE_CONFIGS = {
-        # 国际服务
+        # 推荐
+        "DeepSeek":        {"key_ph":"密钥",  "models":["deepseek-chat","deepseek-reasoner","deepseek-coder"], "url":"https://api.deepseek.com/v1"},
         "OpenAI":          {"key_ph":"sk-...", "models":["gpt-4o","gpt-4o-mini","gpt-4-turbo","gpt-3.5-turbo","o1","o1-mini","o1-pro"], "url":"https://api.openai.com/v1"},
+        # 国际服务
         "Azure OpenAI":    {"key_ph":"密钥",  "models":["gpt-4o","gpt-4-turbo","gpt-35-turbo"], "url":"https://YOUR_RESOURCE.openai.azure.com"},
         "DeepL":           {"key_ph":"密钥",  "models":[], "url":""},
         "Gemini":          {"key_ph":"密钥",  "models":["gemini-pro","gemini-1.5-pro","gemini-1.5-flash","gemini-2.0-flash"], "url":""},
         "Groq":            {"key_ph":"密钥",  "models":["llama-3.1-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768","llama-3.3-70b-versatile"], "url":"https://api.groq.com/openai/v1"},
         # 国产大模型
-        "DeepSeek":        {"key_ph":"密钥",  "models":["deepseek-chat","deepseek-reasoner","deepseek-coder"], "url":"https://api.deepseek.com/v1"},
         "Zhipu 智谱":     {"key_ph":"密钥",  "models":["glm-4","glm-4-flash","glm-4-plus","glm-3-turbo","cogview-3"], "url":"https://open.bigmodel.cn/api/paas/v4"},
         "Qwen 通义千问":  {"key_ph":"密钥",  "models":["qwen-turbo","qwen-plus","qwen-max","qwen-long"], "url":"https://dashscope.aliyuncs.com/compatible-mode/v1"},
         "Tencent 腾讯":   {"key_ph":"密钥",  "models":["hunyuan-pro","hunyuan-standard","hunyuan-lite"], "url":""},
@@ -2544,13 +4141,14 @@ class SettingsPage(QWidget):
 
         cols = QHBoxLayout(); cols.setSpacing(20)
         cfg = UserConfigManager.load()
+        from PyQt5.QtWidgets import QGridLayout, QTextEdit
 
         # ══════════════════════════════════════════
-        # 左列：翻译服务 → 提示词 → 术语库
+        # 左列：翻译服务 → AI 助手
         # ══════════════════════════════════════════
         left = QVBoxLayout(); left.setSpacing(2)
 
-        # ── 翻译服务配置（选择器在卡片内部）──
+        # ── 翻译服务配置 ──
         sl3 = QLabel("翻译服务配置"); sl3.setObjectName("SL"); left.addWidget(sl3)
         self.svc_card = _card()
         svc_outer = QVBoxLayout(self.svc_card)
@@ -2571,7 +4169,6 @@ class SettingsPage(QWidget):
             if saved: key_inp.setText(UserConfigManager.decode_sensitive(saved))
             key_inp.editingFinished.connect(self._save)
             self.api_inputs[svc_name] = {"key": key_inp}
-
             if conf["models"]:
                 mc = QComboBox(); mc.setEditable(True)
                 mc.addItems(conf["models"])
@@ -2579,7 +4176,6 @@ class SettingsPage(QWidget):
                 if saved_m: mc.setCurrentText(saved_m)
                 mc.currentTextChanged.connect(self._save)
                 self.api_inputs[svc_name]["model"] = mc
-
             if conf["url"]:
                 ui = QLineEdit()
                 saved_u = cfg.get(f"url_{svc_name}", "")
@@ -2587,98 +4183,84 @@ class SettingsPage(QWidget):
                 ui.editingFinished.connect(self._save)
                 self.api_inputs[svc_name]["url"] = ui
 
-        # ── 翻译提示词 ──
-        from ui.prompt_manager import PromptTemplateManager
-        from PyQt5.QtWidgets import QTextEdit
-        sl4 = QLabel("翻译提示词"); sl4.setObjectName("SL"); left.addWidget(sl4)
-        c4 = _card(); cl4 = QVBoxLayout(c4); cl4.setContentsMargins(16,12,16,12); cl4.setSpacing(2)
+        # ── AI 助手（摘要 / 问答服务） ──
+        sl_ai = QLabel("AI 助手"); sl_ai.setObjectName("SL"); left.addWidget(sl_ai)
+        ai_card = _card(); ai_lo = QVBoxLayout(ai_card)
+        ai_lo.setContentsMargins(16, 12, 16, 12); ai_lo.setSpacing(6)
 
-        pr = QHBoxLayout(); pr.setSpacing(4)
-        self.prompt_preset = QComboBox()
-        self._refresh_prompt_list()
-        self.prompt_preset.currentTextChanged.connect(self._on_prompt_preset)
-        pr.addWidget(self.prompt_preset, 1)
-        cl4.addLayout(pr)
+        ai_desc = QLabel("摘要与问答使用的 AI 服务，默认与翻译服务相同")
+        ai_desc.setObjectName("Cap"); ai_desc.setWordWrap(True)
+        ai_lo.addWidget(ai_desc)
 
-        self.prompt_edit = QTextEdit()
-        self.prompt_edit.setPlaceholderText("提示词内容… 占位符: {lang_out} {lang_in} {text}")
-        self.prompt_edit.setMaximumHeight(52)
-        saved_prompt = cfg.get("prompt", "")
-        if saved_prompt:
-            self.prompt_edit.setPlainText(saved_prompt)
-        cl4.addWidget(self.prompt_edit)
+        self._ai_default_row = QWidget()
+        _adr_lo = QHBoxLayout(self._ai_default_row)
+        _adr_lo.setContentsMargins(0, 2, 0, 2); _adr_lo.setSpacing(8)
+        self._ai_status_label = QLabel("与翻译服务相同")
+        self._ai_status_label.setStyleSheet(
+            f"font-size:12px;font-weight:500;color:{_C['ok']};background:transparent;")
+        _adr_lo.addWidget(self._ai_status_label); _adr_lo.addStretch()
+        self._ai_toggle_btn = QPushButton("自定义")
+        self._ai_toggle_btn.setObjectName("Gh"); self._ai_toggle_btn.setCursor(Qt.PointingHandCursor)
+        self._ai_toggle_btn.setStyleSheet("font-size:11px;padding:3px 10px;")
+        self._ai_toggle_btn.clicked.connect(self._toggle_assistant_config)
+        _adr_lo.addWidget(self._ai_toggle_btn)
+        ai_lo.addWidget(self._ai_default_row)
 
-        btn_row = QHBoxLayout(); btn_row.setSpacing(2)
-        for label, slot in [
-            ("保存", self._save_prompt_template),
-            ("新建", self._new_prompt_template),
-            ("导入", self._import_prompts),
-            ("导出", self._export_prompts),
+        self._ai_custom_frame = QWidget()
+        _acf_lo = QVBoxLayout(self._ai_custom_frame)
+        _acf_lo.setContentsMargins(0, 6, 0, 0); _acf_lo.setSpacing(10)
+
+        for _f_label, _f_attr, _f_type in [
+            ("服务",    "_ai_svc_combo",   "combo"),
+            ("API Key", "_ai_key_input",   "password"),
+            ("模型",    "_ai_model_combo", "combo_edit"),
+            ("Base URL","_ai_url_input",   "line"),
         ]:
-            b = QPushButton(label); b.setObjectName("Gh"); b.setCursor(Qt.PointingHandCursor)
-            b.setStyleSheet("font-size:11px;padding:2px 6px;")
-            b.clicked.connect(slot)
-            btn_row.addWidget(b)
-        btn_row.addStretch()
-        del_btn = QPushButton("删除"); del_btn.setCursor(Qt.PointingHandCursor)
-        del_btn.setObjectName("GhDanger"); del_btn.setStyleSheet("font-size:11px;padding:2px 6px;")
-        del_btn.clicked.connect(self._delete_prompt_template)
-        btn_row.addWidget(del_btn)
-        cl4.addLayout(btn_row)
+            _grp = QVBoxLayout(); _grp.setSpacing(3)
+            _lbl = QLabel(_f_label); _lbl.setStyleSheet(
+                f"font-size:11px;font-weight:500;color:{_C['t2']};background:transparent;padding:0;")
+            _grp.addWidget(_lbl)
+            if _f_type == "combo":
+                w = QComboBox()
+                from ui.ai_client import CHAT_SERVICES
+                w.addItems([name for name, _, _ in CHAT_SERVICES])
+                w.currentTextChanged.connect(self._on_assistant_svc_changed)
+            elif _f_type == "password":
+                w = QLineEdit(); w.setEchoMode(QLineEdit.Password)
+                w.setPlaceholderText("密钥")
+                w.editingFinished.connect(self._save_assistant_config)
+            elif _f_type == "combo_edit":
+                w = QComboBox(); w.setEditable(True)
+                w.currentTextChanged.connect(self._save_assistant_config)
+            else:
+                w = QLineEdit(); w.setPlaceholderText("留空使用默认")
+                w.editingFinished.connect(self._save_assistant_config)
+            setattr(self, _f_attr, w)
+            _grp.addWidget(w)
+            _acf_lo.addLayout(_grp)
 
-        hint = QLabel("{lang_out}=目标语言  {lang_in}=源语言  {text}=原文 · {{v*}} 保留公式 · Google/Bing 不使用提示词")
-        hint.setObjectName("Cap"); hint.setWordWrap(True); hint.setStyleSheet("font-size:10px;")
-        cl4.addWidget(hint)
-        left.addWidget(c4)
+        _reset_row = QHBoxLayout(); _reset_row.addStretch()
+        _reset_btn = QPushButton("恢复默认"); _reset_btn.setObjectName("GhDanger")
+        _reset_btn.setCursor(Qt.PointingHandCursor)
+        _reset_btn.setStyleSheet("font-size:11px;padding:3px 10px;")
+        _reset_btn.clicked.connect(self._reset_assistant_config)
+        _reset_row.addWidget(_reset_btn)
+        _acf_lo.addLayout(_reset_row)
 
-        # ── 术语库 ──
-        from ui.glossary_manager import GlossaryManager
-        sl5 = QLabel("术语库"); sl5.setObjectName("SL"); left.addWidget(sl5)
-        c5 = _card(); cl5 = QVBoxLayout(c5); cl5.setContentsMargins(16,12,16,12); cl5.setSpacing(2)
-
-        gr = QHBoxLayout(); gr.setSpacing(6)
-        self.gloss_selector = QComboBox()
-        self._refresh_gloss_list()
-        self.gloss_selector.currentTextChanged.connect(self._on_gloss_changed)
-        gr.addWidget(self.gloss_selector, 1)
-        self.gloss_count = QLabel(""); self.gloss_count.setObjectName("Cap")
-        self.gloss_count.setStyleSheet("font-size:10px;")
-        gr.addWidget(self.gloss_count)
-        cl5.addLayout(gr)
-        self._update_gloss_count()
-
-        gbtn = QHBoxLayout(); gbtn.setSpacing(2)
-        for label, slot in [
-            ("新建", self._new_glossary),
-            ("导入", self._import_glossary),
-            ("导出", self._export_glossary),
-        ]:
-            b = QPushButton(label); b.setObjectName("Gh"); b.setCursor(Qt.PointingHandCursor)
-            b.setStyleSheet("font-size:11px;padding:2px 6px;"); b.clicked.connect(slot)
-            gbtn.addWidget(b)
-        gbtn.addStretch()
-        gdel = QPushButton("删除"); gdel.setCursor(Qt.PointingHandCursor)
-        gdel.setObjectName("GhDanger"); gdel.setStyleSheet("font-size:11px;padding:2px 6px;")
-        gdel.clicked.connect(self._delete_glossary)
-        gbtn.addWidget(gdel)
-        cl5.addLayout(gbtn)
-
-        hint2 = QLabel("翻译完成后自动替换匹配术语，支持 CSV/JSON 导入")
-        hint2.setObjectName("Cap"); hint2.setWordWrap(True); hint2.setStyleSheet("font-size:10px;")
-        cl5.addWidget(hint2)
-        left.addWidget(c5)
+        self._ai_custom_frame.setVisible(False)
+        ai_lo.addWidget(self._ai_custom_frame)
+        self._load_assistant_config()
+        left.addWidget(ai_card)
         left.addStretch()
 
         # ══════════════════════════════════════════
-        # 右列：偏好 → Zotero → 指南，三张卡片，不滚动
+        # 右列：偏好 → 提示词 → 术语库 → Zotero
         # ══════════════════════════════════════════
-        from PyQt5.QtWidgets import QGridLayout
         right = QVBoxLayout(); right.setSpacing(2)
 
-        # ── 卡 1 ：偏好设置 ──
+        # ── 偏好设置 ──
         sl_app = QLabel("偏好设置"); sl_app.setObjectName("SL"); right.addWidget(sl_app)
         c = _card(); cl = QVBoxLayout(c); cl.setContentsMargins(16,12,16,12); cl.setSpacing(6)
-
         self.dark_check = QCheckBox("深色模式"); self.dark_check.toggled.connect(self.dark_mode_changed.emit)
         self.cache_check = QCheckBox("翻译缓存"); self.cache_check.setChecked(True)
         self.ai_check = QCheckBox("AI 布局检测"); self.ai_check.setChecked(True)
@@ -2689,15 +4271,13 @@ class SettingsPage(QWidget):
         _pref_grid.addWidget(self.ai_check, 1, 0)
         _pref_grid.addWidget(self.font_check, 1, 1)
         cl.addLayout(_pref_grid)
-
-        # 主题色（骰子 3x6 解锁）
         self.theme_row = QWidget(); tr_lo = QHBoxLayout(self.theme_row)
         tr_lo.setContentsMargins(0,2,0,2); tr_lo.setSpacing(6)
         tr_lbl = QLabel("主题色"); tr_lo.addWidget(tr_lbl)
         THEME_COLORS = [
-            ("#0071E3", "蓝"),  ("#FF6B6B", "红"),  ("#34C759", "绿"),
-            ("#AF52DE", "紫"),  ("#FF9F0A", "橙"),  ("#FF2D55", "粉"),
-            ("#5AC8FA", "青"),  ("#FFD60A", "黄"),
+            ("#0071E3","蓝"),("#FF6B6B","红"),("#34C759","绿"),
+            ("#AF52DE","紫"),("#FF9F0A","橙"),("#FF2D55","粉"),
+            ("#5AC8FA","青"),("#FFD60A","黄"),
         ]
         self._theme_dots = []
         for hex_c, name in THEME_COLORS:
@@ -2710,19 +4290,89 @@ class SettingsPage(QWidget):
             tr_lo.addWidget(dot); self._theme_dots.append(dot)
         tr_lo.addStretch()
         cl.addWidget(self.theme_row)
-        cfg_theme = UserConfigManager.load()
-        self.theme_row.setVisible(cfg_theme.get("theme_unlocked", False))
+        self.theme_row.setVisible(UserConfigManager.load().get("theme_unlocked", False))
         right.addWidget(c)
 
-        # ── 卡 2 ：Zotero 联动 ──
+        # ── 翻译提示词 ──
+        from ui.prompt_manager import PromptTemplateManager
+        sl4 = QLabel("翻译提示词"); sl4.setObjectName("SL"); right.addWidget(sl4)
+        c4 = _card(); cl4 = QVBoxLayout(c4); cl4.setContentsMargins(16,10,16,10); cl4.setSpacing(2)
+        pr = QHBoxLayout(); pr.setSpacing(4)
+        self.prompt_preset = QComboBox()
+        self._refresh_prompt_list()
+        self.prompt_preset.currentTextChanged.connect(self._on_prompt_preset)
+        pr.addWidget(self.prompt_preset, 1)
+        cl4.addLayout(pr)
+        self.prompt_edit = QTextEdit()
+        self.prompt_edit.setPlaceholderText("提示词… {lang_out} {lang_in} {text}")
+        self.prompt_edit.setMaximumHeight(42)
+        saved_prompt = cfg.get("prompt", "")
+        if saved_prompt: self.prompt_edit.setPlainText(saved_prompt)
+        cl4.addWidget(self.prompt_edit)
+        btn_row = QHBoxLayout(); btn_row.setSpacing(2)
+        for label, slot in [
+            ("保存", self._save_prompt_template),
+            ("新建", self._new_prompt_template),
+            ("导入", self._import_prompts),
+            ("导出", self._export_prompts),
+        ]:
+            b = QPushButton(label); b.setObjectName("Gh"); b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet("font-size:11px;padding:2px 6px;"); b.clicked.connect(slot)
+            btn_row.addWidget(b)
+        btn_row.addStretch()
+        del_btn = QPushButton("删除"); del_btn.setCursor(Qt.PointingHandCursor)
+        del_btn.setObjectName("GhDanger"); del_btn.setStyleSheet("font-size:11px;padding:2px 6px;")
+        del_btn.clicked.connect(self._delete_prompt_template)
+        btn_row.addWidget(del_btn)
+        cl4.addLayout(btn_row)
+        right.addWidget(c4)
+
+        # ── 术语库 ──
+        from ui.glossary_manager import GlossaryManager
+        sl5 = QLabel("术语库"); sl5.setObjectName("SL"); right.addWidget(sl5)
+        c5 = _card(); cl5 = QVBoxLayout(c5); cl5.setContentsMargins(16,10,16,10); cl5.setSpacing(3)
+        gr = QHBoxLayout(); gr.setSpacing(6)
+        self.gloss_selector = QComboBox()
+        self._refresh_gloss_list()
+        self.gloss_selector.currentTextChanged.connect(self._on_gloss_changed)
+        gr.addWidget(self.gloss_selector, 1)
+        self.gloss_count = QLabel(""); self.gloss_count.setObjectName("Cap")
+        self.gloss_count.setStyleSheet("font-size:10px;")
+        gr.addWidget(self.gloss_count)
+        cl5.addLayout(gr); self._update_gloss_count()
+        # 内联添加术语
+        _add_row = QHBoxLayout(); _add_row.setSpacing(4)
+        self._gloss_src = QLineEdit(); self._gloss_src.setPlaceholderText("原文")
+        self._gloss_src.setStyleSheet("font-size:11px;padding:4px 8px;")
+        self._gloss_dst = QLineEdit(); self._gloss_dst.setPlaceholderText("译文")
+        self._gloss_dst.setStyleSheet("font-size:11px;padding:4px 8px;")
+        _add_btn = QPushButton("添加"); _add_btn.setObjectName("Gh")
+        _add_btn.setCursor(Qt.PointingHandCursor)
+        _add_btn.setStyleSheet("font-size:11px;padding:2px 8px;")
+        _add_btn.clicked.connect(self._add_gloss_term)
+        _add_row.addWidget(self._gloss_src, 1)
+        _add_row.addWidget(self._gloss_dst, 1)
+        _add_row.addWidget(_add_btn)
+        cl5.addLayout(_add_row)
+        gbtn = QHBoxLayout(); gbtn.setSpacing(2)
+        for label, slot in [
+            ("新建", self._new_glossary), ("导入", self._import_glossary),
+            ("导出", self._export_glossary),
+        ]:
+            b = QPushButton(label); b.setObjectName("Gh"); b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet("font-size:11px;padding:2px 6px;"); b.clicked.connect(slot)
+            gbtn.addWidget(b)
+        gbtn.addStretch()
+        gdel = QPushButton("删除"); gdel.setCursor(Qt.PointingHandCursor)
+        gdel.setObjectName("GhDanger"); gdel.setStyleSheet("font-size:11px;padding:2px 6px;")
+        gdel.clicked.connect(self._delete_glossary); gbtn.addWidget(gdel)
+        cl5.addLayout(gbtn)
+        right.addWidget(c5)
+
+        # ── Zotero 联动 ──
         sl_zot = QLabel("Zotero 联动"); sl_zot.setObjectName("SL"); right.addWidget(sl_zot)
         zot_card = _card(); zot_lo = QVBoxLayout(zot_card)
-        zot_lo.setContentsMargins(14,10,14,10); zot_lo.setSpacing(5)
-
-        zot_desc = QLabel("从 Zotero 拖入文献，翻译后自动放回原位")
-        zot_desc.setObjectName("Cap"); zot_desc.setWordWrap(True)
-        zot_lo.addWidget(zot_desc)
-
+        zot_lo.setContentsMargins(14,10,14,10); zot_lo.setSpacing(4)
         self._zot_sbs = QCheckBox("左右并排 (Side by Side)")
         self._zot_dual = QCheckBox("双语对照 (Dual)")
         self._zot_mono = QCheckBox("仅翻译 (Mono)")
@@ -2746,69 +4396,58 @@ class SettingsPage(QWidget):
         _auto_desc = QLabel("Zotero 插件"); _auto_desc.setObjectName("Cap")
         _auto_row.addWidget(_auto_desc)
         self._zot_status = QLabel(""); self._zot_status.setObjectName("Cap")
-        _auto_row.addWidget(self._zot_status)
-        _auto_row.addStretch()
+        _auto_row.addWidget(self._zot_status); _auto_row.addStretch()
         self._zot_install_btn = QPushButton("一键安装")
-        self._zot_install_btn.setObjectName("Gh")
-        self._zot_install_btn.setCursor(Qt.PointingHandCursor)
+        self._zot_install_btn.setObjectName("Gh"); self._zot_install_btn.setCursor(Qt.PointingHandCursor)
         self._zot_install_btn.clicked.connect(self._install_zotero_plugin)
         _auto_row.addWidget(self._zot_install_btn)
         zot_lo.addLayout(_auto_row)
         QTimer.singleShot(500, self._check_zotero_plugin)
         right.addWidget(zot_card)
 
-        # ── 卡 3 ：使用指南 + 快捷键 + 数据路径 ──
+        # ── 使用指南（紧凑） ──
         sl_guide = QLabel("使用指南"); sl_guide.setObjectName("SL"); right.addWidget(sl_guide)
-        guide_card = _card(); guide_lo = QVBoxLayout(guide_card)
-        guide_lo.setContentsMargins(14,10,14,10); guide_lo.setSpacing(3)
-
+        guide_card = _card("sm"); guide_lo = QVBoxLayout(guide_card)
+        guide_lo.setContentsMargins(12,8,12,8); guide_lo.setSpacing(1)
         for tip in [
             "Google / Bing 无需配置，开箱即用",
             "OpenAI 兼容接口可对接任意第三方服务",
-            "Ollama 本地模型需先启动 Ollama 服务",
-            "DeepSeek / 智谱等国产模型性价比高",
+            "Ollama 本地需先启动服务",
             "50 页以上建议开启分块翻译",
-            "线程数推荐 8–16，过高可能触发限流",
         ]:
             tl = QLabel(f"·  {tip}"); tl.setObjectName("Cap")
+            tl.setStyleSheet("font-size:10px;padding:1px 0;")
             guide_lo.addWidget(tl)
-
         guide_lo.addWidget(_div())
-
-        # 快捷键
-        kb_grid = QGridLayout(); kb_grid.setHorizontalSpacing(8); kb_grid.setVerticalSpacing(3)
-        shortcuts = [
-            ("Ctrl+滚轮", "缩放"),   ("双指捏合", "缩放"),
-            ("← →",      "切换面板"), ("↑↓/滚轮", "翻页"),
-            ("页码+回车",  "跳转"),    ("适宽/适页", "排版"),
-        ]
         self._kb_labels = []
-        for i, (key, desc) in enumerate(shortcuts):
-            row, col = divmod(i, 2)
-            kl = QLabel(key); kl.setObjectName("KBKey")
-            kd = QLabel(desc); kd.setObjectName("Cap")
-            kb_grid.addWidget(kl, row, col * 2)
-            kb_grid.addWidget(kd, row, col * 2 + 1)
+        kb_grid = QGridLayout(); kb_grid.setHorizontalSpacing(6); kb_grid.setVerticalSpacing(1)
+        for i, (key, desc) in enumerate([
+            ("Ctrl+滚轮","缩放"), ("← →","切换"), ("页码+回车","跳转"),
+        ]):
+            kl = QLabel(key); kl.setObjectName("KBKey"); kl.setStyleSheet("font-size:9px;padding:2px 5px;")
+            kd = QLabel(desc); kd.setObjectName("Cap"); kd.setStyleSheet("font-size:9px;")
+            kb_grid.addWidget(kl, 0, i * 2); kb_grid.addWidget(kd, 0, i * 2 + 1)
             self._kb_labels.append(kl)
         guide_lo.addLayout(kb_grid)
-
         guide_lo.addWidget(_div())
-
-        # 数据路径
-        _paths = QLabel("配置: ~/pdf2zh_gui_config.json · 历史: ~/pdf2zh_history.json")
-        _paths.setObjectName("Cap"); _paths.setWordWrap(True)
-        guide_lo.addWidget(_paths)
-        _dm_row = QHBoxLayout()
-        _paths2 = QLabel("术语库: ~/pdf2zh_glossaries/")
-        _paths2.setObjectName("Cap")
-        _dm_row.addWidget(_paths2); _dm_row.addStretch()
+        _paths_col = QVBoxLayout(); _paths_col.setSpacing(1)
+        for _pname, _pfile in [
+            ("配置", "~/pdf2zh_gui_config.json"),
+            ("历史", "~/pdf2zh_history.json"),
+            ("术语库", "~/pdf2zh_glossary_*.csv"),
+        ]:
+            _pl = QLabel(f"{_pname}  {_pfile}")
+            _pl.setObjectName("Cap"); _pl.setStyleSheet("font-size:9px;padding:0;")
+            _paths_col.addWidget(_pl)
+        guide_lo.addLayout(_paths_col)
+        _paths_btn_row = QHBoxLayout(); _paths_btn_row.addStretch()
         open_dir_btn = QPushButton("打开数据目录"); open_dir_btn.setObjectName("Gh")
         open_dir_btn.setCursor(Qt.PointingHandCursor)
+        open_dir_btn.setStyleSheet("font-size:10px;padding:2px 6px;")
         open_dir_btn.clicked.connect(lambda: __import__('subprocess').run(['open', str(__import__('pathlib').Path.home())]))
-        _dm_row.addWidget(open_dir_btn)
-        guide_lo.addLayout(_dm_row)
+        _paths_btn_row.addWidget(open_dir_btn)
+        guide_lo.addLayout(_paths_btn_row)
         right.addWidget(guide_card)
-
         right.addStretch()
 
         cols.addLayout(left, 5)
@@ -3021,6 +4660,108 @@ class SettingsPage(QWidget):
         cfg["zotero_keep_copy"] = self._zot_keep_copy.isChecked()
         UserConfigManager.save(cfg)
 
+    # ── AI 助手配置 ──
+
+    def _load_assistant_config(self):
+        """加载 AI 助手独立配置状态"""
+        cfg = UserConfigManager.load()
+        is_custom = cfg.get("assistant_custom", False)
+        if is_custom:
+            self._ai_custom_frame.setVisible(True)
+            self._ai_status_label.setText("使用独立配置")
+            self._ai_status_label.setStyleSheet(
+                f"font-size:12px;font-weight:500;color:{_C['acc']};background:transparent;")
+            self._ai_toggle_btn.setVisible(False)
+            svc = cfg.get("assistant_service", "")
+            if svc:
+                idx = self._ai_svc_combo.findText(svc)
+                if idx >= 0: self._ai_svc_combo.setCurrentIndex(idx)
+            api_raw = cfg.get("assistant_api_key", "")
+            if api_raw:
+                self._ai_key_input.setText(UserConfigManager.decode_sensitive(api_raw))
+            model = cfg.get("assistant_model", "")
+            if model: self._ai_model_combo.setCurrentText(model)
+            url = cfg.get("assistant_url", "")
+            if url: self._ai_url_input.setText(url)
+        else:
+            self._ai_custom_frame.setVisible(False)
+            self._ai_status_label.setText("✓ 使用翻译服务配置")
+            self._ai_toggle_btn.setText("自定义")
+
+    def _toggle_assistant_config(self):
+        """展开自定义 AI 助手配置"""
+        self._ai_custom_frame.setVisible(True)
+        self._ai_status_label.setText("使用独立配置")
+        self._ai_status_label.setStyleSheet(
+            f"font-size:12px;font-weight:500;color:{_C['acc']};background:transparent;")
+        self._ai_toggle_btn.setVisible(False)
+        # 预填当前翻译服务配置
+        from ui.ai_client import detect_service
+        svc = detect_service()
+        if svc:
+            idx = self._ai_svc_combo.findText(svc["name"])
+            if idx >= 0:
+                self._ai_svc_combo.blockSignals(True)
+                self._ai_svc_combo.setCurrentIndex(idx)
+                self._ai_svc_combo.blockSignals(False)
+            self._ai_key_input.setText(svc.get("api_key", ""))
+            self._ai_model_combo.setCurrentText(svc.get("model", ""))
+            self._ai_url_input.setText(svc.get("base_url", ""))
+        self._on_assistant_svc_changed(self._ai_svc_combo.currentText())
+        self._save_assistant_config()
+
+    def _on_assistant_svc_changed(self, svc_name):
+        """切换 AI 助手服务时更新模型候选列表"""
+        from ui.ai_client import CHAT_SERVICES
+        # 查找默认 URL
+        default_url = ""
+        for name, url, _ in CHAT_SERVICES:
+            if name == svc_name:
+                default_url = url; break
+        if not self._ai_url_input.text().strip() or True:
+            self._ai_url_input.setPlaceholderText(default_url or "自定义 URL")
+        # 更新模型列表
+        cur_model = self._ai_model_combo.currentText()
+        self._ai_model_combo.blockSignals(True)
+        self._ai_model_combo.clear()
+        svc_conf = self.SERVICE_CONFIGS.get(svc_name, {})
+        if svc_conf.get("models"):
+            self._ai_model_combo.addItems(svc_conf["models"])
+        if cur_model:
+            self._ai_model_combo.setCurrentText(cur_model)
+        self._ai_model_combo.blockSignals(False)
+        self._save_assistant_config()
+
+    def _save_assistant_config(self, *args):
+        """保存 AI 助手独立配置"""
+        if not self._ai_custom_frame.isVisible():
+            return
+        cfg = UserConfigManager.load()
+        cfg["assistant_custom"] = True
+        cfg["assistant_service"] = self._ai_svc_combo.currentText()
+        key = self._ai_key_input.text().strip()
+        cfg["assistant_api_key"] = UserConfigManager.encode_sensitive(key) if key else ""
+        cfg["assistant_model"] = self._ai_model_combo.currentText()
+        cfg["assistant_url"] = self._ai_url_input.text().strip()
+        UserConfigManager.save(cfg)
+
+    def _reset_assistant_config(self):
+        """恢复 AI 助手使用翻译服务配置"""
+        cfg = UserConfigManager.load()
+        for k in ("assistant_custom", "assistant_service", "assistant_api_key",
+                   "assistant_model", "assistant_url"):
+            cfg.pop(k, None)
+        UserConfigManager.save(cfg)
+        self._ai_custom_frame.setVisible(False)
+        self._ai_status_label.setText("与翻译服务相同")
+        self._ai_status_label.setStyleSheet(
+            f"font-size:12px;font-weight:500;color:{_C['ok']};background:transparent;")
+        self._ai_toggle_btn.setVisible(True)
+        # 清空输入
+        self._ai_key_input.clear()
+        self._ai_model_combo.setCurrentIndex(0)
+        self._ai_url_input.clear()
+
     def _install_zotero_plugin(self):
         """一键安装 pdf2zh Connector 到 Zotero"""
         import glob, shutil, subprocess
@@ -3087,6 +4828,18 @@ class SettingsPage(QWidget):
             self._zot_install_btn.setEnabled(True)
 
     # ── 术语库操作 ──
+
+    def _add_gloss_term(self):
+        """内联添加一条术语"""
+        src = self._gloss_src.text().strip()
+        dst = self._gloss_dst.text().strip()
+        if not src or not dst:
+            return
+        from ui.glossary_manager import GlossaryManager
+        GlossaryManager.add_term(src, dst)
+        self._gloss_src.clear(); self._gloss_dst.clear()
+        self._update_gloss_count()
+
     def _refresh_gloss_list(self):
         from ui.glossary_manager import GlossaryManager
         self.gloss_selector.blockSignals(True)
@@ -3191,7 +4944,7 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.0.0"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel("v2.2.0"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
@@ -3309,17 +5062,46 @@ class AboutPage(QWidget):
             avatar.setToolTip(name)
             grid.addWidget(avatar, i // cols_n, i % cols_n, Qt.AlignCenter)
         ccl.addLayout(grid)
-        sub = QLabel("感谢每一位支持者 · 欢迎加入我们")
+        sub = QLabel("无限迭代，只为更好的服务您")
         sub.setObjectName("Cap"); sub.setAlignment(Qt.AlignCenter); sub.setStyleSheet("font-size:11px;"); ccl.addWidget(sub)
-        xhs_community_btn = QPushButton("小红书社区链接 · 点击复制口令"); xhs_community_btn.setObjectName("Gh"); xhs_community_btn.setCursor(Qt.PointingHandCursor)
-        xhs_community_btn.setStyleSheet("font-size:11px;")
-        _xhs_code = '4【复制完整口令→启动小红书】 5月2日开放，"pdf2zh桌面版使用问题交流"精彩不容错过 MU2035 :/#d🥞🥒😂🥩🥖🥮🍕😚😏🐭😷🍕'
-        def _copy_xhs_code():
-            QApplication.clipboard().setText(_xhs_code)
-            xhs_community_btn.setText("已复制 ✓ 打开小红书粘贴即可")
-            QTimer.singleShot(2000, lambda: xhs_community_btn.setText("小红书社区链接 · 点击复制口令"))
-        xhs_community_btn.clicked.connect(_copy_xhs_code)
-        ccl.addWidget(xhs_community_btn, 0, Qt.AlignCenter)
+        qq_group_btn = QPushButton("进入 pdf2zh 桌面版交流群"); qq_group_btn.setObjectName("Gh"); qq_group_btn.setCursor(Qt.PointingHandCursor)
+        qq_group_btn.setStyleSheet("font-size:11px;")
+        def _show_qq_qr():
+            QApplication.clipboard().setText("1094195179")
+            c = _C
+            qr_dlg = QDialog(self)
+            qr_dlg.setWindowTitle("加入交流群")
+            qr_dlg.setStyleSheet(f"QDialog{{background:{c['bg']};}}")
+            qlo = QVBoxLayout(qr_dlg); qlo.setContentsMargins(0, 0, 0, 12); qlo.setSpacing(8)
+            qr_label = QLabel()
+            qr_label.setAlignment(Qt.AlignCenter)
+            qr_path = None
+            for candidate in [
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'qq_group_qr.png'),
+                os.path.join(getattr(sys, '_MEIPASS', ''), 'assets', 'qq_group_qr.png'),
+            ]:
+                if os.path.exists(candidate):
+                    qr_path = candidate
+                    break
+            if qr_path:
+                pix = QPixmap(qr_path)
+                # setScaledContents 让图片自动填满 label，不裁切
+                qr_label.setPixmap(pix)
+                qr_label.setScaledContents(True)
+                qr_label.setFixedSize(300, int(300 * pix.height() / pix.width()))
+                qr_dlg.setFixedSize(300, int(300 * pix.height() / pix.width()) + 40)
+            else:
+                qr_label.setText("请用 QQ 搜索群号 1094195179")
+                qr_label.setStyleSheet(f"font-size:13px;color:{c['t2']};padding:30px;")
+                qr_dlg.setFixedSize(300, 100)
+            qlo.addWidget(qr_label)
+            tip = QLabel("群号 1094195179 已复制到剪贴板")
+            tip.setAlignment(Qt.AlignCenter)
+            tip.setStyleSheet(f"font-size:11px;color:{c['acc']};")
+            qlo.addWidget(tip)
+            qr_dlg.exec_()
+        qq_group_btn.clicked.connect(_show_qq_qr)
+        ccl.addWidget(qq_group_btn, 0, Qt.AlignCenter)
         right.addWidget(cc)
         right.addStretch()
 
@@ -3331,6 +5113,178 @@ class AboutPage(QWidget):
 # ═══════════════════════════════════════════════════════════════
 #  主窗口
 # ═══════════════════════════════════════════════════════════════
+
+# ── 桌面宠物：小黑猫 ──────────────────────────────────────────
+
+class _NekoCat(QWidget):
+    """会走来走去的小黑猫彩蛋 — 多种行为模式"""
+
+    # 行为模式
+    WALK, RUN, SIT, SLEEP = 0, 1, 2, 3
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setFixedSize(48, 36)
+        self._frame = 0
+        self._dir = 1
+        self._mode = self.WALK
+        self._speed = 2
+        self._sit_counter = 0
+        self._step_timer = QTimer(self)
+        self._step_timer.timeout.connect(self._on_step)
+        self.setCursor(Qt.PointingHandCursor)
+        self.hide()
+
+    def start_walk(self):
+        """从窗口一侧走到另一侧"""
+        parent = self.parentWidget()
+        if not parent:
+            return
+        import random
+        pw, ph = parent.width(), parent.height()
+        self._dir = random.choice([1, -1])
+        y = ph - 50
+        if self._dir == 1:
+            self._x = float(-self.width())
+            self._x_end = float(pw + self.width())
+        else:
+            self._x = float(pw + self.width())
+            self._x_end = float(-self.width())
+        # 随机选行为
+        roll = random.random()
+        if roll < 0.60:
+            self._mode = self.WALK; self._speed = 1.5
+        elif roll < 0.80:
+            self._mode = self.SIT; self._speed = 1.5
+            # 走到中间附近时会停下来坐一会儿
+            self._sit_x = pw * random.uniform(0.3, 0.7)
+            self._sit_counter = 0
+        else:
+            self._mode = self.RUN; self._speed = 4
+        self.move(int(self._x), y)
+        self.show(); self.raise_()
+        self._step_timer.start(40)  # 25fps
+
+    def _on_step(self):
+        self._frame += 1
+        # SIT 模式：到达坐下点后停下来
+        if self._mode == self.SIT and self._sit_counter > 0:
+            self._sit_counter -= 1
+            if self._sit_counter == 0:
+                self._mode = self.WALK  # 坐完了继续走
+            self.update()
+            return
+        if self._mode == self.SIT and \
+           abs(self._x - self._sit_x) < 5 and self._sit_counter == 0:
+            self._sit_counter = 100  # 坐 4 秒
+            self.update()
+            return
+        self._x += self._dir * self._speed
+        self.move(int(self._x), self.y())
+        self.update()
+        if (self._dir == 1 and self._x > self._x_end) or \
+           (self._dir == -1 and self._x < self._x_end):
+            self._step_timer.stop()
+            self.hide()
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        if self._dir < 0:
+            p.translate(self.width(), 0)
+            p.scale(-1, 1)
+        cat = QColor(35, 35, 35)
+        eye = QColor(180, 210, 50)
+        is_sitting = (self._mode == self.SIT and self._sit_counter > 0)
+        # ── 尾巴 ──
+        p.setPen(QPen(cat, 3, Qt.SolidLine, Qt.RoundCap))
+        p.setBrush(Qt.NoBrush)
+        tail = QPainterPath()
+        sway = 2 if (self._frame // 4) % 2 == 0 else -2
+        if is_sitting:
+            # 坐着：尾巴自然弯曲放在身后
+            tail.moveTo(6, 22); tail.cubicTo(2, 20, -2, 16, 2, 12)
+        else:
+            tail.moveTo(8, 16); tail.cubicTo(4, 12 + sway, 2, 8 + sway, 5, 4)
+        p.drawPath(tail)
+        # ── 身体 ──
+        p.setPen(Qt.NoPen); p.setBrush(cat)
+        if is_sitting:
+            p.drawEllipse(10, 12, 20, 18)  # 坐姿：更圆
+        else:
+            p.drawEllipse(8, 14, 24, 14)
+        # ── 头 ──
+        if is_sitting:
+            p.drawEllipse(22, 2, 17, 16)
+        else:
+            p.drawEllipse(25, 4, 16, 15)
+        # ── 耳朵 ──
+        hx = 22 if is_sitting else 25
+        ear1 = QPainterPath()
+        ear1.moveTo(hx+3, 4); ear1.lineTo(hx+5, -3); ear1.lineTo(hx+8, 3)
+        ear1.closeSubpath(); p.drawPath(ear1)
+        ear2 = QPainterPath()
+        ear2.moveTo(hx+9, 2); ear2.lineTo(hx+12, -4); ear2.lineTo(hx+14, 2)
+        ear2.closeSubpath(); p.drawPath(ear2)
+        # ── 眼睛 ──
+        ex = 27 if is_sitting else 30
+        ey = 7 if is_sitting else 9
+        p.setBrush(eye)
+        if is_sitting and (self._frame // 30) % 3 == 0:
+            # 坐着时偶尔眯眼
+            p.setPen(QPen(eye, 2)); p.setBrush(Qt.NoBrush)
+            p.drawLine(ex, ey+2, ex+4, ey+2)
+            p.drawLine(ex+6, ey+2, ex+10, ey+2)
+            p.setPen(Qt.NoPen)
+        else:
+            p.drawEllipse(ex, ey, 4, 4)
+            p.drawEllipse(ex+6, ey, 4, 4)
+            p.setBrush(QColor(10, 10, 10))
+            p.drawEllipse(ex+1, ey+1, 2, 2)
+            p.drawEllipse(ex+7, ey+1, 2, 2)
+        # ── 腿 ──
+        p.setPen(QPen(cat, 3, Qt.SolidLine, Qt.RoundCap))
+        if is_sitting:
+            # 坐姿：前腿伸直，后腿收起
+            p.drawLine(18, 28, 16, 34)
+            p.drawLine(24, 28, 26, 34)
+        else:
+            phase = self._frame % 4
+            o = [(2,-2,-1,1),(-1,1,2,-2),(-2,2,1,-1),(1,-1,-2,2)][phase]
+            p.drawLine(14, 27, 14+o[0], 34)
+            p.drawLine(20, 27, 20+o[1], 34)
+            p.drawLine(25, 27, 25+o[2], 34)
+            p.drawLine(30, 27, 30+o[3], 34)
+        p.end()
+
+    def enterEvent(self, e):
+        """鼠标悬停 → 疯狂加速"""
+        if self._step_timer.isActive():
+            self._mode = self.RUN
+            self._speed = 6
+            self._sit_counter = 0
+            self._step_timer.setInterval(15)
+
+    def leaveEvent(self, e):
+        """鼠标离开 → 恢复正常速度"""
+        if self._step_timer.isActive() and self._mode == self.RUN:
+            self._speed = 1.5
+            self._step_timer.setInterval(40)
+
+    def mousePressEvent(self, e):
+        """单击 → 喵一声"""
+        try:
+            import subprocess
+            subprocess.Popen(["afplay", "/System/Library/Sounds/Pop.aiff"])
+        except Exception:
+            pass
+
+    def mouseDoubleClickEvent(self, e):
+        """双击 → 直接消失"""
+        self._step_timer.stop()
+        self.hide()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -3384,7 +5338,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.0.0 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel("v2.2.0 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
@@ -3424,11 +5378,11 @@ class MainWindow(QMainWindow):
 
         # 恢复上次窗口状态
         cfg = UserConfigManager.load()
-        saved_page = cfg.get("last_page", "翻译")
-        if saved_page not in self.pages:
-            saved_page = "翻译"
-        self.switch(saved_page); self._apply()
+        self.switch("翻译"); self._apply()
         _install_tip_filter(QApplication.instance())
+        # 去掉所有 QComboBox 下拉框的系统矩形外框
+        for combo in self.findChildren(QComboBox):
+            _fix_combo_popup(combo)
 
         # 恢复窗口尺寸和位置
         if cfg.get("window_geometry"):
@@ -3442,6 +5396,13 @@ class MainWindow(QMainWindow):
         # 静默预加载阅读页：用户点击时已渲染好，无闪烁
         QTimer.singleShot(100, self._preload_reader)
 
+        # ── 小黑猫彩蛋 ──
+        self._neko = _NekoCat(self)
+        self._neko_timer = QTimer(self)
+        self._neko_timer.timeout.connect(self._maybe_spawn_cat)
+        self._neko_timer.start(1_200_000)  # 每 20 分钟出来一次
+        QTimer.singleShot(3_000, lambda: self._neko.start_walk())  # 启动 3 秒出来
+
         # ── 凌晨 3:30 彩蛋：披星戴月 ──
         from datetime import datetime
         now = datetime.now()
@@ -3451,6 +5412,12 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────
     #  凌晨 3:30 彩蛋 — 烟花 + 暖心寄语
     # ─────────────────────────────────────────────
+    def _maybe_spawn_cat(self):
+        """每 20 分钟让小黑猫出来走一趟"""
+        if self._neko.isVisible():
+            return
+        self._neko.start_walk()
+
     def _midnight_bloom(self):
         """全屏烟花 10 秒 → 暖心寄语浮层"""
         import random, math
@@ -3682,6 +5649,8 @@ class MainWindow(QMainWindow):
         reader = self.pages["阅读"]
         reader.set_output_files(output_files)
         QTimer.singleShot(600, lambda: self.switch("阅读"))
+        # 翻译完成后把窗口提到前台（用户可能切走了）
+        QTimer.singleShot(700, lambda: (self.raise_(), self.activateWindow()))
 
 
 class Pdf2zhApp(QApplication):
