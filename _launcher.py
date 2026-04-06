@@ -138,165 +138,85 @@ def main():
 
         app = QApplication(sys.argv)
         app.setStyle('Fusion')
-        app.setStyleSheet("""
-            * {
-                font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
-                font-size: 14px;
-            }
-            QMainWindow {
-                background: #fafbfc;
-            }
-            QGroupBox {
-                font-weight: bold;
-                font-size: 15px;
-                color: #333;
-                border: 1px solid #e0e4ea;
-                border-radius: 6px;
-                margin-top: 8px;
-                padding-top: 14px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-                color: #4169E1;
-            }
-            QPushButton {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                padding: 5px 10px;
-                background: white;
-            }
-            QPushButton:hover {
-                background: #f0f4ff;
-                border-color: #4169E1;
-            }
-            QPushButton:pressed {
-                background: #e0e8ff;
-            }
-            QPushButton:disabled {
-                background: #f5f5f5;
-                color: #aaa;
-                border-color: #e0e0e0;
-            }
-            QComboBox {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                padding: 4px 8px;
-                background: white;
-            }
-            QComboBox:hover {
-                border-color: #4169E1;
-            }
-            QComboBox QAbstractItemView {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                background: white;
-                selection-background-color: #e8eeff;
-                selection-color: #333;
-                padding: 2px;
-            }
-            QLineEdit {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                padding: 4px 8px;
-                background: white;
-            }
-            QLineEdit:focus {
-                border-color: #4169E1;
-            }
-            QSpinBox {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                padding: 3px 6px;
-                background: white;
-            }
-            QCheckBox {
-                spacing: 6px;
-            }
-            QCheckBox::indicator {
-                width: 14px;
-                height: 14px;
-                border: 1px solid #bbb;
-                border-radius: 3px;
-                background: white;
-            }
-            QCheckBox::indicator:checked {
-                background: #4169E1;
-                border-color: #4169E1;
-            }
-            QListWidget {
-                border: 1px solid #e0e4ea;
-                border-radius: 4px;
-                background: white;
-            }
-            QListWidget::item {
-                padding: 3px 6px;
-            }
-            QListWidget::item:selected {
-                background: #e8eeff;
-                color: #333;
-            }
-            QTextEdit {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                background: white;
-            }
-            QTextEdit:focus {
-                border-color: #4169E1;
-            }
-            QProgressBar {
-                border: none;
-                border-radius: 3px;
-                background: #e8ecf4;
-            }
-            QProgressBar::chunk {
-                background: #4169E1;
-                border-radius: 3px;
-            }
-            QTabBar::tab {
-                font-size: 14px;
-                padding: 8px 6px;
-                border: none;
-                border-bottom: 2px solid transparent;
-            }
-            QTabBar::tab:selected {
-                font-weight: bold;
-                color: #4169E1;
-                border-bottom: 2px solid #4169E1;
-            }
-            QTabBar::tab:!selected {
-                color: #666;
-            }
-            QTabBar::tab:hover:!selected {
-                color: #333;
-            }
-            QTabBar::tab:selected {
-                background: white;
-                border-bottom: 2px solid #4169E1;
-                font-weight: bold;
-                color: #4169E1;
-            }
-            QTabWidget::pane {
-                border: 1px solid #d0d5dd;
-                border-radius: 0 0 6px 6px;
-                background: white;
-            }
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QToolTip {
-                background-color: #FFFDF0;
-                color: #333;
-                border: 1px solid #D4C89A;
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
-                font-size: 16px;
-                line-height: 1.6;
-            }
-        """)
+
+        # ── DPI 感知样式表生成 ──
+        dpr = app.primaryScreen().devicePixelRatio()
+        # 逻辑像素缩放因子：1080p=1.0, 2K≈1.33, 4K=2.0
+        # Qt AA_EnableHighDpiScaling 已处理物理→逻辑映射，
+        # 但部分 Windows 系统 DPI 缩放不完美，需兜底
+        log(f"DPI ratio: {dpr}")
+
+        def build_stylesheet(base_font=14):
+            """根据基准字号生成完整样式表（所有尺寸等比联动）"""
+            f = base_font          # 正文
+            f1 = f + 1             # GroupBox 标题
+            fs = f - 1             # 辅助文字
+            ft = f + 2             # Tooltip
+            pad_v = max(3, f // 3) # 垂直内边距
+            pad_h = max(6, f // 2) # 水平内边距
+            r = max(3, f // 3)     # 圆角
+            r2 = r + 2             # 大圆角
+            ind = f                # checkbox indicator
+            bw = max(1, f // 14)   # 边框宽度
+            sp = max(4, f // 3)    # checkbox spacing
+            return f"""
+            * {{ font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif; font-size: {f}px; }}
+            QMainWindow {{ background: #fafbfc; }}
+            QGroupBox {{ font-weight: bold; font-size: {f1}px; color: #333;
+                border: {bw}px solid #e0e4ea; border-radius: {r2}px; margin-top: {sp+4}px; padding-top: {f}px; }}
+            QGroupBox::title {{ subcontrol-origin: margin; left: {pad_h+4}px; padding: 0 {sp}px; color: #4169E1; }}
+            QPushButton {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v}px {pad_h}px; background: white; }}
+            QPushButton:hover {{ background: #f0f4ff; border-color: #4169E1; }}
+            QPushButton:pressed {{ background: #e0e8ff; }}
+            QPushButton:disabled {{ background: #f5f5f5; color: #aaa; border-color: #e0e0e0; }}
+            QComboBox {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v}px {pad_h}px; background: white; }}
+            QComboBox:hover {{ border-color: #4169E1; }}
+            QComboBox QAbstractItemView {{ border: {bw}px solid #d0d5dd; border-radius: {r}px;
+                background: white; selection-background-color: #e8eeff; selection-color: #333; padding: 2px; }}
+            QLineEdit {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v}px {pad_h}px; background: white; }}
+            QLineEdit:focus {{ border-color: #4169E1; }}
+            QSpinBox {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v-1}px {sp}px; background: white; }}
+            QCheckBox {{ spacing: {sp}px; }}
+            QCheckBox::indicator {{ width: {ind}px; height: {ind}px; border: {bw}px solid #bbb; border-radius: {r}px; background: white; }}
+            QCheckBox::indicator:checked {{ background: #4169E1; border-color: #4169E1; }}
+            QListWidget {{ border: {bw}px solid #e0e4ea; border-radius: {r}px; background: white; }}
+            QListWidget::item {{ padding: {pad_v-1}px {sp}px; }}
+            QListWidget::item:selected {{ background: #e8eeff; color: #333; }}
+            QTextEdit {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; background: white; }}
+            QTextEdit:focus {{ border-color: #4169E1; }}
+            QProgressBar {{ border: none; border-radius: {r}px; background: #e8ecf4; }}
+            QProgressBar::chunk {{ background: #4169E1; border-radius: {r}px; }}
+            QTabBar::tab {{ font-size: {f}px; padding: {pad_h}px {sp}px; border: none; border-bottom: 2px solid transparent; }}
+            QTabBar::tab:selected {{ font-weight: bold; color: #4169E1; border-bottom: 2px solid #4169E1; background: white; }}
+            QTabBar::tab:!selected {{ color: #666; }}
+            QTabBar::tab:hover:!selected {{ color: #333; }}
+            QTabWidget::pane {{ border: {bw}px solid #d0d5dd; border-radius: 0 0 {r2}px {r2}px; background: white; }}
+            QScrollArea {{ border: none; background: transparent; }}
+            QScrollBar:vertical {{ width: {max(10, f-2)}px; }}
+            QScrollBar:horizontal {{ height: {max(10, f-2)}px; }}
+            QToolTip {{ background: #FFFDF0; color: #333; border: {bw}px solid #D4C89A;
+                border-radius: {r2+2}px; padding: {pad_h}px {pad_h+4}px;
+                font-family: "Microsoft YaHei"; font-size: {ft}px; }}
+            """
+
+        # 存为全局函数供字号切换时调用
+        import builtins
+        builtins._pdf2zh_build_stylesheet = build_stylesheet
+
+        # 从用户配置读取上次字号，默认小(12)
+        _saved_font = 12
+        try:
+            import json as _json
+            _cfg_path = os.path.join(os.path.expanduser("~"), "pdf2zh_gui_config.json")
+            if os.path.exists(_cfg_path):
+                with open(_cfg_path, 'r', encoding='utf-8') as _f:
+                    _cfg = _json.load(_f)
+                _level = _cfg.get('font_size_level', '小')
+                _saved_font = {'小': 12, '中': 14, '大': 16}.get(_level, 12)
+        except Exception:
+            pass
+        log(f"初始字号: {_saved_font}px")
+        app.setStyleSheet(build_stylesheet(_saved_font))
         window = PDF2ZHMainWindow()
         ensure_window_visible(window, app)
         window.show()
