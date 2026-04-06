@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pdf2zh-desktop — 学术论文翻译，排版丝滑如原文</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #FAF8F5;
+    --bg2: #F3F0EB;
+    --text: #2C2C2C;
+    --text2: #6B6560;
+    --accent: #B8860B;
+    --accent2: #8B6914;
+    --blue: #0071E3;
+    --blue2: #0058B0;
+    --green: #2D8653;
+    --card: #FFFFFF;
+    --border: rgba(0,0,0,0.06);
+    --shadow: 0 2px 20px rgba(0,0,0,0.06);
+    --radius: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Serif SC', 'PingFang SC', serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.8;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 40px; }
+
+  /* ── Hero ── */
+  .hero {
+    padding: 100px 0 80px;
+    text-align: center;
+  }
+  .hero-badge {
+    display: inline-block;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 24px;
+  }
+  .hero h1 {
+    font-size: 52px;
+    font-weight: 900;
+    line-height: 1.2;
+    margin-bottom: 20px;
+    letter-spacing: -1px;
+  }
+  .hero h1 span { color: var(--accent); }
+  .hero .subtitle {
+    font-size: 20px;
+    color: var(--text2);
+    font-weight: 400;
+    max-width: 600px;
+    margin: 0 auto 40px;
+    line-height: 1.7;
+  }
+  .hero-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 32px;
+    border-radius: 50px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s;
+    font-family: 'Inter', 'PingFang SC', sans-serif;
+  }
+  .btn-primary {
+    background: var(--text);
+    color: white;
+  }
+  .btn-primary:hover { background: #444; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1.5px solid rgba(0,0,0,0.15);
+  }
+  .btn-secondary:hover { border-color: var(--text); transform: translateY(-2px); }
+
+  /* ── App Preview ── */
+  .preview-section {
+    padding: 0 0 80px;
+  }
+  .app-frame {
+    background: var(--card);
+    border-radius: 20px;
+    box-shadow: 0 8px 60px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .app-titlebar {
+    height: 52px;
+    background: linear-gradient(180deg, #F8F8F8 0%, #EFEFEF 100%);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .app-dot {
+    width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;
+  }
+  .dot-red { background: #FF5F57; }
+  .dot-yellow { background: #FFBD2E; }
+  .dot-green { background: #28CA41; }
+  .app-body {
+    display: flex;
+    min-height: 480px;
+  }
+  .app-sidebar {
+    width: 200px;
+    background: #F5F5F7;
+    padding: 24px 16px;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .app-sidebar .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+    padding: 0 4px;
+  }
+  .app-sidebar .logo-icon {
+    font-size: 24px;
+  }
+  .app-sidebar .logo-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .app-sidebar .logo-sub {
+    font-size: 10px;
+    color: var(--text2);
+    font-family: 'Inter', sans-serif;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin-bottom: 4px;
+    font-size: 14px;
+    color: var(--text2);
+    cursor: default;
+  }
+  .nav-item.active {
+    background: white;
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .nav-item .nav-emoji { font-size: 18px; }
+  .app-main {
+    flex: 1;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+  }
+  .app-main .main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .app-main h3 {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .mode-tabs {
+    display: flex;
+    gap: 0;
+    background: #F0F0F0;
+    border-radius: 8px;
+    padding: 3px;
+    font-family: 'Inter', sans-serif;
+  }
+  .mode-tab {
+    padding: 6px 16px;
+    font-size: 12px;
+    border-radius: 6px;
+    color: var(--text2);
+    font-weight: 500;
+  }
+  .mode-tab.active {
+    background: white;
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .pdf-preview {
+    flex: 1;
+    display: flex;
+    gap: 2px;
+    background: #E8E8E8;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .pdf-page {
+    flex: 1;
+    background: white;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pdf-page .page-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 8px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+  }
+  .text-line {
+    height: 6px;
+    background: #E0E0E0;
+    border-radius: 3px;
+  }
+  .text-line.short { width: 70%; }
+  .text-line.medium { width: 85%; }
+  .text-line.zh {
+    background: #D4E8FF;
+  }
+  .text-line.zh.short { width: 65%; }
+
+  /* ── Section Shared ── */
+  section {
+    padding: 80px 0;
+  }
+  .section-badge {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  section h2 {
+    font-size: 36px;
+    font-weight: 900;
+    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+  }
+  section .section-desc {
+    font-size: 17px;
+    color: var(--text2);
+    max-width: 560px;
+    margin-bottom: 48px;
+  }
+
+  /* ── Highlight Numbers ── */
+  .highlights {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    padding: 60px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .highlight-item { text-align: center; }
+  .highlight-num {
+    font-family: 'Inter', sans-serif;
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .highlight-label {
+    font-size: 14px;
+    color: var(--text2);
+  }
+
+  /* ── Features Grid ── */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+  .feature-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 32px;
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+  }
+  .feature-card:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+  }
+  .feature-icon {
+    font-size: 28px;
+    margin-bottom: 16px;
+  }
+  .feature-card h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .feature-card p {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+  .feature-card.wide {
+    grid-column: span 2;
+    display: flex;
+    gap: 40px;
+    align-items: center;
+  }
+  .feature-card.wide .feature-text { flex: 1; }
+  .feature-card.wide .feature-visual {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+  }
+
+  /* ── Comparison ── */
+  .comparison {
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .comparison-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+  .comparison-header div {
+    padding: 16px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .comparison-header .us {
+    background: rgba(184,134,11,0.06);
+    color: var(--accent);
+  }
+  .comparison-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .comparison-col {
+    padding: 24px;
+  }
+  .comparison-col:first-child {
+    border-right: 1px solid var(--border);
+  }
+  .comp-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    font-size: 14px;
+    color: var(--text2);
+    border-bottom: 1px solid rgba(0,0,0,0.03);
+  }
+  .comp-row:last-child { border-bottom: none; }
+  .comp-check { color: var(--green); font-weight: 700; }
+  .comp-cross { color: #C0392B; }
+
+  /* ── Steps ── */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    counter-reset: step;
+  }
+  .step {
+    text-align: center;
+    counter-increment: step;
+  }
+  .step-num {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--bg2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-family: 'Inter', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .step h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .step p {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+
+  /* ── Services ── */
+  .services-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .service-tag {
+    padding: 8px 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    font-size: 13px;
+    font-family: 'Inter', 'PingFang SC', sans-serif;
+    color: var(--text2);
+    font-weight: 500;
+  }
+  .service-tag.hot {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(184,134,11,0.04);
+  }
+
+  /* ── Testimonial ── */
+  .quote-section {
+    text-align: center;
+    padding: 80px 0;
+  }
+  .big-quote {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.6;
+    max-width: 700px;
+    margin: 0 auto 24px;
+    letter-spacing: -0.3px;
+  }
+  .big-quote span { color: var(--accent); }
+  .quote-attr {
+    font-size: 14px;
+    color: var(--text2);
+  }
+
+  /* ── Footer ── */
+  .footer {
+    padding: 60px 0;
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+  .footer p {
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+  .footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 32px; }
+    .highlights { grid-template-columns: repeat(2, 1fr); }
+    .features-grid { grid-template-columns: 1fr; }
+    .feature-card.wide { grid-column: span 1; flex-direction: column; }
+    .steps { grid-template-columns: 1fr; }
+    .comparison-header, .comparison-body { grid-template-columns: 1fr; }
+    .app-sidebar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════ Hero ═══════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">Open Source &middot; macOS Native &middot; Free</div>
+    <h1>学术论文翻译<br>排版<span>丝滑如原文</span></h1>
+    <p class="subtitle">
+      pdf2zh-desktop 是一款专为科研人打造的 PDF 论文翻译工具。<br>
+      保留 100% 原始排版，支持 20+ 翻译引擎，左右对照阅读。
+    </p>
+    <div class="hero-buttons">
+      <a href="https://github.com/AaronGIG/pdf2zh-desktop/releases" class="btn btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        下载 macOS 版
+      </a>
+      <a href="https://github.com/AaronGIG/pdf2zh-desktop" class="btn btn-secondary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ App Preview ═══════ -->
+<section class="preview-section">
+  <div class="container">
+    <div class="app-frame">
+      <div class="app-titlebar">
+        <div class="app-dot dot-red"></div>
+        <div class="app-dot dot-yellow"></div>
+        <div class="app-dot dot-green"></div>
+      </div>
+      <div class="app-body">
+        <div class="app-sidebar">
+          <div class="logo-area">
+            <span class="logo-icon">📄</span>
+            <div>
+              <div class="logo-text">pdf2zh-desktop</div>
+              <div class="logo-sub">macOS Edition</div>
+            </div>
+          </div>
+          <div class="nav-item"><span class="nav-emoji">🌐</span> 翻译</div>
+          <div class="nav-item active"><span class="nav-emoji">📖</span> 阅读</div>
+          <div class="nav-item"><span class="nav-emoji">🔧</span> 设置</div>
+          <div class="nav-item"><span class="nav-emoji">💡</span> 关于</div>
+        </div>
+        <div class="app-main">
+          <div class="main-header">
+            <h3>Side by Side</h3>
+            <div class="mode-tabs">
+              <div class="mode-tab">Dual</div>
+              <div class="mode-tab">Mono</div>
+              <div class="mode-tab active">Side by Side</div>
+            </div>
+          </div>
+          <div class="pdf-preview">
+            <div class="pdf-page">
+              <div class="page-title">Original</div>
+              <div class="text-line"></div>
+              <div class="text-line medium"></div>
+              <div class="text-line"></div>
+              <div class="text-line short"></div>
+              <div class="text-line"></div>
+              <div class="text-line medium"></div>
+              <div class="text-line"></div>
+              <div class="text-line short"></div>
+              <div class="text-line"></div>
+              <div class="text-line medium"></div>
+              <div class="text-line short"></div>
+              <div class="text-line"></div>
+              <div class="text-line"></div>
+              <div class="text-line medium"></div>
+            </div>
+            <div class="pdf-page">
+              <div class="page-title">中文翻译</div>
+              <div class="text-line zh"></div>
+              <div class="text-line zh medium"></div>
+              <div class="text-line zh"></div>
+              <div class="text-line zh short"></div>
+              <div class="text-line zh"></div>
+              <div class="text-line zh medium"></div>
+              <div class="text-line zh"></div>
+              <div class="text-line zh short"></div>
+              <div class="text-line zh"></div>
+              <div class="text-line zh medium"></div>
+              <div class="text-line zh short"></div>
+              <div class="text-line zh"></div>
+              <div class="text-line zh"></div>
+              <div class="text-line zh medium"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ Highlights ═══════ -->
+<div class="container">
+  <div class="highlights">
+    <div class="highlight-item">
+      <div class="highlight-num">100%</div>
+      <div class="highlight-label">排版保真还原</div>
+    </div>
+    <div class="highlight-item">
+      <div class="highlight-num">20+</div>
+      <div class="highlight-label">翻译引擎</div>
+    </div>
+    <div class="highlight-item">
+      <div class="highlight-num">3</div>
+      <div class="highlight-label">预览模式</div>
+    </div>
+    <div class="highlight-item">
+      <div class="highlight-num">0</div>
+      <div class="highlight-label">配置门槛</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ Quote ═══════ -->
+<section class="quote-section">
+  <div class="container">
+    <div class="big-quote">
+      "市面上试了一圈论文翻译工具，<br>
+      <span>pdf2zh 是排版保留最丝滑的</span>，没有之一。"
+    </div>
+    <div class="quote-attr">—— 来自用户真实反馈</div>
+  </div>
+</section>
+
+<!-- ═══════ Core Features ═══════ -->
+<section>
+  <div class="container">
+    <div class="section-badge">FEATURES</div>
+    <h2>核心功能</h2>
+    <p class="section-desc">不只是翻译，更是一套完整的学术论文阅读体验。</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📐</div>
+        <h3>排版 100% 保真</h3>
+        <p>公式、表格、图注、参考文献——翻译后排版和原文一模一样。不会出现错位、重叠、格式丢失。这是我们和其他工具最大的区别。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📖</div>
+        <h3>三种阅读模式</h3>
+        <p><strong>Side by Side</strong> 左右对照 · <strong>Dual</strong> 双语交替 · <strong>Mono</strong> 纯译文。一键切换，随心阅读。内置缩略图导航、缩放、翻页。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌍</div>
+        <h3>20+ 翻译引擎</h3>
+        <p>Google · DeepL · OpenAI · DeepSeek · 通义千问 · 腾讯 · Azure · Ollama 本地模型……按需选择，API Key 安全存储在本地。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🧠</div>
+        <h3>AI 智能版面检测</h3>
+        <p>基于 ONNX 深度学习模型，自动识别正文、公式、图表、页眉页脚，精准定位翻译区域，不翻译不该翻译的内容。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📚</div>
+        <h3>术语库 & 提示词</h3>
+        <p>自定义专业术语映射，确保 "Transformer" 始终翻译为 "Transformer"。支持 CSV/JSON 导入，搭配自定义提示词，翻译更精准。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>多线程 & 分块翻译</h3>
+        <p>最高 32 线程并发，50 页长文档自动分块翻译。再长的论文也不怕超时，进度条实时显示。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ How to Use ═══════ -->
+<section style="background: var(--bg2);">
+  <div class="container">
+    <div class="section-badge">HOW TO USE</div>
+    <h2>三步开始翻译</h2>
+    <p class="section-desc">下载即用，无需安装 Python，无需配置环境。</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>选择文件</h3>
+        <p>拖拽 PDF 到窗口，或点击选择文件。支持任意学术论文 PDF。</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>配置翻译</h3>
+        <p>选择翻译引擎和目标语言。填写 API Key（免费引擎无需 Key）。选择输出格式。</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>一键翻译</h3>
+        <p>点击"开始翻译"，等待进度条跑完。翻译完成后自动进入阅读模式，即刻对照阅读。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ Comparison ═══════ -->
+<section>
+  <div class="container">
+    <div class="section-badge">COMPARISON</div>
+    <h2>为什么选择 pdf2zh</h2>
+    <p class="section-desc">和市面上常见的论文翻译方案对比。</p>
+
+    <div class="comparison">
+      <div class="comparison-header">
+        <div class="us">pdf2zh-desktop</div>
+        <div>其他翻译工具</div>
+      </div>
+      <div class="comparison-body">
+        <div class="comparison-col">
+          <div class="comp-row"><span class="comp-check">&#10003;</span> 排版 100% 保真，公式不乱</div>
+          <div class="comp-row"><span class="comp-check">&#10003;</span> 本地运行，数据不上传</div>
+          <div class="comp-row"><span class="comp-check">&#10003;</span> 20+ 翻译引擎自由切换</div>
+          <div class="comp-row"><span class="comp-check">&#10003;</span> Side by Side 左右对照</div>
+          <div class="comp-row"><span class="comp-check">&#10003;</span> 术语库保证专业性</div>
+          <div class="comp-row"><span class="comp-check">&#10003;</span> 完全免费，开源透明</div>
+          <div class="comp-row"><span class="comp-check">&#10003;</span> macOS 原生体验</div>
+        </div>
+        <div class="comparison-col">
+          <div class="comp-row"><span class="comp-cross">&#10007;</span> 公式错位、表格变形</div>
+          <div class="comp-row"><span class="comp-cross">&#10007;</span> 需上传到第三方服务器</div>
+          <div class="comp-row"><span class="comp-cross">&#10007;</span> 通常只支持 1-2 个引擎</div>
+          <div class="comp-row"><span class="comp-cross">&#10007;</span> 仅输出单一译文</div>
+          <div class="comp-row"><span class="comp-cross">&#10007;</span> 无法自定义术语</div>
+          <div class="comp-row"><span class="comp-cross">&#10007;</span> 付费订阅或有页数限制</div>
+          <div class="comp-row"><span class="comp-cross">&#10007;</span> Web 页面或 Electron</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ Supported Services ═══════ -->
+<section style="background: var(--bg2);">
+  <div class="container">
+    <div class="section-badge">SERVICES</div>
+    <h2>支持的翻译引擎</h2>
+    <p class="section-desc">主流翻译 API 全覆盖，本地模型也支持。</p>
+
+    <div class="services-grid">
+      <span class="service-tag hot">Google 翻译</span>
+      <span class="service-tag hot">DeepL</span>
+      <span class="service-tag hot">DeepSeek</span>
+      <span class="service-tag hot">OpenAI GPT</span>
+      <span class="service-tag">通义千问</span>
+      <span class="service-tag">腾讯翻译</span>
+      <span class="service-tag">Azure 翻译</span>
+      <span class="service-tag">智谱 GLM</span>
+      <span class="service-tag">硅基流动</span>
+      <span class="service-tag">Gemini</span>
+      <span class="service-tag">Groq</span>
+      <span class="service-tag">Ollama 本地</span>
+      <span class="service-tag">Bing 翻译</span>
+      <span class="service-tag">有道翻译</span>
+      <span class="service-tag">百度翻译</span>
+      <span class="service-tag">彩云小译</span>
+      <span class="service-tag">自定义 API</span>
+      <span class="service-tag">更多...</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ CTA ═══════ -->
+<section>
+  <div class="container" style="text-align:center;">
+    <h2 style="margin-bottom:16px;">开始你的丝滑翻译体验</h2>
+    <p class="section-desc" style="margin:0 auto 40px;text-align:center;">免费 · 开源 · 下载即用</p>
+    <div class="hero-buttons">
+      <a href="https://github.com/AaronGIG/pdf2zh-desktop/releases" class="btn btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        免费下载 macOS 版
+      </a>
+      <a href="https://github.com/AaronGIG/pdf2zh-desktop" class="btn btn-secondary">
+        &#11088; Star on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ Footer ═══════ -->
+<footer class="footer">
+  <div class="container">
+    <p>pdf2zh-desktop &middot; macOS Edition &middot; v2.0.0</p>
+    <p>基于 <a href="https://github.com/Byaidu/PDFMathTranslate">PDFMathTranslate</a> 核心引擎</p>
+    <p style="margin-top:12px;">&copy; 2025 &middot; Open Source &middot; MIT License</p>
+  </div>
+</footer>
+
+</body>
+</html>
