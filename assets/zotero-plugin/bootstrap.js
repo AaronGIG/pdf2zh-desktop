@@ -4,14 +4,11 @@
  * Registers HTTP endpoints on Zotero's local server (port 23119):
  *   POST /pdf2zh/attach — add translated PDF as Zotero attachment
  *   GET  /pdf2zh/ping   — health check
- *
- * No configuration needed — install and forget.
  */
 
 /* exported startup, shutdown, install, uninstall */
 
 function startup() {
-    // Use prototype-based endpoint definition (compatible with all Zotero 7/8 versions)
     var AttachEndpoint = function () {};
     AttachEndpoint.prototype = {
         supportedMethods: ['POST'],
@@ -48,6 +45,13 @@ function startup() {
                     title: title || 'Translated PDF',
                     contentType: 'application/pdf'
                 });
+
+                // 在 Zotero 自动生成的标题前面加上格式标签
+                if (title) {
+                    var autoTitle = attachment.getField('title');
+                    attachment.setField('title', title + ' - ' + autoTitle);
+                    await attachment.saveTx();
+                }
 
                 return [200, 'application/json', JSON.stringify({
                     key: attachment.key,
