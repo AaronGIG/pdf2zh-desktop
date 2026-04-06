@@ -101,7 +101,7 @@ def ensure_window_visible(window, app):
     w = min(int(sw * 0.85), 1400)
     h = min(int(sh * 0.85), 900)
     # 低分辨率/高缩放时降低最小值
-    w = max(w, min(800, sw - 40))
+    w = max(w, min(860, sw - 40))
     h = max(h, min(560, sh - 40))
     window.resize(w, h)
     x = screen.x() + (sw - w) // 2
