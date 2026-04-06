@@ -83,10 +83,10 @@ def preload_onnxruntime():
 
     t = threading.Thread(target=_load, daemon=True)
     t.start()
-    t.join(timeout=8)  # 最多等 8 秒
+    t.join(timeout=3)  # 最多等 3 秒
 
     if t.is_alive():
-        log("OnnxRuntime 预加载超时（8秒），跳过，AI布局检测将不可用")
+        log("OnnxRuntime 预加载超时（3秒），跳过")
     elif result[0] and not str(result[0]).startswith("ERROR"):
         log(f"OnnxRuntime 预加载成功: {result[0]}")
     else:
