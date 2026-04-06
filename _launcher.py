@@ -94,16 +94,20 @@ def preload_onnxruntime():
 
 
 def ensure_window_visible(window, app):
-    """确保窗口在可见屏幕范围内并居中显示。"""
+    """确保窗口在可见屏幕范围内并居中显示（兼容 DPI 缩放）。"""
     screen = app.primaryScreen().availableGeometry()
-    w = min(int(screen.width() * 0.85), 1400)
-    h = min(int(screen.height() * 0.85), 900)
-    w = max(w, 900)
-    h = max(h, 600)
+    # availableGeometry 已经是逻辑像素，直接用
+    sw, sh = screen.width(), screen.height()
+    w = min(int(sw * 0.85), 1400)
+    h = min(int(sh * 0.85), 900)
+    # 低分辨率/高缩放时降低最小值
+    w = max(w, min(800, sw - 40))
+    h = max(h, min(560, sh - 40))
     window.resize(w, h)
-    x = screen.x() + (screen.width() - w) // 2
-    y = screen.y() + (screen.height() - h) // 2
+    x = screen.x() + (sw - w) // 2
+    y = screen.y() + (sh - h) // 2
     window.move(x, y)
+    log(f"屏幕逻辑分辨率: {sw}x{sh}, 窗口: {w}x{h}")
 
 
 def main():
@@ -116,6 +120,9 @@ def main():
     os.environ["QT_PLUGIN_PATH"] = qt_plugin_path
     log(f"QT_PLUGIN_PATH: {qt_plugin_path}")
 
+    # DPI 感知：让 Qt 正确处理高分屏缩放
+    os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+
     # 关键：必须在 PyQt5 之前预加载 OnnxRuntime
     log("预加载 OnnxRuntime...")
     preload_onnxruntime()
@@ -124,6 +131,8 @@ def main():
         log("导入 pdf2zh.gui_pyqt5...")
         from PyQt5.QtCore import Qt
         from PyQt5.QtWidgets import QApplication
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         from pdf2zh.gui_pyqt5 import PDF2ZHMainWindow
         log("导入成功，启动 GUI...")
 
