@@ -1,12 +1,39 @@
-# 📖 pdf2zh 桌面版 · 开箱即用的 PDF 学术翻译神器 🚀
+<div align="center">
+
+<br>
+
+<img src="assets/icon.png" width="128" height="128" alt="pdf2zh" style="border-radius: 22px;">
+
+<br>
+<br>
+
+# 📖 pdf2zh 桌面版 v2.2.0
+
+### 开箱即用的 PDF 学术翻译神器 🚀
 
 **🎉 无需安装 Python · 无需配置环境 · 下载解压双击就能用！**
 
 **🖥️ 支持 Windows + macOS 双平台**
 
+[![Windows](https://img.shields.io/badge/Windows-10/11-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
+[![macOS](https://img.shields.io/badge/macOS-13.0+-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![Version](https://img.shields.io/badge/Version-2.2.0-blue?style=flat-square)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
+
+<p>
+  <a href="#-三步上手就这么简单">快速开始</a>&ensp;·&ensp;
+  <a href="#-桌面版增强亮点">功能特性</a>&ensp;·&ensp;
+  <a href="#-支持-35-种语言20-翻译服务">翻译服务</a>&ensp;·&ensp;
+  <a href="#-zotero-深度联动">Zotero 联动</a>&ensp;·&ensp;
+  <a href="#-更新日志">更新日志</a>&ensp;·&ensp;
+  <a href="README_EN.md">English</a>
+</p>
+
 > 基于 [PDFMathTranslate](https://github.com/Byaidu/PDFMathTranslate)（EMNLP 2025）打造，在原项目基础上大幅增强桌面体验。
 
 让学术 PDF 翻译变得像复制粘贴一样简单——公式、图表、排版全部完美保留 ✨
+
+</div>
 
 ---
 
@@ -19,9 +46,10 @@
 | | 原版（Web/CLI）🖥️ | ✨ 桌面版 |
 | --- | --- | --- |
 | 安装方式 | 需要 Python + pip 😵 | 解压即用 🎁 |
-| 操作界面 | 浏览器 / 终端 | 原生 Windows GUI 🪟 |
-| 翻译预览 | 浏览器内查看 | 内置 PDF 预览器 👁️ |
-| 批量处理 | 命令行参数 | 界面一键操作 🖱️ |
+| 操作界面 | 浏览器 / 终端 | 原生桌面 GUI 🪟 |
+| 翻译预览 | 浏览器内查看 | 内置 PDF 连续滚动预览 👁️ |
+| 批量处理 | 命令行参数 | 拖放文件/文件夹一键操作 🖱️ |
+| Zotero 联动 | 不支持 | 拖论文进来 → 译文自动回写 📚 |
 | 离线能力 | 不支持 | 程序本体完全离线 📴 |
 
 ---
@@ -38,51 +66,49 @@
 ### 🚀 超长文档？不在话下！
 
 - 📄 1000+ 页的大部头轻松拿下
-- 🧩 **分块翻译**：自定义每块页数（5~200 页），自动分块逐段翻译，内置限流延迟，翻完自动拼接完整文档
+- 🧩 **分块翻译**：自动分块逐段翻译，超过 50 页自动开启
 - 🧠 **智能内存管理**：逐页释放布局数组，即使上千页也不会内存溢出
-- ⏯️ 断点续传——中途退出也不怕，下次自动接着翻，不浪费一分 API 额度
-- 📜 **扫描版 PDF 支持**：自动为译文区域生成白色背景，覆盖底图原文，扫描版书籍也能获得清晰的翻译结果
-- 📊 **表格/图注翻译**：专利文档等表格密集型文件，勾选后也能翻译表格和图注中的文字
-- 🔍 **OCR 识别**：内置 RapidOCR，纯图片扫描件（无文字层）也能自动识别并翻译
+- ⏯️ 断点续传——中途退出也不怕，下次自动接着翻
+- 📜 **扫描版 PDF 支持**：自动覆盖底图原文
+- 📊 **独立表格翻译管线**：专利、检测报告等表格密集文件
+- 🔍 **OCR 识别**：内置 RapidOCR，纯图片扫描件自动识别并翻译
 
 ### 🤖 AI 翻译配置
 
-- 🧩 **20+ 预设模型**：DeepSeek V3/R1、智谱 GLM-4、通义千问、Kimi、OpenAI GPT-4o、Gemini、Mistral、Ollama 等，下拉框直接选
-- 🔧 **OpenAI 兼容格式**：支持任何兼容接口，17 个快捷预设一键填入 API 地址和模型
-- 🔗 **一键测试连接**：填完配置立即验证是否可用，通过后自动保存
-- 📝 **自定义提示词（Prompt）**：5 个内置风格模板（学术/口语/专业/医学/简洁），支持自定义保存、导入导出
-- 📚 **术语库**：5 个学科内置术语库（计算机/医学/金融/法律/电气），支持自定义新建、导入导出 txt/csv/json，翻译时自动注入 Prompt 保证专业术语准确
+- 🧩 **20+ 预设模型**：DeepSeek V3/R1、GPT-4o、GLM-4、Gemini、Mistral、Ollama 等，下拉框直接选
+- 🔧 **OpenAI 兼容格式**：17 个快捷预设一键配置任何兼容接口
+- 🔗 **一键测试连接**：填完配置立即验证，通过后自动保存
+- 📝 **自定义提示词**：内置风格模板 + 自定义保存/导入/导出
+- 📚 **术语库**：5 个学科内置（计算机/医学/金融/法律/电气），支持 txt/csv/json 导入
 
 ### 🧠 智能检测
 
-- 🌐 **自动识别源语言**：打开 PDF 自动检测中文/英文/日文等，自动设置翻译方向
-- 📄 **自动检测扫描件**：发现纯图片 PDF 自动开启 OCR
-- ✅ **翻译前预检**：自动检查 API Key 是否填写、文件是否加密、源语言=目标语言等问题
-- ⏱️ **预估剩余时间**：翻译进度旁显示预计完成时间，窗口标题显示进度百分比
-- 📏 **超长文档自动分块**：超过 50 页自动开启分块翻译
+- 🌐 **自动识别源语言**：打开 PDF 自动检测，自动设置翻译方向
+- 📄 **自动检测扫描件**：纯图片 PDF 自动开启 OCR
+- ✅ **翻译前预检**：API Key / 加密 / 语言检查
+- ⏱️ **预估剩余时间**：窗口标题显示进度百分比
+- 💾 **崩溃恢复**：异常退出后下次启动自动恢复
 
 ### 📚 Zotero 深度联动
 
-- 🔗 **自动检测**：从 Zotero 拖入 PDF，自动识别来源文献
-- 📎 **自动关联**：翻译完成后译文自动添加为 Zotero 附件，无需手动操作
-- 🔌 **一键安装插件**：设置页一键安装 pdf2zh Connector 到 Zotero，开箱即用
+- 🔗 **自动检测**：从 Zotero 拖入 PDF 或条目，自动识别来源
+- 📎 **自动关联**：翻译完成后译文自动添加为 Zotero 附件
+- 🔌 **一键安装插件**：设置页一键安装 pdf2zh Connector，开箱即用
 - 📐 **格式多选**：左右并排 / 双语对照 / 仅译文，任意组合放回 Zotero
 
-### 📚 历史记录 & PDF 预览
+### 📖 PDF 预览 & 历史记录
 
-- 🗂️ 完整翻译历史，键盘上下键快速切换，右键菜单打开目录/复制路径/默认程序打开
-- 👀 **连续滚动预览**：像真正的 PDF 阅读器一样，滚轮连续翻页，懒加载大文档不卡
-- 📐 **自适应显示**：适应宽度 / 适应高度 / 最佳适配，窗口大小变化自动重排
+- 👀 **连续滚动预览**：懒加载，大文档不卡
+- 📐 **自适应显示**：适应宽度 / 适应高度 / 最佳适配
+- 🗂️ 完整翻译历史，右键菜单打开目录/复制路径
 - 🔍 **预览首页**：先翻一页看效果，满意再翻全文
 - 📝 翻译完成后自动打开输出文件
 
 ### 📁 拖放 & 批量翻译
 
-- 🖱️ **拖放支持**：直接拖入 PDF 文件或文件夹到窗口，自动识别所有 PDF
-- 📂 统一文件管理：浏览文件（支持多选）、浏览文件夹、一键清空
-- 🎯 单文件/多文件自动判断，无需手动切换模式
+- 🖱️ **拖放支持**：文件、文件夹、Zotero 条目直接拖入窗口
+- 📂 统一文件管理：浏览文件（多选）、浏览文件夹、一键清空
 - 🔄 批量翻译失败项标红，支持一键重试
-- 💾 **崩溃恢复**：翻译中途异常退出，下次启动自动恢复
 
 ---
 
@@ -92,13 +118,13 @@
 
 | 平台 | 下载 | 大小 | 启动方式 |
 |------|------|------|---------|
-| 🪟 Windows | [`pdf2zh-desktop-win.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | 309MB | 解压 → 双击 `pdf2zh.bat` |
-| 🍎 macOS (Apple Silicon) | [`pdf2zh-desktop-mac.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | 209MB | 解压 → 双击 `pdf2zh.app` |
+| 🪟 Windows | [`pdf2zh-desktop-win-v2.2.0.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | ~340MB | 解压 → 双击 `pdf2zh.bat` |
+| 🍎 macOS | [`pdf2zh-desktop-mac-v2.2.0.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) | ~620MB | 解压 → 双击 `pdf2zh.app` |
 
 ### 🖱️ 第二步：启动
 
 - **Windows**：双击 `pdf2zh.bat`
-- **macOS**：双击 `pdf2zh.app`（首次打开需右键 → 打开 → 确认）
+- **macOS**：双击 `pdf2zh.app`（首次需右键 → 打开）
 
 ### 📄 第三步：翻译
 
@@ -106,91 +132,43 @@
 
 > 💡 **小贴士**：Google / Bing 翻译免费无需配置，打开就能用！
 >
-> ⚠️ 请从 [Releases 页面](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) 下载 zip 压缩包，**不要**点 Source code，那个不能直接用。
->
-> 🍎 **macOS 注意**：仅支持 Apple Silicon（M 系列芯片），AI 模型已内置，解压即用。Intel Mac 暂不支持。
+> ⚠️ 请从 [Releases 页面](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) 下载，**不要**点 Source code。
 
 ---
 
-## 🌍 支持 20+ 翻译服务，总有一款适合你
+## 🌍 支持 35 种语言、20+ 翻译服务
 
 | 类型 | 服务 |
 | --- | --- |
-| 🆓 免费白嫖 | Google 翻译、Bing 翻译 |
-| 🔑 需要 API Key | OpenAI、DeepL、DeepLX、DeepSeek、Gemini、Azure |
+| 🆓 免费 | Google 翻译、Bing 翻译 |
+| 🔑 API Key | OpenAI、DeepL、DeepLX、DeepSeek、Gemini、Azure |
 | 🇨🇳 国内服务 | 智谱 GLM、硅基流动、腾讯翻译、阿里 Qwen-MT |
 | 🏠 本地部署 | Ollama、Xinference、Argos Translate（完全离线） |
-| 🔧 其他 | Dify、AnythingLLM、Grok、Groq |
+| 🔧 其他 | Dify、AnythingLLM、Grok、Groq、OpenAI 兼容格式 |
+
+**支持语言**：中文（简繁）、英、日、韩、法、德、俄、西、意、葡、荷、波兰、土耳其、阿拉伯、泰、越南、印尼、马来、印地、孟加拉、乌克兰、捷克、瑞典、丹麦、芬兰、希腊、希伯来、匈牙利、罗马尼亚、老挝、高棉、缅甸、格鲁吉亚 等
 
 ---
 
-## 📄 三种输出格式任你选
+## 📄 三种输出格式
 
-每次翻译自动生成：
-
-- 📝 **`文件名-mono.pdf`** — 纯译文版，干干净净
-- 📖 **`文件名-dual.pdf`** — 双语对照版，原文译文交替排列
-- ↔️ **双语并排** — 左原文右译文，对照阅读超方便
+- 📝 **`文件名-mono.pdf`** — 纯译文版
+- 📖 **`文件名-dual.pdf`** — 双语对照版
+- ↔️ **`文件名-side_by_side.pdf`** — 左原文右译文（推荐）
 
 ---
 
-## 🤖 AI 智能布局检测
+## 🔗 Zotero 深度联动
 
-内置 DocLayout-YOLO 模型，自动识别页面中的正文、公式、图注、标题等区域，确保翻译内容精准插入正确位置。
+```
+从 Zotero 拖论文到 pdf2zh → 翻译 → 译文自动出现在 Zotero 附件栏
+```
 
-- ✅ 翻译开始时自动显示「AI 布局检测已启用 ✓」状态提示
-- 📋 完整的翻译日志（`logs/translate.log`），方便排查问题
+1. **设置页** → Zotero 联动 → 「一键安装 Zotero 插件」→ Zotero 重启
+2. 从 Zotero **拖条目或 PDF 附件**到 pdf2zh 窗口
+3. 翻译 → 译文自动关联为 Zotero 附件，标题带格式标签（如 `side by side - 论文名`）
 
-> ⚠️ 此功能依赖 [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)（文件夹内已附带 `VC_redist.x64.exe`）。
-> 未安装时翻译功能完全正常，只是布局识别精度略有下降。
-
----
-
-## 🔧 翻译参数
-
-| 参数 | 说明 |
-| --- | --- |
-| 🌐 源语言 / 目标语言 | 中文（简繁）、英、日、韩、法、德、俄、西、意（自动检测） |
-| 📃 页面范围 | 全部、仅首页、前 5 页、自定义（如 `1-3,7,10-12`） |
-| ⚡ 线程数 | 并发请求数，影响速度与限流 |
-| 🔄 翻译完成后自动打开 | 翻译结束自动用默认 PDF 阅读器打开结果 |
-| 🔤 跳过字体子集 | 处理特殊字体 PDF 时使用 |
-| 🧩 分块翻译 | 大文件按 N 页分块翻译，超 50 页自动开启 |
-| 📜 扫描版 PDF | 覆盖底图原文（仅扫描版书籍需要勾选） |
-| 📊 翻译表格内容 | 独立管线，按单元格翻译，适合专利/检测报告 |
-| 🖼️ 翻译图注文字 | 独立管线，翻译图片区域的文字标注 |
-| 🔍 OCR 识别 | 纯图片扫描件自动识别文字再翻译 |
-| 📐 公式字体正则 | 自定义匹配公式区域的字体 |
-| 📝 自定义提示词 | 控制 AI 翻译风格，支持模板和变量（$lang_in $lang_out $text） |
-| 📚 术语库 | 专业术语对照表，自动注入 AI Prompt，支持导入 txt/csv/json |
-
----
-
-## 💻 系统要求
-
-| 项目 | 要求 |
-| --- | --- |
-| 💿 操作系统 | Windows 10 / 11，64 位 |
-| 🧠 内存 | 4 GB 起步（大文档建议 8 GB） |
-| 💾 磁盘 | 程序约 750 MB + 翻译输出空间 |
-| 🌐 网络 | 使用在线翻译服务时需联网 |
-
----
-
-## 📦 内置依赖一览
-
-所有依赖已经打包好，真正的开箱即用 ✅
-
-| 模块 | 版本 | 用途 |
-| --- | --- | --- |
-| PyQt5 | 5.15.11 | GUI 框架 |
-| pdf2zh | 1.9.9 | 核心翻译引擎 |
-| PyMuPDF | 1.26.7 | PDF 解析与预览 |
-| babeldoc | 0.2.33 | 文档结构分析 |
-| onnxruntime | 内置 | AI 布局检测（需 VC++） |
-| OpenCV / Pillow / numpy | 内置 | 图像处理 |
-| fontTools | 内置 | 字体处理 |
-| peewee | 内置 | 翻译缓存（SQLite） |
+> 不需要每次操作，插件只装一次。没装 Zotero 的用户完全不受影响。
 
 ---
 
@@ -198,32 +176,39 @@
 
 | 快捷键 | 功能 |
 | --- | --- |
-| `Ctrl+T` | 开始翻译 |
-| `Ctrl+O` | 打开文件 |
+| `Ctrl+T` / `⌘T` | 开始翻译 |
+| `Ctrl+O` / `⌘O` | 打开文件 |
 | `← →` | PDF 翻页 |
 | `Ctrl+滚轮` | 缩放预览 |
 | `F11` | 全屏 |
 
 ---
 
-## 📂 目录结构
+## 🔧 翻译参数
 
-```text
-pdf2zh-desktop-win/
-├── core/
-│   ├── runtime/        ⚙️ Python 3.12 嵌入式运行时
-│   └── site-packages/  📦 所有依赖包
-├── config/             ⚙️ 配置文件
-├── pdf2zh_files/       📄 翻译输出目录
-├── logs/               📋 运行日志
-├── pdf2zh.bat          ⭐ 主启动入口（双击我！）
-├── pdf2zh.vbs          ⭐ 备用启动入口（旧版 Windows）
-├── _launcher.py        🐍 Python 启动器
-├── debug_start.bat     🔧 调试模式启动（带诊断输出）
-├── install.bat         📥 首次安装脚本
-├── VC_redist.x64.exe   🔧 VC++ 运行库
-└── diagnostic.bat      🩺 系统诊断工具
-```
+| 参数 | 说明 |
+| --- | --- |
+| 🌐 源语言 / 目标语言 | 35 种语言，自动检测 |
+| 📃 页面范围 | 全部、仅首页、前 5 页、自定义 |
+| 🔄 翻译完成后自动打开 | 默认开启 |
+| 🧩 分块翻译 | 大文件自动分块，超 50 页自动开启 |
+| 📜 扫描版 PDF | 覆盖底图原文 |
+| 📊 翻译表格内容 | 独立管线，按单元格翻译 |
+| 🔍 OCR 识别 | 纯图片扫描件自动识别 |
+| 📝 自定义提示词 | 控制 AI 翻译风格 |
+| 📚 术语库 | 专业术语对照，支持 txt/csv/json |
+
+---
+
+## 💻 系统要求
+
+| 项目 | Windows | macOS |
+| --- | --- | --- |
+| 💿 操作系统 | Windows 10/11 64 位 | macOS 13.0+ |
+| 🧠 内存 | 4 GB 起步（大文档建议 8 GB） | 4 GB 以上 |
+| 💾 磁盘 | ~750 MB | ~750 MB |
+| 🌐 网络 | 使用在线翻译服务时需联网 | 同左 |
+| 🍎 芯片 | — | Apple Silicon (M 系列) |
 
 ---
 
@@ -232,111 +217,70 @@ pdf2zh-desktop-win/
 | 😰 遇到了啥？ | 💡 这样解决 |
 | --- | --- |
 | 双击 vbs 报"不兼容" | Windows 11 24H2 废弃了 VBScript，请改用 `pdf2zh.bat` |
-| 双击后没反应 | 查看 `logs/startup_*.log` 日志 |
+| macOS 提示"无法验证开发者" | 右键 → 打开 → 确认（仅需一次） |
 | 翻译中途断了 | 检查磁盘空间，重启后自动从缓存续接 |
-| VC++ 报错 | 运行 `install.bat` 或手动安装 `VC_redist.x64.exe` |
 | 排版错乱 / 乱码 | 试试勾选「跳过字体子集」 |
-| AI 布局检测状态？ | 翻译时看进度提示，详情查看 `logs/translate.log` |
 | 大文档内存不足？ | 勾选「分块翻译」，设置合适的块大小 |
-| 扫描版书籍原文和译文重叠？ | 勾选高级选项中的「扫描版 PDF」，自动在译文区域覆盖白色背景 |
-| PDF 丢进去秒结束，没有翻译？ | 勾选高级选项中的「OCR 识别」，自动识别图片中的文字再翻译 |
-| 专利文档表格不翻译？ | 勾选高级选项中的「翻译表格和图注内容」 |
-| 怎么用 DeepSeek 翻译？ | 翻译服务选 DeepSeek → 填入 API Key → 模型下拉框选 deepseek-chat（V3）或 deepseek-reasoner（R1） |
-| 怎么用自己的 API 接口？ | 翻译服务选「OpenAI 兼容格式」→ 快捷预设选服务商 → 填 Key 即可 |
-| 怎么保证术语翻译准确？ | 展开高级选项中的「术语库」→ 选学科模板或自定义 → 翻译时自动注入 |
-| 怎么拖文件进去？ | 直接把 PDF 文件或文件夹拖到窗口任意位置 |
-| 搞不定？ | 双击 `diagnostic.bat` 生成诊断报告 📋 |
+| 扫描版原文和译文重叠？ | 勾选「扫描版 PDF」 |
+| PDF 丢进去秒结束？ | 勾选「OCR 识别」 |
+| 专利表格不翻译？ | 勾选「翻译表格内容」 |
+| 怎么用 DeepSeek？ | 选 DeepSeek → 填 API Key → 选模型 |
+| 怎么用自己的 API？ | 选「OpenAI 兼容格式」→ 快捷预设一键配置 |
+| 怎么保证术语准确？ | 展开「术语库」→ 选学科模板或自定义 |
+| Zotero 翻译后没显示附件？ | 安装 pdf2zh Connector 插件 |
 
 ---
 
 ## 📋 更新日志
 
-### v2.1.0（2026-04-04）— Zotero 深度联动
+### v2.2.0（2026-04-06）
 
-#### Zotero 一键联动
+#### Zotero 深度联动
+- Zotero 条目/PDF 附件拖拽识别（解析 x-moz-custom-clipdata MIME）
+- 翻译完成自动回写 + 通过插件自动关联附件
+- 一键安装 pdf2zh Connector 插件（自动写 extensions.json + 重启 Zotero）
+- 附件标题带格式标签（`side by side - 论文名`）
+- 智能数据目录检测（读 prefs.js 自定义路径 + 多磁盘扫描 + 选最大库）
+- 支持内置存储 / 绝对链接 / 相对链接三种附件格式
 
-- 新增 Zotero 自动检测：从 Zotero 拖入 PDF 自动识别来源，翻译完成后译文自动保存回原位
-- 新增 pdf2zh Connector 插件：一键安装到 Zotero，翻译完成后自动将译文添加为 Zotero 附件，无需手动操作
-- 新增译文格式多选：可选左右并排 / 双语对照 / 仅译文，任意组合放回 Zotero
-- 新增「保留本地副本」选项：Zotero 来源文件可选是否同时保留一份到本地输出目录
-- 设置页新增 Zotero 卡片：插件安装状态检测 + 格式偏好 + 一键安装，开箱即用
-
-#### 使用方式
-
-1. 设置页 → Zotero 卡片 → 点击「一键安装到 Zotero」→ 重启 Zotero
-2. 从 Zotero 拖论文到 pdf2zh → 翻译 → 译文自动出现在 Zotero 附件栏
-
-> 不需要每次选格式，设置一次永久生效。没装 Zotero 的用户完全不受影响。
-
----
-
-### v2.0.0（2026-04-03）— 重大更新
+#### UI 优化
+- 全新 UI（克莱因蓝配色 + 圆角卡片 + 微软雅黑）
+- API 配置改为悬浮弹窗，切换服务零跳动
+- 提示词 / 术语库改为弹窗编辑
+- 连续滚动 PDF 预览（懒加载）
+- 标签页三等分 + 使用说明标签页
+- 字号切换（小/中/大）
+- 缩略图面板自适应 + 页码标注
+- 历史记录防抖 + 右键菜单（打开目录/复制路径）
+- 翻译完成自动清空文件列表
+- 窗口自适应屏幕分辨率
 
 #### 翻译能力
-
-- 新增独立表格翻译管线（专利/检测报告等表格密集文件）
-- 新增独立图注翻译管线
-- 新增 OCR 识别（RapidOCR，纯图片扫描件自动识别）
-- 新增术语库系统（5 个学科内置模板 + 自定义 + 导入导出 txt/csv/json）
-- 新增自定义提示词（5 个风格模板 + 自定义保存 + 导入导出）
-- 新增翻译前预览首页（先翻一页看效果）
-- 新增翻译前预检（自动检查 API Key、文件加密、语言设置）
-- 新增超长文档自动分块（>50 页自动开启）
-- 修复 OCR 处理后 PDF 字体表异常导致的崩溃
-
-#### AI 配置
-
-- 新增 17 个 AI 模型预设（国内 7 + 国外 7 + 本地 3）
-- 新增模型下拉选择器（DeepSeek V3/R1、GPT-4o、GLM-4 等可直接选择）
-- 新增一键测试连接
-- 新增 OpenAI 兼容格式（原 OpenAI-liked）快捷配置
-- API 配置标签改为友好中文名
-- 翻译服务旁显示提示信息（如"免费，需科学上网"）
-
-#### 智能检测
-
-- 打开 PDF 自动检测源语言并设置目标语言
-- 自动检测纯扫描件并开启 OCR
-- 预估翻译剩余时间，窗口标题显示进度百分比
-
-#### 界面体验
-
-- 全新 UI 设计（克莱因蓝配色 + 圆角卡片 + 微软雅黑字体）
-- 统一文件选择（合并单文件/批量模式，支持多选和文件夹）
-- 拖放文件/文件夹到窗口直接翻译
-- PDF 预览改为连续滚动模式（懒加载，大文档不卡）
-- 预览自适应宽度/高度/最佳适配
-- 新增使用说明标签页（内置完整功能说明 + 快捷键 + FAQ）
-- 历史记录右键菜单（打开目录、复制路径、用默认程序打开）
-- 左右键翻页，Ctrl+T 快捷翻译，Ctrl+O 打开文件
-- 翻译完成后自动打开输出文件
-- 翻译完成进度条变色（蓝→青绿/红）+ 任务栏闪烁提醒
-- 崩溃恢复（下次启动自动恢复未完成的翻译会话）
-- 批量翻译失败项标红 + 一键重试
-- 等级成就系统（Lv.1 ~ Lv.10000，12 级称号）
-- 时段关怀标语（125 条，外置 JSON 可扩展）
-- 自定义应用图标
-- 标签页三等分 + 下划线选中态
-- 翻译服务顺序优化（Google → Bing → DeepSeek 排前三）
+- 独立表格翻译管线（按单元格翻译 + 自适应字号）
+- 独立图注翻译管线
+- 35 种语言支持 + 源语言自动识别
+- 自动检测扫描件 + 翻译前预检
+- 预估剩余时间 + 崩溃恢复 + 批量失败重试
 
 #### 稳定性
+- 修复取消翻译闪退
+- 修复 ollama 导入阻塞（延迟导入）
+- OnnxRuntime 8 秒超时机制
+- PDF 预览快速切换 150ms 防抖
+- 历史记录 200ms 防抖
+- 删除/清空历史不再闪退
 
-- 修复取消翻译导致闪退（CancelledError 未捕获）
-- 修复 `import ollama` 无服务时阻塞启动（改为延迟导入）
-- OnnxRuntime 预加载超时机制（8 秒超时自动跳过）
-- PDF 预览快速切换防抖（150ms）
-- Qt 插件路径显式设置（避免 Anaconda 等环境冲突）
+### v2.0.0（2026-04-03）
+
+- 首个功能完整版本
+- 20+ 翻译服务 + AI 配置面板
+- OCR / 表格翻译 / 扫描版支持
+- 术语库 + 自定义提示词
+- 连续滚动预览 + 拖放 + 批量翻译
 
 ### v1.0.0（2026-03-22）
 
 - 首个公开发布版本
-- 基于 PDFMathTranslate 的完整 GUI 桌面版
-- 20+ 翻译服务支持
-- 分块翻译、断点续传
-- 扫描版 PDF 白底覆盖
-- 内置 PDF 预览器
-- 批量翻译
-- 翻译历史记录
 
 ---
 
@@ -344,10 +288,18 @@ pdf2zh-desktop-win/
 
 **桌面版作者**：[@AaronGIG](https://github.com/AaronGIG) (CAS)
 
-桌面版的独立打包、GUI 增强、便携化改造、智能诊断等功能由 AaronGIG (CAS) 与 Claude (Anthropic AI) 协作开发完成 🤖✨
+桌面版的独立打包、GUI 增强、便携化改造、Zotero 联动等功能由 AaronGIG (CAS) 与 Claude (Anthropic AI) 协作开发完成 🤖✨
 
 **核心翻译引擎**：[PDFMathTranslate](https://github.com/Byaidu/PDFMathTranslate)（EMNLP 2025），感谢原项目的贡献 🤝
 
 ---
 
-📖 详细安装指南 → [INSTALL.md](INSTALL.md) | 🌐 English → [README_EN.md](README_EN.md)
+<div align="center">
+
+希望能做更有意义的事
+
+**专注交付生产级的垂直学术公共品** 🍀
+
+[GitHub](https://github.com/AaronGIG/pdf2zh-desktop) · [最新版本](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) · [反馈](https://github.com/AaronGIG/pdf2zh-desktop/issues) · [小红书: 艾伦说](https://www.xiaohongshu.com/user/profile/66c6fef7000000001d0315ef)
+
+</div>

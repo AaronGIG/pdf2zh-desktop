@@ -83,10 +83,10 @@ def preload_onnxruntime():
 
     t = threading.Thread(target=_load, daemon=True)
     t.start()
-    t.join(timeout=8)  # 最多等 8 秒
+    t.join(timeout=30)  # 等待加载完成（AI布局检测必须）
 
     if t.is_alive():
-        log("OnnxRuntime 预加载超时（8秒），跳过，AI布局检测将不可用")
+        log("OnnxRuntime 预加载超时（30秒），继续启动")
     elif result[0] and not str(result[0]).startswith("ERROR"):
         log(f"OnnxRuntime 预加载成功: {result[0]}")
     else:
@@ -94,18 +94,20 @@ def preload_onnxruntime():
 
 
 def ensure_window_visible(window, app):
-    """根据屏幕分辨率自适应窗口大小并居中显示。"""
+    """确保窗口在可见屏幕范围内并居中显示（兼容 DPI 缩放）。"""
     screen = app.primaryScreen().availableGeometry()
-    # 按屏幕大小自适应：占屏幕 85% 但不超过 1400x900
-    w = min(int(screen.width() * 0.85), 1400)
-    h = min(int(screen.height() * 0.85), 900)
-    # 最小保证 900x600
-    w = max(w, 900)
-    h = max(h, 600)
+    # availableGeometry 已经是逻辑像素，直接用
+    sw, sh = screen.width(), screen.height()
+    w = min(int(sw * 0.85), 1400)
+    h = min(int(sh * 0.85), 900)
+    # 低分辨率/高缩放时降低最小值
+    w = max(w, min(860, sw - 40))
+    h = max(h, min(560, sh - 40))
     window.resize(w, h)
-    x = screen.x() + (screen.width() - w) // 2
-    y = screen.y() + (screen.height() - h) // 2
+    x = screen.x() + (sw - w) // 2
+    y = screen.y() + (sh - h) // 2
     window.move(x, y)
+    log(f"屏幕逻辑分辨率: {sw}x{sh}, 窗口: {w}x{h}")
 
 
 def main():
@@ -118,6 +120,9 @@ def main():
     os.environ["QT_PLUGIN_PATH"] = qt_plugin_path
     log(f"QT_PLUGIN_PATH: {qt_plugin_path}")
 
+    # DPI 感知：让 Qt 正确处理高分屏缩放
+    os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+
     # 关键：必须在 PyQt5 之前预加载 OnnxRuntime
     log("预加载 OnnxRuntime...")
     preload_onnxruntime()
@@ -126,170 +131,102 @@ def main():
         log("导入 pdf2zh.gui_pyqt5...")
         from PyQt5.QtCore import Qt
         from PyQt5.QtWidgets import QApplication
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         from pdf2zh.gui_pyqt5 import PDF2ZHMainWindow
         log("导入成功，启动 GUI...")
 
         app = QApplication(sys.argv)
         app.setStyle('Fusion')
-        app.setStyleSheet("""
-            * {
-                font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
-                font-size: 14px;
-            }
-            QMainWindow {
-                background: #fafbfc;
-            }
-            QGroupBox {
-                font-weight: bold;
-                font-size: 15px;
-                color: #333;
-                border: 1px solid #e0e4ea;
-                border-radius: 6px;
-                margin-top: 8px;
-                padding-top: 14px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-                color: #4169E1;
-            }
-            QPushButton {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                padding: 5px 10px;
-                background: white;
-            }
-            QPushButton:hover {
-                background: #f0f4ff;
-                border-color: #4169E1;
-            }
-            QPushButton:pressed {
-                background: #e0e8ff;
-            }
-            QPushButton:disabled {
-                background: #f5f5f5;
-                color: #aaa;
-                border-color: #e0e0e0;
-            }
-            QComboBox {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                padding: 4px 8px;
-                background: white;
-            }
-            QComboBox:hover {
-                border-color: #4169E1;
-            }
-            QComboBox QAbstractItemView {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                background: white;
-                selection-background-color: #e8eeff;
-                selection-color: #333;
-                padding: 2px;
-            }
-            QLineEdit {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                padding: 4px 8px;
-                background: white;
-            }
-            QLineEdit:focus {
-                border-color: #4169E1;
-            }
-            QSpinBox {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                padding: 3px 6px;
-                background: white;
-            }
-            QCheckBox {
-                spacing: 6px;
-            }
-            QCheckBox::indicator {
-                width: 14px;
-                height: 14px;
-                border: 1px solid #bbb;
-                border-radius: 3px;
-                background: white;
-            }
-            QCheckBox::indicator:checked {
-                background: #4169E1;
-                border-color: #4169E1;
-            }
-            QListWidget {
-                border: 1px solid #e0e4ea;
-                border-radius: 4px;
-                background: white;
-            }
-            QListWidget::item {
-                padding: 3px 6px;
-            }
-            QListWidget::item:selected {
-                background: #e8eeff;
-                color: #333;
-            }
-            QTextEdit {
-                border: 1px solid #d0d5dd;
-                border-radius: 4px;
-                background: white;
-            }
-            QTextEdit:focus {
-                border-color: #4169E1;
-            }
-            QProgressBar {
-                border: none;
-                border-radius: 3px;
-                background: #e8ecf4;
-            }
-            QProgressBar::chunk {
-                background: #4169E1;
-                border-radius: 3px;
-            }
-            QTabBar::tab {
-                font-size: 14px;
-                padding: 8px 6px;
-                border: none;
-                border-bottom: 2px solid transparent;
-            }
-            QTabBar::tab:selected {
-                font-weight: bold;
-                color: #4169E1;
-                border-bottom: 2px solid #4169E1;
-            }
-            QTabBar::tab:!selected {
-                color: #666;
-            }
-            QTabBar::tab:hover:!selected {
-                color: #333;
-            }
-            QTabBar::tab:selected {
-                background: white;
-                border-bottom: 2px solid #4169E1;
-                font-weight: bold;
-                color: #4169E1;
-            }
-            QTabWidget::pane {
-                border: 1px solid #d0d5dd;
-                border-radius: 0 0 6px 6px;
-                background: white;
-            }
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QToolTip {
-                background-color: #FFFDF0;
-                color: #333;
-                border: 1px solid #D4C89A;
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
-                font-size: 16px;
-                line-height: 1.6;
-            }
-        """)
+
+        # ── DPI 感知样式表生成 ──
+        dpr = app.primaryScreen().devicePixelRatio()
+        log(f"DPI ratio: {dpr}")
+
+        # DPR 补偿系数：高分屏上 Qt 会把逻辑像素放大到物理像素，
+        # 导致同样 12px 在 4K@200% 屏显示为 24px 物理，视觉偏大。
+        # 补偿公式：dpr>1 时缩小基准字号，使各屏幕物理显示大小接近。
+        import builtins
+        builtins._pdf2zh_dpr = dpr
+        builtins._pdf2zh_dpr_scale = 1.0 / max(1.0, dpr ** 0.6)  # 高分屏更强补偿
+
+        def build_stylesheet(base_font=14):
+            """根据基准字号生成完整样式表（所有尺寸等比联动，DPR 自动补偿）"""
+            dpr_scale = getattr(builtins, '_pdf2zh_dpr_scale', 1.0)
+            f = max(8, round(base_font * dpr_scale))  # DPR 补偿后的实际字号（下限 8px）
+            f1 = f + 1             # GroupBox 标题
+            fs = f - 1             # 辅助文字
+            ft = f + 2             # Tooltip
+            pad_v = max(3, f // 3) # 垂直内边距
+            pad_h = max(6, f // 2) # 水平内边距
+            r = max(3, f // 3)     # 圆角
+            r2 = r + 2             # 大圆角
+            ind = f                # checkbox indicator
+            bw = max(1, f // 14)   # 边框宽度
+            sp = max(4, f // 3)    # checkbox spacing
+            return f"""
+            * {{ font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif; font-size: {f}px; }}
+            QMainWindow {{ background: #fafbfc; }}
+            QGroupBox {{ font-weight: bold; font-size: {f1}px; color: #333;
+                border: {bw}px solid #e0e4ea; border-radius: {r2}px; margin-top: {sp+4}px; padding-top: {f}px; }}
+            QGroupBox::title {{ subcontrol-origin: margin; left: {pad_h+4}px; padding: 0 {sp}px; color: #4169E1; }}
+            QPushButton {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v}px {pad_h}px; background: white; }}
+            QPushButton:hover {{ background: #f0f4ff; border-color: #4169E1; }}
+            QPushButton:pressed {{ background: #e0e8ff; }}
+            QPushButton:disabled {{ background: #f5f5f5; color: #aaa; border-color: #e0e0e0; }}
+            QComboBox {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v}px {pad_h}px; background: white; }}
+            QComboBox:hover {{ border-color: #4169E1; }}
+            QComboBox QAbstractItemView {{ border: {bw}px solid #d0d5dd; border-radius: {r}px;
+                background: white; selection-background-color: #e8eeff; selection-color: #333; padding: 2px; }}
+            QLineEdit {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v}px {pad_h}px; background: white; }}
+            QLineEdit:focus {{ border-color: #4169E1; }}
+            QSpinBox {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v-1}px {sp}px; background: white; }}
+            QCheckBox {{ spacing: {sp}px; }}
+            QCheckBox::indicator {{ width: {ind}px; height: {ind}px; border: {bw}px solid #c8cdd4; border-radius: {max(2, r // 2)}px; background: white; }}
+            QCheckBox::indicator:hover {{ border-color: #4169E1; }}
+            QCheckBox::indicator:checked {{ background: #4169E1; border-color: #4169E1; }}
+            QListWidget {{ border: {bw}px solid #e0e4ea; border-radius: {r}px; background: white; }}
+            QListWidget::item {{ padding: {pad_v-1}px {sp}px; }}
+            QListWidget::item:selected {{ background: #e8eeff; color: #333; }}
+            QTextEdit {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; background: white; }}
+            QTextEdit:focus {{ border-color: #4169E1; }}
+            QProgressBar {{ border: none; border-radius: {r}px; background: #e8ecf4; }}
+            QProgressBar::chunk {{ background: #4169E1; border-radius: {r}px; }}
+            QTabBar::tab {{ font-size: {f}px; padding: {pad_h}px {sp}px; border: none; border-bottom: 2px solid transparent; }}
+            QTabBar::tab:selected {{ font-weight: bold; color: #4169E1; border-bottom: 2px solid #4169E1; background: white; }}
+            QTabBar::tab:!selected {{ color: #666; }}
+            QTabBar::tab:hover:!selected {{ color: #333; }}
+            QTabWidget::pane {{ border: {bw}px solid #d0d5dd; border-radius: 0 0 {r2}px {r2}px; background: white; }}
+            QScrollArea {{ border: none; background: transparent; }}
+            QScrollBar:vertical {{ width: {max(10, f-2)}px; }}
+            QScrollBar:horizontal {{ height: {max(10, f-2)}px; }}
+            QToolTip {{ background: #FFFDF0; color: #333; border: {bw}px solid #D4C89A;
+                border-radius: {r2+2}px; padding: {pad_h}px {pad_h+4}px;
+                font-family: "Microsoft YaHei"; font-size: {ft}px; }}
+            QPushButton#translateBtn {{ background: #165DFF; color: white; font-size: {f}px;
+                padding: {pad_v}px {pad_h}px; border-radius: {r}px; border: none; }}
+            QPushButton#translateBtn:hover {{ background: #0E42D2; }}
+            QPushButton#translateBtn:disabled {{ background: #ccc; color: #888; }}
+            """
+
+        # 存为全局函数供字号切换时调用
+        import builtins
+        builtins._pdf2zh_build_stylesheet = build_stylesheet
+
+        # 从用户配置读取上次字号，默认极小(10)
+        _saved_font = 10
+        try:
+            import json as _json
+            _cfg_path = os.path.join(os.path.expanduser("~"), "pdf2zh_gui_config.json")
+            if os.path.exists(_cfg_path):
+                with open(_cfg_path, 'r', encoding='utf-8') as _f:
+                    _cfg = _json.load(_f)
+                _level = _cfg.get('font_size_level', '极小')
+                _saved_font = {'极小': 10, '小': 12, '中': 14, '大': 16, '极大': 18}.get(_level, 10)
+        except Exception:
+            pass
+        log(f"初始字号: {_saved_font}px")
+        app.setStyleSheet(build_stylesheet(_saved_font))
         window = PDF2ZHMainWindow()
         ensure_window_visible(window, app)
         window.show()

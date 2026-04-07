@@ -1,4 +1,4 @@
-# Translation output files - never commit user documents
+# Translation output files
 pdf2zh_files/
 
 # Logs
@@ -8,13 +8,31 @@ logs/
 __pycache__/
 *.pyc
 *.pyo
-core/site-packages/**/__pycache__/
-core/site-packages/**/*.pyc
 
 # User config
 config/user.json
 
-# Dev artifacts (prevent accidental commit)
+# Embedded Python runtime (too large for git)
+core/runtime/
+core/site-packages/
+
+# Only track our custom pdf2zh source (unignore)
+!core/site-packages/pdf2zh/
+
+# But still ignore pycache inside pdf2zh
+core/site-packages/pdf2zh/__pycache__/
+
+# Binary / large files
+*.exe
+*.zip
+*.pyd
+*.dll
+*.so
+*.dylib
+*.onnx
+cache/
+
+# Dev artifacts
 DEPLOY_TEST_REPORT.md
 build_script.py
 COMPLETION_SUMMARY.md

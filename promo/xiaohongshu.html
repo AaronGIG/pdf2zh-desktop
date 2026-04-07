@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pdf2zh-desktop 小红书图文 v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #FAF8F5;
+    --text: #2C2C2C;
+    --text2: #6B6560;
+    --accent: #B8860B;
+    --blue: #007AFF;
+    --green: #2D8653;
+    --card: #FFFFFF;
+    --border: rgba(0,0,0,0.06);
+    --macos-bg: #F5F5F7;
+    --sidebar-bg: #F0F0F2;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans SC', 'PingFang SC', sans-serif;
+    background: #D8D4CF;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 60px;
+    padding: 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .slide-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: #999;
+    margin-bottom: -48px;
+    letter-spacing: 1px;
+  }
+
+  .slide {
+    width: 1080px;
+    height: 1440px;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.1);
+  }
+
+  /* ── Shared: Footer github ── */
+  .slide-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 20px;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: rgba(0,0,0,0.25);
+    letter-spacing: 0.5px;
+    background: linear-gradient(transparent, rgba(250,248,245,0.9));
+  }
+
+  /* ── Shared: macOS window frame ── */
+  .mac-window {
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05);
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+  .mac-titlebar {
+    height: 40px;
+    background: linear-gradient(180deg, #FAFAFA 0%, #F0F0F0 100%);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    gap: 7px;
+  }
+  .mac-dot { width: 11px; height: 11px; border-radius: 50%; }
+  .dot-r { background: #FF5F57; }
+  .dot-y { background: #FFBD2E; }
+  .dot-g { background: #28CA41; }
+
+  /* ══════════════════════════════════════
+     SLIDE 1: COVER
+     ══════════════════════════════════════ */
+  .s1 {
+    background: linear-gradient(160deg, #FAF8F5 0%, #F0EDE8 50%, #E8E4DF 100%);
+  }
+  .s1-inner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 80px;
+  }
+  .s1-badge {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 28px;
+    padding: 8px 24px;
+    background: rgba(184,134,11,0.06);
+    border-radius: 50px;
+  }
+  .s1-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 58px;
+    font-weight: 900;
+    line-height: 1.3;
+    margin-bottom: 28px;
+  }
+  .s1-title span { color: var(--accent); }
+  .s1-sub {
+    font-size: 22px;
+    color: var(--text2);
+    line-height: 1.7;
+    margin-bottom: 48px;
+    max-width: 700px;
+  }
+  /* Mini app preview on cover */
+  .s1-app {
+    width: 780px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.1);
+  }
+  .s1-app-body {
+    display: flex;
+    height: 320px;
+    background: white;
+  }
+  .s1-sidebar {
+    width: 160px;
+    background: var(--sidebar-bg);
+    padding: 16px 12px;
+    border-right: 1px solid rgba(0,0,0,0.05);
+  }
+  .s1-sidebar .s-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding: 0 4px;
+  }
+  .s1-sidebar .s-logo span:first-child { font-size: 18px; }
+  .s1-sidebar .s-logo span:last-child {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .s1-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 3px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .s1-nav-item.active {
+    background: white;
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .s1-main {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+  }
+  .s1-tabs {
+    display: flex;
+    gap: 0;
+    background: #F0F0F0;
+    border-radius: 6px;
+    padding: 2px;
+    margin-bottom: 12px;
+    align-self: flex-end;
+  }
+  .s1-tab {
+    padding: 4px 12px;
+    font-size: 10px;
+    border-radius: 5px;
+    color: var(--text2);
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  }
+  .s1-tab.active {
+    background: white;
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .s1-pdf {
+    flex: 1;
+    display: flex;
+    gap: 2px;
+    background: #E0E0E0;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .s1-page {
+    flex: 1;
+    background: white;
+    padding: 16px;
+  }
+  .s1-page .pt { font-size: 7px; font-weight: 700; text-align: center; margin-bottom: 10px; color: #888; font-family: 'Inter', sans-serif; }
+  .tl { height: 4px; background: #E0E0E0; border-radius: 2px; margin-bottom: 5px; }
+  .tl.s { width: 65%; }
+  .tl.m { width: 82%; }
+  .tl.l { width: 95%; }
+  .tl.zh { background: #CCDFF5; }
+
+  /* ══════════════════════════════════════
+     SLIDE 2: Side-by-Side Demo
+     ══════════════════════════════════════ */
+  .s2-inner {
+    flex: 1;
+    padding: 64px;
+    display: flex;
+    flex-direction: column;
+  }
+  .s2-header {
+    margin-bottom: 32px;
+  }
+  .s2-badge {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .s2-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 40px;
+    font-weight: 900;
+    margin-bottom: 8px;
+  }
+  .s2-sub {
+    font-size: 18px;
+    color: var(--text2);
+  }
+  .s2-app {
+    flex: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+  }
+  .s2-app-body {
+    flex: 1;
+    display: flex;
+    background: white;
+  }
+  .s2-left {
+    width: 240px;
+    border-right: 1px solid rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+  }
+  .s2-left-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+  .s2-left-header span {
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .s2-left-header .s2-btns {
+    display: flex;
+    gap: 6px;
+  }
+  .s2-btn-sm {
+    padding: 3px 8px;
+    font-size: 10px;
+    border-radius: 4px;
+    background: rgba(0,122,255,0.08);
+    color: var(--blue);
+    font-weight: 600;
+  }
+  .s2-hist-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.03);
+    cursor: default;
+  }
+  .s2-hist-item.active {
+    background: rgba(0,122,255,0.06);
+    border-left: 3px solid var(--blue);
+  }
+  .s2-hist-item .hist-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .s2-hist-item .hist-meta {
+    font-size: 9px;
+    color: var(--text2);
+  }
+  .s2-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .s2-right-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+  .s2-mode-tabs {
+    display: flex;
+    background: #F0F0F0;
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .s2-mode-tab {
+    padding: 5px 14px;
+    font-size: 11px;
+    border-radius: 5px;
+    color: var(--text2);
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  }
+  .s2-mode-tab.active {
+    background: white;
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    font-weight: 600;
+  }
+  .s2-preview {
+    flex: 1;
+    display: flex;
+    gap: 2px;
+    background: #E0E0E0;
+    margin: 12px;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .s2-pdf-page {
+    flex: 1;
+    background: white;
+    padding: 20px 18px;
+  }
+  .s2-pdf-page .phead {
+    font-family: 'Inter', serif;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 14px;
+    color: #333;
+  }
+  .s2-pdf-page .phead-zh {
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 14px;
+    color: #333;
+  }
+  .ptl { height: 5px; background: #E0E0E0; border-radius: 2px; margin-bottom: 6px; }
+  .ptl.s { width: 60%; }
+  .ptl.m { width: 80%; }
+  .ptl.l { width: 94%; }
+  .ptl.xs { width: 45%; }
+  .ptl.zh { background: #CCDFF5; }
+  .ptl.title-line { height: 8px; background: #C0C0C0; width: 70%; margin: 0 auto 12px; border-radius: 3px; }
+  .ptl.title-zh { height: 8px; background: #A3C8F0; width: 65%; margin: 0 auto 12px; border-radius: 3px; }
+  .ptl.gap { height: 12px; background: transparent; }
+
+  /* ══════════════════════════════════════
+     SLIDE 3: Translation Page Demo
+     ══════════════════════════════════════ */
+  .s3-inner {
+    flex: 1;
+    padding: 64px;
+    display: flex;
+    flex-direction: column;
+  }
+  .s3-app {
+    flex: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+  }
+  .s3-body {
+    flex: 1;
+    display: flex;
+    background: white;
+  }
+  .s3-sidebar {
+    width: 160px;
+    background: var(--sidebar-bg);
+    padding: 16px 12px;
+    border-right: 1px solid rgba(0,0,0,0.05);
+  }
+  .s3-main {
+    flex: 1;
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .s3-drop-zone {
+    border: 2px dashed rgba(0,122,255,0.25);
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+    background: rgba(0,122,255,0.02);
+  }
+  .s3-drop-zone .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .s3-drop-zone .drop-main { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .s3-drop-zone .drop-sub { font-size: 12px; color: var(--text2); }
+  .s3-form-row {
+    display: flex;
+    gap: 16px;
+  }
+  .s3-field {
+    flex: 1;
+  }
+  .s3-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--blue);
+    margin-bottom: 6px;
+  }
+  .s3-field .field-box {
+    background: #F5F5F7;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text);
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+  .s3-field .field-box.key-field {
+    color: #999;
+    font-family: 'Inter', monospace;
+    font-size: 11px;
+  }
+  .s3-translate-btn {
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    cursor: default;
+  }
+  .s3-progress {
+    background: #F0F0F0;
+    border-radius: 8px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .s3-progress-bar {
+    height: 100%;
+    width: 72%;
+    background: linear-gradient(90deg, #007AFF, #34AADC);
+    border-radius: 8px;
+  }
+  .s3-status {
+    font-size: 11px;
+    color: var(--text2);
+    text-align: center;
+  }
+  .s3-callouts {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .s3-callout {
+    position: relative;
+    flex: 1;
+  }
+  .s3-callout .arrow {
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 20px;
+  }
+  .s3-callout .callout-text {
+    background: rgba(184,134,11,0.06);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 11px;
+    color: var(--accent);
+    text-align: center;
+    font-weight: 600;
+  }
+
+  /* ══════════════════════════════════════
+     SLIDE 4: Features - Glossary & Prompts
+     ══════════════════════════════════════ */
+  .s4-inner {
+    flex: 1;
+    padding: 64px;
+    display: flex;
+    flex-direction: column;
+  }
+  .s4-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .s4-card {
+    background: var(--card);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+  }
+  .s4-card-icon { font-size: 32px; margin-bottom: 12px; }
+  .s4-card h3 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .s4-card p {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .s4-card .mock-ui {
+    flex: 1;
+    background: #F8F8FA;
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid rgba(0,0,0,0.04);
+  }
+  .mock-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .mock-table th {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text2);
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  .mock-table td {
+    font-size: 11px;
+    padding: 7px 8px;
+    border-bottom: 1px solid rgba(0,0,0,0.03);
+    color: var(--text);
+  }
+  .mock-table .en { font-family: 'Inter', sans-serif; color: var(--text2); }
+  .mock-table .zh-val { color: var(--accent); font-weight: 500; }
+  .mock-prompt {
+    font-family: 'Inter', monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--text2);
+    white-space: pre-wrap;
+  }
+  .mock-prompt .kw { color: var(--accent); font-weight: 600; }
+  .s4-card.wide {
+    grid-column: span 2;
+  }
+  .s4-card.wide .inner-flex {
+    display: flex;
+    gap: 28px;
+    flex: 1;
+  }
+  .s4-card.wide .inner-flex > div { flex: 1; }
+
+  /* ══════════════════════════════════════
+     SLIDE 5: All Features Overview
+     ══════════════════════════════════════ */
+  .s5-inner {
+    flex: 1;
+    padding: 64px;
+    display: flex;
+    flex-direction: column;
+  }
+  .s5-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    align-content: center;
+  }
+  .s5-item {
+    background: var(--card);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .s5-item .s5-icon { font-size: 36px; margin-bottom: 14px; }
+  .s5-item h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .s5-item p { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+  /* ══════════════════════════════════════
+     SLIDE 6: CTA
+     ══════════════════════════════════════ */
+  .s6 {
+    background: linear-gradient(160deg, #FAF8F5 0%, #F0EDE8 50%, #E8E4DF 100%);
+  }
+  .s6-inner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 80px;
+  }
+  .s6-icon { font-size: 64px; margin-bottom: 36px; }
+  .s6-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 48px;
+    font-weight: 900;
+    line-height: 1.3;
+    margin-bottom: 20px;
+  }
+  .s6-title span { color: var(--accent); }
+  .s6-sub {
+    font-size: 20px;
+    color: var(--text2);
+    line-height: 1.7;
+    margin-bottom: 40px;
+    max-width: 650px;
+  }
+  .s6-qr-area {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 32px 56px;
+    border: 1px solid var(--border);
+    margin-bottom: 36px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.04);
+  }
+  .s6-qr-area .qr-label {
+    font-size: 14px;
+    color: var(--text2);
+    margin-bottom: 10px;
+  }
+  .s6-qr-area .qr-link {
+    font-family: 'Inter', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .s6-qr-area .qr-link2 {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: var(--text2);
+    margin-top: 8px;
+  }
+  .s6-tags {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 32px;
+  }
+  .s6-tag {
+    padding: 8px 20px;
+    background: rgba(184,134,11,0.06);
+    border-radius: 50px;
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .s6-follow {
+    font-size: 16px;
+    color: var(--text2);
+  }
+  .s6-follow strong { color: var(--text); }
+
+  /* Shared title block */
+  .sec-badge {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  .sec-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 38px;
+    font-weight: 900;
+    margin-bottom: 6px;
+  }
+  .sec-sub {
+    font-size: 16px;
+    color: var(--text2);
+    margin-bottom: 28px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 1: COVER
+     ═══════════════════════════════════════ -->
+<div class="slide-label">Slide 1 / 6 — 封面</div>
+<div class="slide s1">
+  <div class="s1-inner">
+    <div class="s1-badge">Mac 端最丝滑 &middot; 开箱即用</div>
+    <h1 class="s1-title">学术论文翻译<br><span>排版丝滑如原文</span></h1>
+    <p class="s1-sub">
+      pdf2zh-desktop —— Mac 端最丝滑的<br>开箱即用 PDF 论文翻译桌面工具
+    </p>
+
+    <!-- Mini App Mockup -->
+    <div class="s1-app mac-window">
+      <div class="mac-titlebar">
+        <div class="mac-dot dot-r"></div>
+        <div class="mac-dot dot-y"></div>
+        <div class="mac-dot dot-g"></div>
+      </div>
+      <div class="s1-app-body">
+        <div class="s1-sidebar">
+          <div class="s-logo"><span>📄</span><span>pdf2zh-desktop</span></div>
+          <div class="s1-nav-item"><span>🌐</span> 翻译</div>
+          <div class="s1-nav-item active"><span>📖</span> 阅读</div>
+          <div class="s1-nav-item"><span>🔧</span> 设置</div>
+          <div class="s1-nav-item"><span>💡</span> 关于</div>
+        </div>
+        <div class="s1-main">
+          <div class="s1-tabs" style="align-self: flex-end;">
+            <div class="s1-tab">Dual</div>
+            <div class="s1-tab">Mono</div>
+            <div class="s1-tab active">Side by Side</div>
+          </div>
+          <div class="s1-pdf">
+            <div class="s1-page">
+              <div class="pt">English Original</div>
+              <div class="tl l"></div><div class="tl m"></div><div class="tl l"></div><div class="tl s"></div>
+              <div class="tl l"></div><div class="tl m"></div><div class="tl l"></div><div class="tl s"></div>
+              <div class="tl m"></div><div class="tl l"></div><div class="tl s"></div>
+              <div class="tl l"></div><div class="tl m"></div>
+            </div>
+            <div class="s1-page">
+              <div class="pt">中文翻译</div>
+              <div class="tl zh l"></div><div class="tl zh m"></div><div class="tl zh l"></div><div class="tl zh s"></div>
+              <div class="tl zh l"></div><div class="tl zh m"></div><div class="tl zh l"></div><div class="tl zh s"></div>
+              <div class="tl zh m"></div><div class="tl zh l"></div><div class="tl zh s"></div>
+              <div class="tl zh l"></div><div class="tl zh m"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 2: Reader - Side by Side
+     ═══════════════════════════════════════ -->
+<div class="slide-label">Slide 2 / 6 — 阅读模式</div>
+<div class="slide">
+  <div class="s2-inner">
+    <div class="s2-header">
+      <div class="sec-badge">READER</div>
+      <div class="s2-title">左右对照，沉浸阅读</div>
+      <div class="s2-sub">Side by Side · Dual · Mono 三种模式一键切换，内置缩略图导航</div>
+    </div>
+
+    <div class="s2-app mac-window">
+      <div class="mac-titlebar">
+        <div class="mac-dot dot-r"></div>
+        <div class="mac-dot dot-y"></div>
+        <div class="mac-dot dot-g"></div>
+      </div>
+      <div class="s2-app-body">
+        <div class="s2-left">
+          <div class="s2-left-header">
+            <span>翻译历史</span>
+            <div class="s2-btns"><span class="s2-btn-sm">缩略图</span></div>
+          </div>
+          <div class="s2-hist-item active">
+            <div class="hist-name">✓ Leader-Follower Dynamics in Share...</div>
+            <div class="hist-meta">Google · 自动检测→中文(简) · 04-03</div>
+          </div>
+          <div class="s2-hist-item">
+            <div class="hist-name">✓ Attention Is All You Need - 2017</div>
+            <div class="hist-meta">DeepSeek · 英语→中文(简) · 04-02</div>
+          </div>
+          <div class="s2-hist-item">
+            <div class="hist-name">✓ BERT: Pre-training of Deep Bidire...</div>
+            <div class="hist-meta">OpenAI · 英语→中文(简) · 04-01</div>
+          </div>
+          <div class="s2-hist-item">
+            <div class="hist-name">✓ Generative Adversarial Networks</div>
+            <div class="hist-meta">Google · 英语→中文(简) · 03-30</div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="padding:10px 16px;display:flex;gap:8px;">
+            <span class="s2-btn-sm">📂 Finder</span>
+            <span class="s2-btn-sm">📄 源文件</span>
+          </div>
+        </div>
+        <div class="s2-right">
+          <div class="s2-right-header">
+            <div></div>
+            <div class="s2-mode-tabs">
+              <div class="s2-mode-tab">Dual</div>
+              <div class="s2-mode-tab">Mono</div>
+              <div class="s2-mode-tab active">Side by Side</div>
+            </div>
+          </div>
+          <div class="s2-preview">
+            <div class="s2-pdf-page">
+              <div class="phead">Leader-Follower Dynamics</div>
+              <div class="ptl title-line"></div>
+              <div class="ptl l"></div><div class="ptl m"></div><div class="ptl l"></div>
+              <div class="ptl s"></div><div class="ptl l"></div><div class="ptl m"></div>
+              <div class="ptl gap"></div>
+              <div class="ptl l"></div><div class="ptl m"></div><div class="ptl l"></div>
+              <div class="ptl s"></div><div class="ptl m"></div><div class="ptl l"></div>
+              <div class="ptl gap"></div>
+              <div class="ptl l"></div><div class="ptl m"></div><div class="ptl s"></div>
+              <div class="ptl l"></div><div class="ptl m"></div>
+            </div>
+            <div class="s2-pdf-page">
+              <div class="phead-zh">领导者-追随者动态研究</div>
+              <div class="ptl title-zh"></div>
+              <div class="ptl zh l"></div><div class="ptl zh m"></div><div class="ptl zh l"></div>
+              <div class="ptl zh s"></div><div class="ptl zh l"></div><div class="ptl zh m"></div>
+              <div class="ptl gap"></div>
+              <div class="ptl zh l"></div><div class="ptl zh m"></div><div class="ptl zh l"></div>
+              <div class="ptl zh s"></div><div class="ptl zh m"></div><div class="ptl zh l"></div>
+              <div class="ptl gap"></div>
+              <div class="ptl zh l"></div><div class="ptl zh m"></div><div class="ptl zh s"></div>
+              <div class="ptl zh l"></div><div class="ptl zh m"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 3: Translation Page
+     ═══════════════════════════════════════ -->
+<div class="slide-label">Slide 3 / 6 — 翻译流程</div>
+<div class="slide">
+  <div class="s3-inner">
+    <div style="margin-bottom:28px;">
+      <div class="sec-badge">TRANSLATE</div>
+      <div class="sec-title">三步完成翻译</div>
+      <div class="sec-sub">拖入 PDF → 选择引擎 → 一键翻译，就是这么简单</div>
+    </div>
+
+    <div class="s3-app mac-window">
+      <div class="mac-titlebar">
+        <div class="mac-dot dot-r"></div>
+        <div class="mac-dot dot-y"></div>
+        <div class="mac-dot dot-g"></div>
+      </div>
+      <div class="s3-body">
+        <div class="s3-sidebar">
+          <div class="s-logo" style="display:flex;align-items:center;gap:8px;margin-bottom:20px;padding:0 4px;">
+            <span style="font-size:18px;">📄</span>
+            <span style="font-family:Inter,sans-serif;font-size:11px;font-weight:700;">pdf2zh-desktop</span>
+          </div>
+          <div class="s1-nav-item active"><span>🌐</span> 翻译</div>
+          <div class="s1-nav-item"><span>📖</span> 阅读</div>
+          <div class="s1-nav-item"><span>🔧</span> 设置</div>
+          <div class="s1-nav-item"><span>💡</span> 关于</div>
+        </div>
+        <div class="s3-main">
+          <div class="s3-drop-zone">
+            <div class="drop-icon">📄</div>
+            <div class="drop-main">拖拽 PDF 文件到这里</div>
+            <div class="drop-sub">或点击浏览 · 支持批量</div>
+          </div>
+
+          <div class="s3-form-row">
+            <div class="s3-field">
+              <label>翻译服务</label>
+              <div class="field-box">Google 翻译（免费）</div>
+            </div>
+            <div class="s3-field">
+              <label>源语言 → 目标语言</label>
+              <div class="field-box">自动检测 → 中文(简)</div>
+            </div>
+          </div>
+
+          <div class="s3-form-row">
+            <div class="s3-field">
+              <label>输出格式</label>
+              <div class="field-box">左右并排 (Side by Side)</div>
+            </div>
+            <div class="s3-field">
+              <label>线程数</label>
+              <div class="field-box">8</div>
+            </div>
+          </div>
+
+          <div class="s3-form-row">
+            <div class="s3-field">
+              <label>API Key（Google 免费无需填写）</label>
+              <div class="field-box key-field">sk-... (仅 DeepL/OpenAI/DeepSeek 等需要)</div>
+            </div>
+          </div>
+
+          <div class="s3-translate-btn">🚀 开始翻译</div>
+
+          <div class="s3-progress">
+            <div class="s3-progress-bar"></div>
+          </div>
+          <div class="s3-status">正在翻译 · 第 18/25 页 · 预计剩余 32 秒 · Google 翻译</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="s3-callouts">
+      <div class="s3-callout">
+        <div class="callout-text">🎯 Google 翻译免费<br>无需 API Key</div>
+      </div>
+      <div class="s3-callout">
+        <div class="callout-text">⚡ 多线程并发<br>长文档也不怕</div>
+      </div>
+      <div class="s3-callout">
+        <div class="callout-text">📐 排版 100% 保真<br>公式表格不乱</div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 4: Glossary & Prompts
+     ═══════════════════════════════════════ -->
+<div class="slide-label">Slide 4 / 6 — 术语库 & 提示词</div>
+<div class="slide">
+  <div class="s4-inner">
+    <div style="margin-bottom:24px;">
+      <div class="sec-badge">ADVANCED</div>
+      <div class="sec-title">术语库 + 自定义提示词</div>
+      <div class="sec-sub">学术翻译的精准度，靠这两个功能拉满</div>
+    </div>
+
+    <div class="s4-grid">
+      <div class="s4-card">
+        <div class="s4-card-icon">📚</div>
+        <h3>术语库</h3>
+        <p>自定义专业术语映射，确保翻译一致性。支持 CSV / JSON 导入。</p>
+        <div class="mock-ui">
+          <table class="mock-table">
+            <tr><th>English</th><th>中文</th></tr>
+            <tr><td class="en">Transformer</td><td class="zh-val">Transformer</td></tr>
+            <tr><td class="en">Attention Mechanism</td><td class="zh-val">注意力机制</td></tr>
+            <tr><td class="en">Fine-tuning</td><td class="zh-val">微调</td></tr>
+            <tr><td class="en">Embedding</td><td class="zh-val">嵌入向量</td></tr>
+            <tr><td class="en">Gradient Descent</td><td class="zh-val">梯度下降</td></tr>
+            <tr><td class="en">Backpropagation</td><td class="zh-val">反向传播</td></tr>
+            <tr><td class="en">Overfitting</td><td class="zh-val">过拟合</td></tr>
+            <tr><td class="en">Loss Function</td><td class="zh-val">损失函数</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="s4-card">
+        <div class="s4-card-icon">✍️</div>
+        <h3>自定义提示词</h3>
+        <p>针对不同领域配置翻译提示词，控制翻译风格和精度。</p>
+        <div class="mock-ui">
+          <div class="mock-prompt"><span class="kw">模板名称:</span> 计算机科学论文
+
+<span class="kw">提示词:</span>
+你是一位资深的计算机科学学术翻译专家。
+请将以下英文学术论文内容翻译为中文：
+
+<span class="kw">要求:</span>
+1. 保持学术论文的严谨性和专业性
+2. 专业术语保留英文原文
+3. 数学公式和变量名不翻译
+4. 保持原文段落结构
+5. 使用书面语，避免口语化表达</div>
+        </div>
+      </div>
+
+      <div class="s4-card wide">
+        <div class="inner-flex">
+          <div>
+            <div class="s4-card-icon">🌍</div>
+            <h3>20+ 翻译引擎</h3>
+            <p>主流翻译 API 全覆盖。Google 免费可用，DeepL / DeepSeek / OpenAI 效果更好。支持 Ollama 本地模型，完全离线翻译。</p>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;">
+              <span style="padding:5px 12px;background:rgba(184,134,11,0.06);border-radius:20px;font-size:11px;color:var(--accent);font-weight:600;">Google</span>
+              <span style="padding:5px 12px;background:rgba(184,134,11,0.06);border-radius:20px;font-size:11px;color:var(--accent);font-weight:600;">DeepL</span>
+              <span style="padding:5px 12px;background:rgba(184,134,11,0.06);border-radius:20px;font-size:11px;color:var(--accent);font-weight:600;">DeepSeek</span>
+              <span style="padding:5px 12px;background:rgba(184,134,11,0.06);border-radius:20px;font-size:11px;color:var(--accent);font-weight:600;">OpenAI</span>
+              <span style="padding:5px 12px;background:#F0F0F0;border-radius:20px;font-size:11px;color:var(--text2);">通义千问</span>
+              <span style="padding:5px 12px;background:#F0F0F0;border-radius:20px;font-size:11px;color:var(--text2);">腾讯翻译</span>
+              <span style="padding:5px 12px;background:#F0F0F0;border-radius:20px;font-size:11px;color:var(--text2);">Azure</span>
+              <span style="padding:5px 12px;background:#F0F0F0;border-radius:20px;font-size:11px;color:var(--text2);">Gemini</span>
+              <span style="padding:5px 12px;background:#F0F0F0;border-radius:20px;font-size:11px;color:var(--text2);">Ollama</span>
+              <span style="padding:5px 12px;background:#F0F0F0;border-radius:20px;font-size:11px;color:var(--text2);">更多...</span>
+            </div>
+          </div>
+          <div>
+            <div class="s4-card-icon">⚡</div>
+            <h3>分块 & 多线程</h3>
+            <p>50 页以上长文档自动分块翻译。最高 32 线程并发，实时进度条。AI 智能版面检测，精准定位翻译区域。</p>
+            <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="color:var(--green);font-weight:700;font-size:13px;">✓</span>
+                <span style="font-size:13px;">每块 50 页 · 间隔 10 秒</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="color:var(--green);font-weight:700;font-size:13px;">✓</span>
+                <span style="font-size:13px;">最高 32 线程并发翻译</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="color:var(--green);font-weight:700;font-size:13px;">✓</span>
+                <span style="font-size:13px;">ONNX AI 版面智能检测</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="color:var(--green);font-weight:700;font-size:13px;">✓</span>
+                <span style="font-size:13px;">实时进度 · 可中断重试</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 5: Feature Overview Grid
+     ═══════════════════════════════════════ -->
+<div class="slide-label">Slide 5 / 6 — 全部功能</div>
+<div class="slide">
+  <div class="s5-inner">
+    <div style="margin-bottom:24px;">
+      <div class="sec-badge">EVERYTHING</div>
+      <div class="sec-title">还有这些</div>
+      <div class="sec-sub">Mac 端最完整的 PDF 论文翻译工具，没有之一</div>
+    </div>
+
+    <div class="s5-grid">
+      <div class="s5-item">
+        <div class="s5-icon">📐</div>
+        <h3>排版 100% 保真</h3>
+        <p>公式、表格、图注<br>翻译后和原文一模一样</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">📖</div>
+        <h3>三种阅读模式</h3>
+        <p>Side by Side · Dual<br>Mono 一键切换</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">🌍</div>
+        <h3>20+ 翻译引擎</h3>
+        <p>Google 免费可用<br>DeepL / DeepSeek / GPT</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">📚</div>
+        <h3>术语库</h3>
+        <p>自定义术语映射<br>CSV / JSON 导入</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">✍️</div>
+        <h3>自定义提示词</h3>
+        <p>不同领域配置不同翻译策略<br>精准控制翻译质量</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">🧠</div>
+        <h3>AI 版面检测</h3>
+        <p>ONNX 深度学习模型<br>精准识别翻译区域</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">⚡</div>
+        <h3>多线程 · 分块</h3>
+        <p>最高 32 线程并发<br>长文档自动分块</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">🔒</div>
+        <h3>本地运行</h3>
+        <p>数据不上传<br>API Key 本地存储</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">🎨</div>
+        <h3>明暗主题</h3>
+        <p>跟随系统或手动切换<br>macOS 原生体验</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">📂</div>
+        <h3>翻译历史</h3>
+        <p>自动保存记录<br>随时回看对照</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">🖱️</div>
+        <h3>拖拽上传</h3>
+        <p>直接拖 PDF 到窗口<br>支持批量翻译</p>
+      </div>
+      <div class="s5-item">
+        <div class="s5-icon">💰</div>
+        <h3>完全免费</h3>
+        <p>开源 MIT 协议<br>永久免费使用</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SLIDE 6: CTA
+     ═══════════════════════════════════════ -->
+<div class="slide-label">Slide 6 / 6 — 下载引导</div>
+<div class="slide s6">
+  <div class="s6-inner">
+    <div class="s6-icon">🚀</div>
+    <h2 class="s6-title">Mac 端最丝滑的<br><span>PDF 论文翻译工具</span></h2>
+    <p class="s6-sub">
+      开箱即用 · 免费开源 · 排版保真<br>
+      下载解压，双击即可开始翻译
+    </p>
+    <div class="s6-qr-area">
+      <div class="qr-label">GitHub 下载地址</div>
+      <div class="qr-link">github.com/AaronGIG/pdf2zh-desktop</div>
+      <div class="qr-link2">Releases 页面下载最新版本</div>
+    </div>
+    <div class="s6-tags">
+      <span class="s6-tag">#学术翻译</span>
+      <span class="s6-tag">#论文翻译</span>
+      <span class="s6-tag">#pdf翻译</span>
+      <span class="s6-tag">#科研工具</span>
+      <span class="s6-tag">#开源软件</span>
+      <span class="s6-tag">#macOS</span>
+    </div>
+    <div class="s6-follow">关注 <strong>艾伦说</strong> 获取更多学术工具推荐</div>
+  </div>
+  <div class="slide-footer">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+</body>
+</html>
