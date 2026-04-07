@@ -487,6 +487,7 @@ class TranslateWorker(QThread):
                  pages=None, thread_count=8, chunk_enabled=False,
                  chunk_size=50, chunk_delay=10, envs=None,
                  skip_subset_fonts=False, ignore_cache=False,
+                 scan_mode=False, translate_tables=False, ocr_mode=False,
                  parent=None):
         super().__init__(parent)
         self.file_path = file_path
@@ -502,6 +503,9 @@ class TranslateWorker(QThread):
         self.envs = envs
         self.skip_subset_fonts = skip_subset_fonts
         self.ignore_cache = ignore_cache
+        self.scan_mode = scan_mode
+        self.translate_tables = translate_tables
+        self.ocr_mode = ocr_mode
         self.cancelled = False
         self._cancel_event = None
 
@@ -563,9 +567,17 @@ class TranslateWorker(QThread):
             total_pages = len(doc)
             doc.close()
 
-            # 翻译参数基础模板（和原版一致）
+            # 预处理链
+            actual_file = self.file_path
+
+            # OCR 预处理：纯图片扫描件 → 添加不可见文字层
+            if self.ocr_mode:
+                self.status.emit("正在 OCR 识别…")
+                actual_file = self._ocr_preprocess(actual_file)
+
+            # 翻译参数基础模板（pdf2zh 1.8.9 兼容）
             base_param = dict(
-                files=[self.file_path],
+                files=[actual_file],
                 output=self.output_dir,
                 lang_in=self.lang_in,
                 lang_out=self.lang_out,
@@ -574,6 +586,7 @@ class TranslateWorker(QThread):
                 model=model,
                 cancellation_event=self._cancel_event,
                 envs=self.envs or {},
+                scan_mode=self.scan_mode,
             )
 
             def on_progress(p):
@@ -648,6 +661,13 @@ class TranslateWorker(QThread):
 
             mono_path, dual_path = result_list[0]
 
+            # ── 表格翻译后处理 ──
+            if self.translate_tables:
+                self.status.emit("正在翻译表格内容…")
+                for pdf_path in [mono_path, dual_path]:
+                    if pdf_path and os.path.exists(pdf_path):
+                        self._translate_tables_postprocess(pdf_path)
+
             # ── 生成 Side-by-Side ──
             self.status.emit("正在生成左右并排版…")
             base = os.path.splitext(mono_path)[0]
@@ -681,6 +701,113 @@ class TranslateWorker(QThread):
                 loop.close()
             except Exception:
                 pass
+
+    # ── OCR 预处理：纯图片扫描件添加不可见文字层 ──
+
+    def _ocr_preprocess(self, file_path):
+        """对纯图片 PDF 先 OCR 识别，添加文字层后返回临时文件路径"""
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+        except ImportError:
+            self.status.emit("OCR 模块未安装，跳过")
+            return file_path
+
+        try:
+            ocr = RapidOCR()
+            doc = fitz.open(file_path)
+            modified = False
+
+            for page_num in range(doc.page_count):
+                if self.cancelled:
+                    break
+                page = doc[page_num]
+                if page.get_text().strip():
+                    continue  # 已有文字层，跳过
+
+                pix = page.get_pixmap(dpi=300)
+                img_data = pix.tobytes("png")
+                result, _ = ocr(img_data)
+                if not result:
+                    continue
+
+                scale_x = page.rect.width / pix.width
+                scale_y = page.rect.height / pix.height
+                for line in result:
+                    box, text, confidence = line
+                    if confidence < 0.5:
+                        continue
+                    x0 = min(p[0] for p in box) * scale_x
+                    y0 = min(p[1] for p in box) * scale_y
+                    x1 = max(p[0] for p in box) * scale_x
+                    y1 = max(p[1] for p in box) * scale_y
+                    font_size = max((y1 - y0) * 0.8, 4)
+                    rc = fitz.Rect(x0, y0, x1, y1)
+                    page.insert_textbox(
+                        rc, text, fontsize=font_size,
+                        fontname="helv", color=(0, 0, 0),
+                        render_mode=3,  # 3 = invisible
+                    )
+                    modified = True
+                self.status.emit(f"OCR 识别中… {page_num+1}/{doc.page_count}")
+
+            if modified:
+                import tempfile
+                tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+                doc.save(tmp.name)
+                doc.close()
+                return tmp.name
+            doc.close()
+        except Exception as e:
+            self.status.emit(f"OCR 失败: {e}")
+        return file_path
+
+    # ── 表格翻译后处理 ──
+
+    def _translate_tables_postprocess(self, pdf_path):
+        """提取表格文字，翻译后写回（独立管线，不影响正文排版）"""
+        try:
+            doc = fitz.open(pdf_path)
+            from ui.ai_client import chat_completion
+            for page_num in range(doc.page_count):
+                if self.cancelled:
+                    break
+                page = doc[page_num]
+                tables = page.find_tables()
+                if not tables or not tables.tables:
+                    continue
+                for table in tables.tables:
+                    for cell in table.cells:
+                        if cell is None:
+                            continue
+                        rect = fitz.Rect(cell)
+                        text = page.get_textbox(rect).strip()
+                        if not text or len(text) < 2:
+                            continue
+                        # 翻译单元格文字
+                        try:
+                            translated = chat_completion([
+                                {"role": "system", "content": f"Translate to {self.lang_out}. Output ONLY the translation, nothing else."},
+                                {"role": "user", "content": text}
+                            ])
+                            if translated and translated.strip():
+                                # 白底覆盖 + 写入译文
+                                shape = page.new_shape()
+                                shape.draw_rect(rect)
+                                shape.finish(color=None, fill=(1, 1, 1))
+                                shape.commit()
+                                font_size = max(min((rect.height * 0.7), 12), 5)
+                                page.insert_textbox(
+                                    rect, translated.strip(),
+                                    fontsize=font_size, fontname="china-s",
+                                    color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT,
+                                )
+                        except Exception:
+                            pass  # 单个单元格失败不影响其他
+                self.status.emit(f"表格翻译… {page_num+1}/{doc.page_count}")
+            doc.saveIncr()
+            doc.close()
+        except Exception:
+            pass
 
     def cancel(self):
         self.cancelled = True

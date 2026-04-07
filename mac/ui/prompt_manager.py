@@ -37,11 +37,12 @@ DEFAULT_TEMPLATES = {
 
 
 class PromptTemplateManager:
-    """管理用户自定义 Prompt 模板（存储在 ~/pdf2zh_prompts.json）"""
+    """管理用户自定义 Prompt 模板（存储在 ~/.config/pdf2zh/prompts.json）"""
 
     @staticmethod
     def path():
-        return Path.home() / "pdf2zh_prompts.json"
+        from ui.config_manager import _config_dir
+        return _config_dir() / "prompts.json"
 
     @classmethod
     def load_all(cls):

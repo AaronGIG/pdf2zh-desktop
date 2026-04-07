@@ -114,7 +114,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(project_dir, 'pdf2zh.app', 'Contents', 'Resources', 'AppIcon.icns'),
+    icon=os.path.join(project_dir, 'assets', 'AppIcon.icns'),
 )
 
 coll = COLLECT(
@@ -130,7 +130,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='pdf2zh.app',
-    icon=os.path.join(project_dir, 'pdf2zh.app', 'Contents', 'Resources', 'AppIcon.icns'),
+    icon=os.path.join(project_dir, 'assets', 'AppIcon.icns'),
     bundle_identifier='com.aarongig.pdf2zh',
     info_plist={
         'CFBundleName': 'pdf2zh',

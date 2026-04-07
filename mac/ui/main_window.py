@@ -2898,6 +2898,21 @@ class TranslatePage(QWidget):
         r4.addStretch()
         cl.addLayout(r4)
 
+        cl.addSpacing(6)
+        # 高级选项：扫描版 / 表格翻译 / OCR（参考 Win 端实现）
+        r5 = QHBoxLayout(); r5.setSpacing(16)
+        self.scan_mode_check = QCheckBox("扫描版 PDF")
+        self.scan_mode_check.setToolTip("扫描版 PDF 的文字嵌在图片中，勾选后会在译文区域覆盖底图原文。\n普通数字 PDF 请勿勾选。")
+        r5.addWidget(self.scan_mode_check)
+        self.translate_tables_check = QCheckBox("翻译表格内容")
+        self.translate_tables_check.setToolTip("按单元格翻译表格，适合专利、检测报告等表格密集型文件。")
+        r5.addWidget(self.translate_tables_check)
+        self.ocr_mode_check = QCheckBox("OCR 识别")
+        self.ocr_mode_check.setToolTip("对纯图片扫描件先进行 OCR 文字识别再翻译。\n需要额外处理时间，普通 PDF 请勿勾选。")
+        r5.addWidget(self.ocr_mode_check)
+        r5.addStretch()
+        cl.addLayout(r5)
+
         lo.addWidget(card)
 
         # ── 进度卡片（固定高度占位，避免布局跳动） ──
@@ -3089,6 +3104,7 @@ class TranslatePage(QWidget):
         self._output_dir = os.path.expanduser("~/Documents/pdf2zh_files")
         os.makedirs(self._output_dir, exist_ok=True)
 
+        self._cancel_pending = False
         self.go_btn.setEnabled(False); self.go_btn.setText("翻译中…")
         self.prog_card.setVisible(True); self.stop_btn.setVisible(True)
         self.prog_bar.setValue(0)
@@ -3126,6 +3142,9 @@ class TranslatePage(QWidget):
             chunk_size=self.chunk_size_spin.value(),
             chunk_delay=self.chunk_delay_spin.value(),
             envs=envs,
+            scan_mode=self.scan_mode_check.isChecked(),
+            translate_tables=self.translate_tables_check.isChecked(),
+            ocr_mode=self.ocr_mode_check.isChecked(),
         )
         self.worker.progress.connect(self._on_prog)
         self.worker.status.connect(self._on_status)
@@ -3134,8 +3153,29 @@ class TranslatePage(QWidget):
         self.worker.start()
 
     def _cancel(self):
-        if self.worker: self.worker.cancel()
+        if not self.worker:
+            return
+        self.worker.cancel()
+        self._cancel_pending = True
         self.prog_label.setText("正在取消…")
+        self.stop_btn.setEnabled(False)
+        # 最多等 5 秒，超时强制终止
+        def _force_cleanup():
+            if not self._cancel_pending:
+                return  # 翻译已正常结束，不需要强制清理
+            if self.worker and self.worker.isRunning():
+                self.worker.terminate()
+                self.worker.wait(2000)
+            self.worker = None
+            self._cancel_pending = False
+            self.go_btn.setEnabled(True)
+            self.go_btn.setText("开始翻译")
+            self.stop_btn.setVisible(False)
+            self.stop_btn.setEnabled(True)
+            self.prog_icon.setText("⚠️")
+            self.prog_label.setText("已取消")
+            self.prog_detail.setText("")
+        QTimer.singleShot(5000, _force_cleanup)
 
     _TIPS = [
         "翻译中，请稍候…", "公式和图表会完整保留",
@@ -3171,6 +3211,7 @@ class TranslatePage(QWidget):
 
     def _on_single_done(self, output_files):
         """单文件翻译完成 — 回写 Zotero + 记录历史 + 推进队列"""
+        self._cancel_pending = False  # 正常完成，取消超时回调不再触发
         fp = self.pending_files[self._batch_idx]
 
         if self.worker:
@@ -3202,6 +3243,7 @@ class TranslatePage(QWidget):
 
     def _on_single_err(self, msg):
         """单文件翻译出错 — 记录后继续下一个"""
+        self._cancel_pending = False
         fp = self.pending_files[self._batch_idx]
 
         if self.worker:
@@ -3285,14 +3327,10 @@ class TranslatePage(QWidget):
             self.go_btn.clicked.connect(self._retry_failed)
             self.go_btn.setEnabled(True)
 
-        # macOS 系统通知 — 翻译完成后通知用户（适合长时间翻译时切到其他 app）
+        # macOS 系统提示音（不用 osascript 的 display notification，避免点击打开脚本编辑器）
         try:
             import subprocess
-            msg = f"{ok} 篇翻译完成" if failed == 0 else f"完成 {ok} 篇，失败 {failed} 篇"
-            subprocess.Popen([
-                "osascript", "-e",
-                f'display notification "{msg}" with title "pdf2zh" sound name "Glass"'
-            ])
+            subprocess.Popen(["afplay", "/System/Library/Sounds/Glass.aiff"])
         except Exception:
             pass
 
@@ -3336,6 +3374,7 @@ class TranslatePage(QWidget):
         self._start()
 
     def _on_err(self, msg):
+        self._cancel_pending = False  # 错误也算结束，取消超时不再触发
         self.prog_icon.setText("❌")
         self.prog_label.setText("翻译出错")
         self.prog_pct.setText("!")
@@ -4026,8 +4065,8 @@ class ReaderPage(QWidget):
         has_files = bool(r.get("output_files"))
         self._btn_reveal.setVisible(has_files)
         self._btn_open_src.setVisible(bool(r.get("file", {}).get("path")))
-        # 加载预览
-        if "output_files" in r:
+        # 加载预览（翻译刚完成时跳过，避免覆盖最新结果）
+        if "output_files" in r and not getattr(self, '_skip_preview_on_select', False):
             self.preview.set_output_files(r["output_files"])
 
     def _open_in_reader(self, item):
@@ -4042,9 +4081,11 @@ class ReaderPage(QWidget):
     def set_output_files(self, files):
         """外部调用（翻译完成后）"""
         self.preview.set_output_files(files)
+        self._skip_preview_on_select = True  # 防止 refresh → setCurrentRow → _on_select 覆盖预览
         self.refresh()
         if self.list_w.count() > 0:
             self.list_w.setCurrentRow(0)
+        self._skip_preview_on_select = False
 
     def _clear(self):
         HistoryManager.clear(); self.refresh()
@@ -4432,9 +4473,9 @@ class SettingsPage(QWidget):
         guide_lo.addWidget(_div())
         _paths_col = QVBoxLayout(); _paths_col.setSpacing(1)
         for _pname, _pfile in [
-            ("配置", "~/pdf2zh_gui_config.json"),
-            ("历史", "~/pdf2zh_history.json"),
-            ("术语库", "~/pdf2zh_glossary_*.csv"),
+            ("配置", "~/.config/pdf2zh/config.json"),
+            ("历史", "~/.config/pdf2zh/history.json"),
+            ("术语库", "~/.config/pdf2zh/glossary.json"),
         ]:
             _pl = QLabel(f"{_pname}  {_pfile}")
             _pl.setObjectName("Cap"); _pl.setStyleSheet("font-size:9px;padding:0;")
@@ -4871,7 +4912,8 @@ class SettingsPage(QWidget):
             # 在用户目录下创建空术语库文件
             import json
             from pathlib import Path
-            user_dir = Path.home() / "pdf2zh_glossaries"
+            from ui.config_manager import _config_dir
+            user_dir = _config_dir() / "glossaries"
             user_dir.mkdir(exist_ok=True)
             fp = user_dir / f"{name}.json"
             fp.write_text(json.dumps({}, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -4887,7 +4929,8 @@ class SettingsPage(QWidget):
         name = self.gloss_selector.currentText()
         if name in DEFAULT_GLOSSARIES:
             return
-        fp = Path.home() / "pdf2zh_glossaries" / f"{name}.json"
+        from ui.config_manager import _config_dir
+        fp = _config_dir() / "glossaries" / f"{name}.json"
         if fp.exists():
             fp.unlink()
         self._refresh_gloss_list()
@@ -4944,7 +4987,7 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.2.0"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel("v2.2.3"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
@@ -5338,7 +5381,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.2.0 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel("v2.2.3 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
@@ -5380,9 +5423,9 @@ class MainWindow(QMainWindow):
         cfg = UserConfigManager.load()
         self.switch("翻译"); self._apply()
         _install_tip_filter(QApplication.instance())
-        # 去掉所有 QComboBox 下拉框的系统矩形外框
-        for combo in self.findChildren(QComboBox):
-            _fix_combo_popup(combo)
+        # 去掉所有控件的 macOS 聚焦环（小点边框）
+        for w in self.findChildren(QWidget):
+            w.setAttribute(Qt.WA_MacShowFocusRect, False)
 
         # 恢复窗口尺寸和位置
         if cfg.get("window_geometry"):

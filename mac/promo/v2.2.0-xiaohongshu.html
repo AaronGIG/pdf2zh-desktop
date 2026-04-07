@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pdf2zh-desktop v2.2.0 小红书</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+  :root{--bg:#FAF8F5;--t:#1D1D1F;--t2:#6E6E73;--acc:#0071E3;--red:#FF3B30;--grn:#34C759;--card:#FFF;--brd:rgba(0,0,0,.06)}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Noto Sans SC','PingFang SC',-apple-system,sans-serif;background:#D8D4CF;display:flex;flex-direction:column;align-items:center;gap:50px;padding:50px;-webkit-font-smoothing:antialiased}
+  .sl{width:1080px;height:1440px;background:var(--bg);position:relative;overflow:hidden;flex-shrink:0;display:flex;flex-direction:column;border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,.12)}
+  .sl-lb{font-family:Inter,sans-serif;font-size:13px;color:#999;margin-bottom:-38px;letter-spacing:1px}
+  .sl-ft{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-family:Inter,sans-serif;font-size:11px;color:#BBB}
+
+  /* mac window */
+  .mw{background:var(--card);border-radius:12px;border:1px solid var(--brd);box-shadow:0 4px 24px rgba(0,0,0,.06);overflow:hidden}
+  .mt{height:32px;background:#F5F5F7;display:flex;align-items:center;padding-left:12px;gap:6px;border-bottom:1px solid rgba(0,0,0,.04)}
+  .md{width:10px;height:10px;border-radius:50%}.dr{background:#FF5F57}.dy{background:#FFBD2E}.dg{background:#28C840}
+
+  /* sidebar */
+  .sb{width:150px;background:#F0F0F2;padding:12px 8px;border-right:1px solid rgba(0,0,0,.04);display:flex;flex-direction:column;gap:1px}
+  .sn{padding:7px 10px;border-radius:6px;font-size:11px;display:flex;align-items:center;gap:7px;color:var(--t2)}
+  .sn.ac{background:rgba(0,113,227,.1);color:var(--acc);font-weight:600}
+  .slogo{font-size:10px;font-weight:700;display:flex;align-items:center;gap:6px;padding:4px 10px;margin-bottom:12px}
+
+  /* 红线标注系统 */
+  .anno{position:absolute;pointer-events:none;z-index:20}
+  .a-tag{background:rgba(255,59,48,.07);border:1.5px solid rgba(255,59,48,.25);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--red);line-height:1.5;white-space:nowrap}
+  .a-tag.big{font-size:13px;padding:8px 14px}
+  .a-dot{width:10px;height:10px;border-radius:50%;background:var(--red);border:2px solid #fff;box-shadow:0 1px 6px rgba(255,59,48,.3);position:absolute}
+  .a-line{position:absolute;background:var(--red);opacity:.5}
+  .a-line.h{height:2px}.a-line.v{width:2px}
+  .a-num{width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;position:absolute}
+  /* 底部说明栏 */
+  .a-legend{position:absolute;bottom:50px;left:50px;right:50px;display:flex;gap:14px;flex-wrap:wrap}
+  .a-leg-item{display:flex;align-items:center;gap:8px;background:rgba(255,59,48,.05);border:1px solid rgba(255,59,48,.15);border-radius:8px;padding:8px 14px}
+  .a-leg-num{width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .a-leg-text{font-size:12px;color:var(--red);font-weight:500;line-height:1.4}
+
+  /* 模拟文本行 */
+  .tl{height:5px;border-radius:2px;margin-bottom:4px}.tl.en{background:#E0E0E0}.tl.zh{background:#CCDFF5}
+  .tl.w95{width:95%}.tl.w90{width:90%}.tl.w85{width:85%}.tl.w80{width:80%}.tl.w75{width:75%}.tl.w70{width:70%}.tl.w60{width:60%}.tl.w50{width:50%}
+  .tl.ttl{height:7px;width:60%;margin:0 auto 10px}.tl.ttl.en{background:#C0C0C0}.tl.ttl.zh{background:#A3C8F0}
+  .tl.gap{height:8px;background:transparent}
+
+  /* badge */
+  .bdg{font-family:Inter,sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;color:var(--acc);margin-bottom:6px}
+  .stitle{font-family:'Noto Serif SC',serif;font-size:36px;font-weight:900;margin-bottom:4px;color:var(--t)}
+  .ssub{font-size:14px;color:var(--t2);margin-bottom:20px;line-height:1.6}
+
+  /* ════ SLIDE 1 封面 ════ */
+  .s1{background:linear-gradient(170deg,#FAF8F5 0%,#F0EDE8 40%,#E8E4DF 100%)}
+  .s1-in{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:50px 70px}
+  .s1-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(0,113,227,.08);border-radius:50px;padding:8px 20px;margin-bottom:20px;font-size:13px;font-weight:600;color:var(--acc)}
+  .s1-chip .dot{width:6px;height:6px;border-radius:50%;background:var(--grn);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .s1 h1{font-family:'Noto Serif SC',serif;font-size:52px;font-weight:900;line-height:1.25;margin-bottom:14px}.s1 h1 span{color:var(--acc)}
+  .s1-sub{font-size:18px;color:var(--t2);line-height:1.7;margin-bottom:28px;max-width:680px}
+  .s1-tags{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:32px}
+  .s1-tag{padding:8px 18px;border-radius:50px;font-size:13px;font-weight:600}
+  .s1-tag.b{background:rgba(0,113,227,.08);color:var(--acc)}
+  .s1-tag.g{background:rgba(52,199,89,.08);color:#2D8653}
+  .s1-tag.o{background:rgba(255,149,0,.08);color:#C77800}
+  /* 封面模拟窗 */
+  .s1-mk{width:820px;border-radius:14px;overflow:hidden;box-shadow:0 12px 60px rgba(0,0,0,.1)}
+  .s1-mk-body{display:flex;height:380px}
+  .s1-mk-main{flex:1;background:#FAFAFA;display:flex;gap:2px;padding:14px}
+  .s1-mk-page{flex:1;background:#fff;border-radius:4px;padding:18px 14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+
+  /* ════ SLIDE 2 翻译页标注 ════ */
+  .s2-in{flex:1;padding:44px 50px;display:flex;flex-direction:column}
+  .s2-app{flex:1;position:relative}
+  .s2-body{display:flex;height:100%}
+  .s2-main{flex:1;padding:16px;display:flex;flex-direction:column;gap:10px}
+  .s2-drop{border:2px dashed rgba(0,113,227,.3);border-radius:10px;padding:24px;text-align:center;background:rgba(0,113,227,.02)}
+  .s2-drop-ic{font-size:28px;margin-bottom:4px}
+  .s2-drop-t{font-size:13px;font-weight:600;color:var(--t)}
+  .s2-drop-h{font-size:10px;color:var(--t2);margin-top:2px}
+  .s2-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .s2-f{background:#F5F5F7;border-radius:7px;padding:8px 12px;border:1px solid rgba(0,0,0,.05)}
+  .s2-f label{font-size:9px;color:var(--t2);display:block;margin-bottom:2px}
+  .s2-f .v{font-size:11px;font-weight:500;color:var(--t)}
+  .s2-go{background:var(--acc);color:#fff;border-radius:8px;padding:10px;text-align:center;font-size:13px;font-weight:600}
+  .s2-prog{background:#F0F0F2;border-radius:7px;padding:8px 12px}
+  .s2-prog-bar{height:4px;background:#E0E0E0;border-radius:2px;overflow:hidden}.s2-prog-bar .fill{width:72%;height:100%;background:var(--acc);border-radius:2px}
+  .s2-prog-t{font-size:9px;color:var(--t2);margin-top:4px}
+  /* Zotero 提示条 */
+  .zot-hint{background:rgba(0,113,227,.06);border-radius:6px;padding:6px 12px;font-size:10px;color:var(--acc);font-weight:500;display:flex;align-items:center;gap:6px}
+
+  /* ════ SLIDE 3 阅读页标注 ════ */
+  .s3-in{flex:1;padding:44px 50px;display:flex;flex-direction:column}
+  .s3-app{flex:1;position:relative}
+  .s3-body{display:flex;height:100%}
+  .s3-left{width:180px;background:#F5F5F7;border-right:1px solid rgba(0,0,0,.04);display:flex;flex-direction:column}
+  .s3-left-hdr{padding:10px 12px;font-size:11px;font-weight:600;color:var(--t);border-bottom:1px solid rgba(0,0,0,.04);display:flex;justify-content:space-between;align-items:center}
+  .s3-grp{padding:6px 12px;display:flex;gap:4px}
+  .s3-grp-btn{padding:3px 8px;border-radius:4px;font-size:9px;font-weight:500;background:rgba(0,113,227,.1);color:var(--acc)}
+  .s3-grp-btn.dim{background:transparent;color:var(--t2)}
+  .s3-hist{flex:1;overflow:hidden}
+  .s3-hi{padding:8px 12px;border-bottom:1px solid rgba(0,0,0,.03);cursor:default}
+  .s3-hi.ac{background:rgba(0,113,227,.06);border-left:3px solid var(--acc)}
+  .s3-hi-name{font-size:10px;font-weight:600;color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .s3-hi-meta{font-size:8px;color:var(--t2);margin-top:1px}
+  .s3-right{flex:1;display:flex;flex-direction:column}
+  .s3-toolbar{display:flex;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(0,0,0,.04);gap:6px}
+  .s3-tab{padding:5px 12px;border-radius:5px;font-size:10px;color:var(--t2);font-weight:500}
+  .s3-tab.ac{background:#fff;color:var(--t);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .s3-tabs-bg{display:flex;background:#F0F0F0;border-radius:6px;padding:2px}
+  .s3-preview{flex:1;display:flex;gap:2px;background:#E8E8E8;margin:10px;border-radius:4px;overflow:hidden}
+  .s3-page{flex:1;background:#fff;padding:16px 12px}
+  .s3-page-t{font-size:9px;font-weight:600;text-align:center;margin-bottom:10px;color:#333}
+  /* AI 面板 */
+  .s3-ai{width:200px;background:#FAFAFA;border-left:1px solid rgba(0,0,0,.04);padding:10px;display:flex;flex-direction:column}
+  .s3-ai-hdr{font-size:10px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+  .s3-ai-svc{font-size:8px;color:var(--t2)}
+  .s3-qb{display:flex;gap:4px;margin-bottom:8px}
+  .s3-qb-btn{flex:1;padding:4px;border-radius:10px;background:#fff;border:1px solid rgba(0,0,0,.05);font-size:8px;text-align:center;font-weight:500}
+  .s3-ai-chat{flex:1;display:flex;flex-direction:column;gap:6px}
+  .s3-bub{border-radius:8px;padding:6px 8px;font-size:8px;line-height:1.4;max-width:90%}
+  .s3-bub.u{background:var(--acc);color:#fff;margin-left:auto;border-bottom-right-radius:3px}
+  .s3-bub.a{background:#fff;border:1px solid rgba(0,0,0,.04);border-top-left-radius:3px}
+  .s3-ai-inp{display:flex;gap:4px;margin-top:auto}
+  .s3-ai-inp-box{flex:1;background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:8px;padding:5px 8px;font-size:8px;color:var(--t2)}
+  .s3-ai-inp-btn{background:var(--acc);color:#fff;border-radius:8px;padding:5px 10px;font-size:8px;font-weight:600}
+
+  /* ════ SLIDE 4 功能卡 ════ */
+  .s4-in{flex:1;padding:44px 50px;display:flex;flex-direction:column}
+  .s4-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;flex:1;align-content:center}
+  .s4-item{background:var(--card);border-radius:14px;border:1px solid var(--brd);padding:26px 20px;text-align:center}
+  .s4-item .ic{font-size:34px;margin-bottom:10px}
+  .s4-item h3{font-size:15px;font-weight:700;margin-bottom:5px}
+  .s4-item p{font-size:11px;color:var(--t2);line-height:1.5}
+  .s4-item .vs{margin-top:8px;padding:5px 10px;border-radius:5px;background:rgba(255,59,48,.06);font-size:9px;color:var(--red);font-weight:600;display:inline-block}
+
+  /* ════ SLIDE 5 对比 ════ */
+  .s5-in{flex:1;padding:44px 50px;display:flex;flex-direction:column}
+  .s5-tbl{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border-radius:14px;overflow:hidden;border:1px solid var(--brd);margin-bottom:28px}
+  .s5-tbl th{background:#F5F5F7;padding:12px 16px;font-size:12px;font-weight:600;text-align:left;border-bottom:1px solid rgba(0,0,0,.04)}
+  .s5-tbl th:first-child{width:140px}
+  .s5-tbl td{padding:10px 16px;font-size:11px;color:var(--t);border-bottom:1px solid rgba(0,0,0,.03)}
+  .s5-tbl tr:last-child td{border-bottom:none}
+  .s5-tbl .hl{background:rgba(0,113,227,.03)}
+  .s5-tbl .hl td:first-child{font-weight:600;color:var(--acc)}
+  .ck{color:var(--grn);font-weight:700}.cx{color:var(--red)}.pt{color:#FF9500}
+  .s5-bottom{text-align:center;margin-top:auto}
+  .s5-bottom h2{font-size:26px;font-weight:800;margin-bottom:6px}
+  .s5-bottom h2 span{color:var(--acc)}
+  .s5-bottom p{font-size:13px;color:var(--t2)}
+
+  /* ════ SLIDE 6 CTA ════ */
+  .s6{background:linear-gradient(160deg,#FAF8F5,#F0EDE8 50%,#E8E4DF)}
+  .s6-in{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:70px}
+  .s6 h1{font-family:'Noto Serif SC',serif;font-size:42px;font-weight:900;line-height:1.3;margin-bottom:14px}.s6 h1 span{color:var(--acc)}
+  .s6-sub{font-size:17px;color:var(--t2);line-height:1.7;margin-bottom:30px;max-width:580px}
+  .s6-btn{display:inline-flex;align-items:center;gap:10px;background:var(--acc);color:#fff;border-radius:14px;padding:16px 40px;font-size:17px;font-weight:700;box-shadow:0 4px 20px rgba(0,113,227,.25);margin-bottom:28px}
+  .s6-info{font-size:12px;color:var(--t2);line-height:1.8}.s6-info strong{color:var(--t)}
+  .s6-tags{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:20px}
+  .s6-tag{padding:6px 14px;background:rgba(0,113,227,.06);border-radius:50px;font-size:11px;color:var(--acc);font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- ════ SLIDE 1: 封面 ════ -->
+<div class="sl-lb">Slide 1 / 6 — 封面</div>
+<div class="sl s1">
+<div class="s1-in">
+  <div class="s1-chip"><div class="dot"></div>开源免费 · Mac 原生 · 开箱即用</div>
+  <h1>Mac 装机必备<br><span>论文翻译神器</span></h1>
+  <p class="s1-sub">pdf2zh-desktop —— 目前最原生丝滑的免费 Mac 端 PDF 论文翻译软件<br>排版保真 · AI 助手 · Zotero 联动 · 术语库 · 20+ 翻译引擎</p>
+  <div class="s1-tags">
+    <div class="s1-tag b"> Mac 原生体验</div>
+    <div class="s1-tag g"> 完全免费开源</div>
+    <div class="s1-tag o"> Zotero 一键联动</div>
+  </div>
+  <div class="s1-mk mw">
+    <div class="mt"><div class="md dr"></div><div class="md dy"></div><div class="md dg"></div></div>
+    <div class="s1-mk-body">
+      <div class="sb">
+        <div class="slogo"><span style="font-size:15px">📄</span> pdf2zh-desktop</div>
+        <div class="sn"><span>🌐</span> 翻译</div>
+        <div class="sn ac"><span>📖</span> 阅读</div>
+        <div class="sn"><span>🔧</span> 设置</div>
+        <div class="sn"><span>💡</span> 关于</div>
+      </div>
+      <div class="s1-mk-main">
+        <div class="s1-mk-page">
+          <div class="tl ttl en"></div>
+          <div class="tl en w90"></div><div class="tl en w80"></div><div class="tl en w95"></div><div class="tl en w60"></div>
+          <div class="tl gap"></div>
+          <div class="tl en w90"></div><div class="tl en w85"></div><div class="tl en w70"></div><div class="tl en w95"></div>
+          <div class="tl gap"></div>
+          <div class="tl en w80"></div><div class="tl en w90"></div><div class="tl en w75"></div><div class="tl en w85"></div>
+        </div>
+        <div class="s1-mk-page">
+          <div class="tl ttl zh"></div>
+          <div class="tl zh w90"></div><div class="tl zh w80"></div><div class="tl zh w95"></div><div class="tl zh w60"></div>
+          <div class="tl gap"></div>
+          <div class="tl zh w90"></div><div class="tl zh w85"></div><div class="tl zh w70"></div><div class="tl zh w95"></div>
+          <div class="tl gap"></div>
+          <div class="tl zh w80"></div><div class="tl zh w90"></div><div class="tl zh w75"></div><div class="tl zh w85"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="sl-ft">github.com/AaronGIG/pdf2zh-desktop · MIT License</div>
+</div>
+
+<!-- ════ SLIDE 2: 翻译页 + 红线标注 ════ -->
+<div class="sl-lb">Slide 2 / 6 — 翻译界面</div>
+<div class="sl">
+<div class="s2-in">
+  <div style="margin-bottom:14px"><div class="bdg">TRANSLATE</div><div class="stitle">三步完成翻译</div><div class="ssub">拖入 PDF → 选择引擎 → 一键翻译 · Apple Design 原生视觉</div></div>
+  <div class="s2-app mw" style="flex:1">
+    <div class="mt"><div class="md dr"></div><div class="md dy"></div><div class="md dg"></div></div>
+    <div class="s2-body">
+      <div class="sb">
+        <div class="slogo"><span style="font-size:15px">📄</span> pdf2zh</div>
+        <div class="sn ac"><span>🌐</span> 翻译</div>
+        <div class="sn"><span>📖</span> 阅读</div>
+        <div class="sn"><span>🔧</span> 设置</div>
+        <div class="sn"><span>💡</span> 关于</div>
+      </div>
+      <div class="s2-main">
+        <div class="zot-hint">📚 检测到 Zotero 文献 · 译文将自动保存回原位</div>
+        <div class="s2-drop">
+          <div class="s2-drop-ic">📄</div>
+          <div class="s2-drop-t">拖拽 PDF 文件到这里</div>
+          <div class="s2-drop-h">或点击浏览 · 支持批量 · 支持从 Zotero 直接拖入</div>
+        </div>
+        <div class="s2-form">
+          <div class="s2-f"><label>翻译服务</label><div class="v">Google 翻译（免费）</div></div>
+          <div class="s2-f"><label>源语言 → 目标语言</label><div class="v">自动检测 → 中文(简)</div></div>
+          <div class="s2-f"><label>输出格式</label><div class="v">左右并排 (Side by Side)</div></div>
+          <div class="s2-f"><label>线程数</label><div class="v">8（多线程并发）</div></div>
+        </div>
+        <div class="s2-go">🚀 开始翻译</div>
+        <div class="s2-prog">
+          <div class="s2-prog-bar"><div class="fill"></div></div>
+          <div class="s2-prog-t">正在翻译 · 第 18/25 页 · 预计剩余 32 秒 · Google 翻译 · 星光不负赶路人 ✨</div>
+        </div>
+      </div>
+    </div>
+    <!-- 红线标注 -->
+    <div class="a-num" style="top:60px;left:170px">1</div>
+    <div class="a-line h" style="top:69px;left:192px;width:30px"></div>
+
+    <div class="a-num" style="top:110px;right:42px">2</div>
+    <div class="a-line v" style="top:92px;right:51px;height:18px"></div>
+
+    <div class="a-num" style="top:250px;right:42px">3</div>
+    <div class="a-line v" style="top:232px;right:51px;height:18px"></div>
+
+    <div class="a-num" style="top:380px;right:42px">4</div>
+    <div class="a-line v" style="top:362px;right:51px;height:18px"></div>
+
+    <div class="a-num" style="top:490px;right:42px">5</div>
+
+    <div class="a-num" style="top:555px;right:42px">6</div>
+  </div>
+
+  <!-- 底部说明 -->
+  <div class="a-legend">
+    <div class="a-leg-item"><div class="a-leg-num">1</div><div class="a-leg-text">四页导航<br>翻译 · 阅读 · 设置 · 关于</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">2</div><div class="a-leg-text">Zotero 自动检测<br>译文回写原位</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">3</div><div class="a-leg-text">拖拽即翻译<br>支持批量 + 文件夹</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">4</div><div class="a-leg-text">20+ 翻译引擎<br>Google 免费无需 Key</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">5</div><div class="a-leg-text">一键翻译<br>多线程并发加速</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">6</div><div class="a-leg-text">实时进度 + 关怀消息<br>翻译完系统通知</div></div>
+  </div>
+</div>
+<div class="sl-ft">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ════ SLIDE 3: 阅读页 + AI 助手标注 ════ -->
+<div class="sl-lb">Slide 3 / 6 — 阅读界面</div>
+<div class="sl">
+<div class="s3-in">
+  <div style="margin-bottom:14px"><div class="bdg">READER + AI</div><div class="stitle">沉浸阅读 + AI 助手</div><div class="ssub">三种预览模式 · 历史分组 · 高亮批注 · AI 论文问答</div></div>
+  <div class="s3-app mw" style="flex:1">
+    <div class="mt"><div class="md dr"></div><div class="md dy"></div><div class="md dg"></div></div>
+    <div class="s3-body">
+      <!-- 左侧历史 -->
+      <div class="s3-left">
+        <div class="s3-left-hdr">翻译历史 <span style="font-size:9px;color:var(--t2)">缩略图</span></div>
+        <div class="s3-grp">
+          <div class="s3-grp-btn">全部</div>
+          <div class="s3-grp-btn dim">📁 论文</div>
+          <div class="s3-grp-btn dim">＋</div>
+        </div>
+        <div class="s3-hist">
+          <div class="s3-hi ac"><div class="s3-hi-name">✓ Leader-Follower Dynamics in...</div><div class="s3-hi-meta">DeepSeek · 自动→中文 · 04-06</div></div>
+          <div class="s3-hi"><div class="s3-hi-name">✓ Attention Is All You Need</div><div class="s3-hi-meta">Google · 英语→中文 · 04-05</div></div>
+          <div class="s3-hi"><div class="s3-hi-name">✓ BERT: Pre-training of Deep...</div><div class="s3-hi-meta">OpenAI · 英语→中文 · 04-04</div></div>
+          <div class="s3-hi"><div class="s3-hi-name">✓ Generative Adversarial Net...</div><div class="s3-hi-meta">Google · 英语→中文 · 04-03</div></div>
+          <div class="s3-hi"><div class="s3-hi-name">✓ ResNet: Deep Residual Learn...</div><div class="s3-hi-meta">Bing · 英语→中文 · 04-02</div></div>
+        </div>
+        <div style="padding:6px 10px;display:flex;gap:6px;border-top:1px solid rgba(0,0,0,.04)">
+          <span style="font-size:9px;padding:3px 6px;background:#F0F0F2;border-radius:4px">📂 Finder</span>
+          <span style="font-size:9px;padding:3px 6px;background:#F0F0F2;border-radius:4px">📄 源文件</span>
+        </div>
+      </div>
+      <!-- 中间预览 -->
+      <div class="s3-right">
+        <div class="s3-toolbar">
+          <div class="s3-tabs-bg">
+            <div class="s3-tab">Dual</div>
+            <div class="s3-tab">Mono</div>
+            <div class="s3-tab ac">Side by Side</div>
+            <div class="s3-tab">连续</div>
+          </div>
+          <div style="flex:1"></div>
+          <span style="font-size:9px;padding:3px 8px;background:var(--acc);color:#fff;border-radius:4px;font-weight:600">打开</span>
+          <span style="font-size:9px;color:var(--t2)">1 / 12</span>
+        </div>
+        <div class="s3-preview">
+          <div class="s3-page">
+            <div class="s3-page-t">Leader-Follower Dynamics</div>
+            <div class="tl ttl en"></div>
+            <div class="tl en w90"></div><div class="tl en w85"></div><div class="tl en w95"></div><div class="tl en w60"></div>
+            <div class="tl gap"></div>
+            <div class="tl en w95"></div><div class="tl en w80"></div><div class="tl en w90"></div><div class="tl en w70"></div>
+            <div class="tl gap"></div>
+            <div class="tl en w85"></div><div class="tl en w95"></div><div class="tl en w75"></div>
+            <div class="tl gap"></div>
+            <div class="tl en w90"></div><div class="tl en w80"></div><div class="tl en w60"></div>
+          </div>
+          <div class="s3-page">
+            <div class="s3-page-t" style="color:var(--acc)">领导者-追随者动态研究</div>
+            <div class="tl ttl zh"></div>
+            <div class="tl zh w90"></div><div class="tl zh w85"></div><div class="tl zh w95"></div><div class="tl zh w60"></div>
+            <div class="tl gap"></div>
+            <div class="tl zh w95"></div><div class="tl zh w80"></div><div class="tl zh w90"></div><div class="tl zh w70"></div>
+            <div class="tl gap"></div>
+            <div class="tl zh w85"></div><div class="tl zh w95"></div><div class="tl zh w75"></div>
+            <div class="tl gap"></div>
+            <div class="tl zh w90"></div><div class="tl zh w80"></div><div class="tl zh w60"></div>
+          </div>
+        </div>
+      </div>
+      <!-- AI 面板 -->
+      <div class="s3-ai">
+        <div class="s3-ai-hdr">AI 助手 <span class="s3-ai-svc">via DeepSeek</span></div>
+        <div class="s3-qb">
+          <div class="s3-qb-btn">📝 摘要</div>
+          <div class="s3-qb-btn">📖 讲解</div>
+          <div class="s3-qb-btn">❓ 提问</div>
+        </div>
+        <div class="s3-ai-chat">
+          <div class="s3-bub u">帮我分析核心方法</div>
+          <div class="s3-bub a"><strong>核心方法</strong><br>本文提出了一种基于博弈论的领导者-追随者模型…<br><br><strong>创新点</strong><br>与传统方法相比，引入了动态均衡…</div>
+        </div>
+        <div class="s3-ai-inp">
+          <div class="s3-ai-inp-box">输入问题…</div>
+          <div class="s3-ai-inp-btn">发送</div>
+        </div>
+      </div>
+    </div>
+    <!-- 红线标注 -->
+    <div class="a-num" style="top:70px;left:6px">1</div>
+    <div class="a-num" style="top:130px;left:6px">2</div>
+    <div class="a-num" style="top:260px;left:6px">3</div>
+    <div class="a-num" style="top:62px;left:400px">4</div>
+    <div class="a-num" style="top:200px;left:380px">5</div>
+    <div class="a-num" style="right:6px;top:62px">6</div>
+    <div class="a-num" style="right:6px;top:140px">7</div>
+    <div class="a-num" style="right:6px;top:340px">8</div>
+  </div>
+  <div class="a-legend">
+    <div class="a-leg-item"><div class="a-leg-num">1</div><div class="a-leg-text">翻译历史<br>双击直接阅读</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">2</div><div class="a-leg-text">分组管理<br>右键重命名/删除</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">3</div><div class="a-leg-text">历史详情<br>Finder/源文件快捷入口</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">4</div><div class="a-leg-text">四种预览模式<br>Dual · Mono · Side · 连续</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">5</div><div class="a-leg-text">左右对照预览<br>原文 vs 译文</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">6</div><div class="a-leg-text">AI 助手<br>8 种 Prompt 一键分析</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">7</div><div class="a-leg-text">快捷操作栏<br>摘要/讲解/提问</div></div>
+    <div class="a-leg-item"><div class="a-leg-num">8</div><div class="a-leg-text">论文问答<br>流式回答 · Markdown</div></div>
+  </div>
+</div>
+<div class="sl-ft">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ════ SLIDE 4: Zotero + AI 详解 ════ -->
+<div class="sl-lb">Slide 4 / 6 — Zotero & AI</div>
+<div class="sl">
+<div class="s4-in">
+  <div style="margin-bottom:16px"><div class="bdg">SMART</div><div class="stitle">Zotero 联动 + AI 助手</div><div class="ssub">学术工作流的最后一块拼图</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex:1;align-content:start">
+    <!-- Zotero -->
+    <div style="background:var(--card);border-radius:14px;border:1px solid var(--brd);padding:28px">
+      <div style="font-size:32px;margin-bottom:12px">📚</div>
+      <h3 style="font-size:18px;font-weight:700;margin-bottom:6px">Zotero 深度联动</h3>
+      <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:18px">从 Zotero 拖论文 → 翻译 → 译文自动放回原位<br>一键安装连接插件，完全无感集成</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px;background:#F5F5F7;border-radius:10px;padding:14px 16px">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--acc);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">1</div>
+          <div><div style="font-size:12px;font-weight:600">从 Zotero 拖论文到 pdf2zh</div><div style="font-size:10px;color:var(--t2);margin-top:1px">自动检测来源 · 显示蓝色提示条</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;background:#F5F5F7;border-radius:10px;padding:14px 16px">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--acc);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">2</div>
+          <div><div style="font-size:12px;font-weight:600">选引擎 → 一键翻译</div><div style="font-size:10px;color:var(--t2);margin-top:1px">Dual / Mono / Side by Side 三种格式</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;background:#F5F5F7;border-radius:10px;padding:14px 16px">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--acc);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">3</div>
+          <div><div style="font-size:12px;font-weight:600">译文自动保存回 Zotero</div><div style="font-size:10px;color:var(--t2);margin-top:1px">通过 pdf2zh Connector 插件关联附件</div></div>
+        </div>
+        <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(52,199,89,.08);border-radius:50px;padding:6px 14px;font-size:10px;color:#2D8653;font-weight:600;margin-top:4px">
+          <span>✓</span> 一键安装 · 开源免费 · 设置页配置
+        </div>
+      </div>
+    </div>
+    <!-- AI -->
+    <div style="background:var(--card);border-radius:14px;border:1px solid var(--brd);padding:28px">
+      <div style="font-size:32px;margin-bottom:12px">🤖</div>
+      <h3 style="font-size:18px;font-weight:700;margin-bottom:6px">AI 论文助手</h3>
+      <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:18px">8 种预设 Prompt 一键分析 · 自定义提示词<br>支持导入 .txt / .json · 边读边问</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:#F5F5F7;border-radius:8px;padding:10px 12px;text-align:center"><div style="font-size:18px;margin-bottom:4px">📝</div><div style="font-size:11px;font-weight:600">结构化摘要</div><div style="font-size:9px;color:var(--t2);margin-top:2px">内置引擎自动分析</div></div>
+        <div style="background:#F5F5F7;border-radius:8px;padding:10px 12px;text-align:center"><div style="font-size:18px;margin-bottom:4px">📖</div><div style="font-size:11px;font-weight:600">通俗讲解</div><div style="font-size:9px;color:var(--t2);margin-top:2px">5 个结构化章节</div></div>
+        <div style="background:#F5F5F7;border-radius:8px;padding:10px 12px;text-align:center"><div style="font-size:18px;margin-bottom:4px">🔍</div><div style="font-size:11px;font-weight:600">批判分析</div><div style="font-size:9px;color:var(--t2);margin-top:2px">审稿人视角评价</div></div>
+        <div style="background:#F5F5F7;border-radius:8px;padding:10px 12px;text-align:center"><div style="font-size:18px;margin-bottom:4px">🧪</div><div style="font-size:11px;font-weight:600">方法详解</div><div style="font-size:9px;color:var(--t2);margin-top:2px">技术流程+创新点</div></div>
+        <div style="background:#F5F5F7;border-radius:8px;padding:10px 12px;text-align:center"><div style="font-size:18px;margin-bottom:4px">📚</div><div style="font-size:11px;font-weight:600">术语表</div><div style="font-size:9px;color:var(--t2);margin-top:2px">关键术语+定义</div></div>
+        <div style="background:#F5F5F7;border-radius:8px;padding:10px 12px;text-align:center"><div style="font-size:18px;margin-bottom:4px">💡</div><div style="font-size:11px;font-weight:600">应用场景</div><div style="font-size:9px;color:var(--t2);margin-top:2px">落地+商业价值</div></div>
+      </div>
+      <div style="margin-top:12px;background:rgba(0,113,227,.04);border-radius:8px;padding:10px 14px;font-size:10px;color:var(--acc);text-align:center;font-weight:500">
+        ⚙ 可自定义 Prompt · 支持导入文件 · 勾选 3 个显示在快捷栏
+      </div>
+    </div>
+  </div>
+  <!-- 底部术语库 -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:20px">
+    <div style="background:var(--card);border-radius:10px;border:1px solid var(--brd);padding:14px;text-align:center">
+      <div style="font-size:11px;font-weight:600;margin-bottom:2px">📚 学术通用</div><div style="font-size:9px;color:var(--t2)">16 术语</div>
+    </div>
+    <div style="background:var(--card);border-radius:10px;border:1px solid var(--brd);padding:14px;text-align:center">
+      <div style="font-size:11px;font-weight:600;margin-bottom:2px">💻 计算机</div><div style="font-size:9px;color:var(--t2)">12 术语</div>
+    </div>
+    <div style="background:var(--card);border-radius:10px;border:1px solid var(--brd);padding:14px;text-align:center">
+      <div style="font-size:11px;font-weight:600;margin-bottom:2px">💰 金融经济</div><div style="font-size:9px;color:var(--t2)">11 术语</div>
+    </div>
+    <div style="background:var(--card);border-radius:10px;border:1px solid var(--brd);padding:14px;text-align:center">
+      <div style="font-size:11px;font-weight:600;margin-bottom:2px">🧬 医学生物</div><div style="font-size:9px;color:var(--t2)">11 术语</div>
+    </div>
+    <div style="background:var(--card);border-radius:10px;border:1px solid var(--brd);padding:14px;text-align:center">
+      <div style="font-size:11px;font-weight:600;margin-bottom:2px">✏️ 自定义</div><div style="font-size:9px;color:var(--t2)">CSV/JSON 导入</div>
+    </div>
+  </div>
+</div>
+<div class="sl-ft">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ════ SLIDE 5: 竞品对比 ════ -->
+<div class="sl-lb">Slide 5 / 6 — 对比</div>
+<div class="sl">
+<div class="s5-in">
+  <div style="margin-bottom:16px"><div class="bdg">COMPARISON</div><div class="stitle">为什么选 pdf2zh</div><div class="ssub">和同类产品的真实对比 · 全面碾压</div></div>
+  <table class="s5-tbl">
+    <tr><th>功能</th><th>pdf2zh-desktop</th><th>知云翻译</th><th>沉浸式翻译</th><th>某 AI 翻译</th></tr>
+    <tr class="hl"><td>价格</td><td><span class="ck">完全免费 + 开源</span></td><td>免费（有广告）</td><td>$9.99/月</td><td>按量付费</td></tr>
+    <tr class="hl"><td>排版保真</td><td><span class="ck">✓ 100%</span></td><td><span class="pt">部分</span></td><td><span class="cx">✗ 纯文本</span></td><td><span class="pt">部分</span></td></tr>
+    <tr class="hl"><td>Mac 原生</td><td><span class="ck">✓ Apple Design</span></td><td><span class="cx">✗ 仅 Win</span></td><td><span class="pt">浏览器插件</span></td><td><span class="pt">Web</span></td></tr>
+    <tr class="hl"><td>Zotero 联动</td><td><span class="ck">✓ 拖入→回写</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td></tr>
+    <tr class="hl"><td>AI 助手</td><td><span class="ck">✓ 8 种 Prompt</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td><td><span class="pt">基础</span></td></tr>
+    <tr class="hl"><td>术语库</td><td><span class="ck">✓ 5 套预设</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td></tr>
+    <tr class="hl"><td>翻译引擎</td><td><span class="ck">20+</span></td><td>3</td><td>10+</td><td>1</td></tr>
+    <tr class="hl"><td>批量翻译</td><td><span class="ck">✓</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td><td><span class="pt">有限</span></td></tr>
+    <tr class="hl"><td>离线可用</td><td><span class="ck">✓ Ollama</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td><td><span class="cx">✗</span></td></tr>
+  </table>
+  <div class="s5-bottom">
+    <h2>开源、免费、功能全面<span>，还要什么自行车？</span></h2>
+    <p>基于 PDFMathTranslate (EMNLP 2025) 学术论文翻译引擎</p>
+  </div>
+</div>
+<div class="sl-ft">github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+<!-- ════ SLIDE 6: CTA ════ -->
+<div class="sl-lb">Slide 6 / 6 — 下载</div>
+<div class="sl s6">
+<div class="s6-in">
+  <div style="font-size:52px;margin-bottom:24px">📄</div>
+  <h1>用最好的工具<br><span>读最好的论文</span></h1>
+  <p class="s6-sub">pdf2zh-desktop —— Mac 端最丝滑的论文翻译工具<br>完全免费 · 完全开源 · 开箱即用</p>
+  <div class="s6-btn"> 下载 pdf2zh-desktop</div>
+  <div class="s6-info">
+    <strong>GitHub:</strong> github.com/AaronGIG/pdf2zh-desktop<br>
+    <strong>适用:</strong> macOS 13.0+ · Apple Silicon & Intel · 约 700MB<br>
+    <strong>协议:</strong> MIT License · 永久免费
+  </div>
+  <div class="s6-tags">
+    <div class="s6-tag">#Mac装机必备</div>
+    <div class="s6-tag">#论文翻译</div>
+    <div class="s6-tag">#Zotero</div>
+    <div class="s6-tag">#AI助手</div>
+    <div class="s6-tag">#学术工具</div>
+    <div class="s6-tag">#开源免费</div>
+    <div class="s6-tag">#研究生必备</div>
+  </div>
+</div>
+<div class="sl-ft">pdf2zh-desktop v2.2.0 · github.com/AaronGIG/pdf2zh-desktop</div>
+</div>
+
+</body>
+</html>
