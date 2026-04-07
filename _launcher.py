@@ -148,12 +148,12 @@ def main():
         # 补偿公式：dpr>1 时缩小基准字号，使各屏幕物理显示大小接近。
         import builtins
         builtins._pdf2zh_dpr = dpr
-        builtins._pdf2zh_dpr_scale = 1.0 / max(1.0, dpr ** 0.45)  # 温和补偿
+        builtins._pdf2zh_dpr_scale = 1.0 / max(1.0, dpr ** 0.6)  # 高分屏更强补偿
 
         def build_stylesheet(base_font=14):
             """根据基准字号生成完整样式表（所有尺寸等比联动，DPR 自动补偿）"""
             dpr_scale = getattr(builtins, '_pdf2zh_dpr_scale', 1.0)
-            f = max(10, round(base_font * dpr_scale))  # DPR 补偿后的实际字号
+            f = max(8, round(base_font * dpr_scale))  # DPR 补偿后的实际字号（下限 8px）
             f1 = f + 1             # GroupBox 标题
             fs = f - 1             # 辅助文字
             ft = f + 2             # Tooltip
@@ -182,7 +182,8 @@ def main():
             QLineEdit:focus {{ border-color: #4169E1; }}
             QSpinBox {{ border: {bw}px solid #d0d5dd; border-radius: {r}px; padding: {pad_v-1}px {sp}px; background: white; }}
             QCheckBox {{ spacing: {sp}px; }}
-            QCheckBox::indicator {{ width: {ind}px; height: {ind}px; border: {bw}px solid #bbb; border-radius: {r}px; background: white; }}
+            QCheckBox::indicator {{ width: {ind}px; height: {ind}px; border: {bw}px solid #c8cdd4; border-radius: {max(2, r // 2)}px; background: white; }}
+            QCheckBox::indicator:hover {{ border-color: #4169E1; }}
             QCheckBox::indicator:checked {{ background: #4169E1; border-color: #4169E1; }}
             QListWidget {{ border: {bw}px solid #e0e4ea; border-radius: {r}px; background: white; }}
             QListWidget::item {{ padding: {pad_v-1}px {sp}px; }}
@@ -202,22 +203,26 @@ def main():
             QToolTip {{ background: #FFFDF0; color: #333; border: {bw}px solid #D4C89A;
                 border-radius: {r2+2}px; padding: {pad_h}px {pad_h+4}px;
                 font-family: "Microsoft YaHei"; font-size: {ft}px; }}
+            QPushButton#translateBtn {{ background: #165DFF; color: white; font-size: {f}px;
+                padding: {pad_v}px {pad_h}px; border-radius: {r}px; border: none; }}
+            QPushButton#translateBtn:hover {{ background: #0E42D2; }}
+            QPushButton#translateBtn:disabled {{ background: #ccc; color: #888; }}
             """
 
         # 存为全局函数供字号切换时调用
         import builtins
         builtins._pdf2zh_build_stylesheet = build_stylesheet
 
-        # 从用户配置读取上次字号，默认小(12)
-        _saved_font = 12
+        # 从用户配置读取上次字号，默认极小(10)
+        _saved_font = 10
         try:
             import json as _json
             _cfg_path = os.path.join(os.path.expanduser("~"), "pdf2zh_gui_config.json")
             if os.path.exists(_cfg_path):
                 with open(_cfg_path, 'r', encoding='utf-8') as _f:
                     _cfg = _json.load(_f)
-                _level = _cfg.get('font_size_level', '小')
-                _saved_font = {'极小': 10, '小': 12, '中': 14, '大': 16, '极大': 18}.get(_level, 12)
+                _level = _cfg.get('font_size_level', '极小')
+                _saved_font = {'极小': 10, '小': 12, '中': 14, '大': 16, '极大': 18}.get(_level, 10)
         except Exception:
             pass
         log(f"初始字号: {_saved_font}px")
