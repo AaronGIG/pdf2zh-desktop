@@ -141,14 +141,19 @@ def main():
 
         # ── DPI 感知样式表生成 ──
         dpr = app.primaryScreen().devicePixelRatio()
-        # 逻辑像素缩放因子：1080p=1.0, 2K≈1.33, 4K=2.0
-        # Qt AA_EnableHighDpiScaling 已处理物理→逻辑映射，
-        # 但部分 Windows 系统 DPI 缩放不完美，需兜底
         log(f"DPI ratio: {dpr}")
 
+        # DPR 补偿系数：高分屏上 Qt 会把逻辑像素放大到物理像素，
+        # 导致同样 12px 在 4K@200% 屏显示为 24px 物理，视觉偏大。
+        # 补偿公式：dpr>1 时缩小基准字号，使各屏幕物理显示大小接近。
+        import builtins
+        builtins._pdf2zh_dpr = dpr
+        builtins._pdf2zh_dpr_scale = 1.0 / max(1.0, dpr ** 0.45)  # 温和补偿
+
         def build_stylesheet(base_font=14):
-            """根据基准字号生成完整样式表（所有尺寸等比联动）"""
-            f = base_font          # 正文
+            """根据基准字号生成完整样式表（所有尺寸等比联动，DPR 自动补偿）"""
+            dpr_scale = getattr(builtins, '_pdf2zh_dpr_scale', 1.0)
+            f = max(10, round(base_font * dpr_scale))  # DPR 补偿后的实际字号
             f1 = f + 1             # GroupBox 标题
             fs = f - 1             # 辅助文字
             ft = f + 2             # Tooltip
@@ -212,7 +217,7 @@ def main():
                 with open(_cfg_path, 'r', encoding='utf-8') as _f:
                     _cfg = _json.load(_f)
                 _level = _cfg.get('font_size_level', '小')
-                _saved_font = {'小': 12, '中': 14, '大': 16}.get(_level, 12)
+                _saved_font = {'极小': 10, '小': 12, '中': 14, '大': 16, '极大': 18}.get(_level, 12)
         except Exception:
             pass
         log(f"初始字号: {_saved_font}px")
