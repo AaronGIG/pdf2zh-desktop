@@ -139,6 +139,22 @@ def main():
         app = QApplication(sys.argv)
         app.setStyle('Fusion')
 
+        # ── 单实例检测：防止重复启动多个窗口 ──
+        from PyQt5.QtNetwork import QLocalServer, QLocalSocket
+        _instance_key = "pdf2zh-desktop-singleton-lock"
+        _socket = QLocalSocket()
+        _socket.connectToServer(_instance_key)
+        if _socket.waitForConnected(500):
+            # 已有实例在运行，退出
+            log("检测到已有实例运行，退出")
+            _socket.close()
+            sys.exit(0)
+        _socket.close()
+        _server = QLocalServer()
+        _server.removeServer(_instance_key)
+        _server.listen(_instance_key)
+        log("单实例锁已创建")
+
         # ── DPI 感知样式表生成 ──
         dpr = app.primaryScreen().devicePixelRatio()
         log(f"DPI ratio: {dpr}")
