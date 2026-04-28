@@ -29,6 +29,8 @@
   <a href="README_EN.md">English</a>
 </p>
 
+<sub>💬 用户交流群（QQ）：<b>1094195179</b>（pdf2zh桌面版交流群）</sub>
+
 > 基于 [PDFMathTranslate](https://github.com/Byaidu/PDFMathTranslate)（EMNLP 2025）打造，在原项目基础上大幅增强桌面体验。
 
 让学术 PDF 翻译变得像复制粘贴一样简单——公式、图表、排版全部完美保留 ✨
