@@ -75,7 +75,7 @@ function startup() {
             return [200, 'application/json', JSON.stringify({
                 status: 'ok',
                 plugin: 'pdf2zh-connector',
-                version: '1.0.4'
+                version: '1.0.5'
             })];
         }
     };

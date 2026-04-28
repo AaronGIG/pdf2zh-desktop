@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
     "name": "pdf2zh Connector",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "Enables pdf2zh-desktop to add translated PDFs as Zotero attachments.",
     "author": "AaronGIG",
     "applications": {
@@ -9,7 +9,7 @@
             "id": "pdf2zh-connector@aarongig.com",
             "update_url": "https://raw.githubusercontent.com/Byaidu/PDFMathTranslate/main/updates.json",
             "strict_min_version": "6.999",
-            "strict_max_version": "8.0.*"
+            "strict_max_version": "9.0.*"
         }
     }
 }
