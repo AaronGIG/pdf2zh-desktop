@@ -602,6 +602,36 @@
         <div class="top"><h5>API Key 安全吗？</h5></div>
         <p class="desc">本地存 base64 + 文件权限 600，不上传服务器。如果担心源码可在 GitHub 仓库审计 <code>config_manager.py</code>。</p>
       </div>
+
+      <div class="card">
+        <div class="top"><h5>翻译完跟原文一模一样，看不到中文？</h5></div>
+        <p class="desc"><b>多半是扫描件</b>。在原 PDF 里用鼠标拖选 — 选不中字、只拖出虚线框 = 没有文字层。先在 Acrobat / <code>ocrmypdf</code> 加文字层再翻：<code>brew install ocrmypdf && ocrmypdf in.pdf out.pdf -l eng</code>。</p>
+      </div>
+
+      <div class="card">
+        <div class="top"><h5>WPS / 旧 Word 导出的 PDF 翻不动？</h5></div>
+        <p class="desc">这类 PDF 字体编码不规范（字体名 Generic0/1 之类，<code>cid:</code> 解码失败），引擎会把整段误判成公式跳过。<b>解法</b>：用 Adobe Acrobat 打开 → 文件 → 另存为 PDF（会重嵌字体表）→ 再翻。或先转 Word 再用 Word 重导。</p>
+      </div>
+
+      <div class="card">
+        <div class="top"><h5>报错 <code>urlopen error [Errno 8]</code>？</h5></div>
+        <p class="desc">网络层 DNS 解析失败，跟 PDF 无关。检查 3 件事：① 设置里 base_url 是否完整（<code>https://...</code> 开头、不要多 <code>/v1</code>）；② 浏览器能否访问对应 API 域名；③ 关掉 VPN / 系统代理再试。校园网 / 公司网经常拦 LLM API。</p>
+      </div>
+
+      <div class="card">
+        <div class="top"><h5>报错 <code>KeyError: 'Length1'</code>？</h5></div>
+        <p class="desc">PDF 嵌入了不规范的 Type1 字体（少了 Length1 必填字段），常见于 WPS、旧 Office、某些在线 PDF 工具导出。<b>绕过</b>：Adobe Acrobat / Chrome「打印 → 另存为 PDF」重新导出一份，字体表会被补齐。</p>
+      </div>
+
+      <div class="card">
+        <div class="top"><h5>勾了「OCR 识别」还是没翻出来？</h5></div>
+        <p class="desc">当前 macOS 版为保持轻量，<b>未内置 OCR 引擎</b>。勾选框暂时是占位，扫描件请先用上面提到的 <code>ocrmypdf</code> 或 Acrobat 加文字层。后续版本会按反馈决定是否补回 OCR（约 +15MB）。</p>
+      </div>
+
+      <div class="card">
+        <div class="top"><h5>怎么先判断 PDF 是不是扫描件？</h5></div>
+        <p class="desc">最快办法：macOS 预览打开 PDF，用鼠标拖选文字。<b>能选中</b>（光标变 I 型、能复制）= 有文字层，直接翻；<b>选不中</b>（只能拉虚线框）= 扫描件，需要先 OCR。</p>
+      </div>
     </div>
   </section>
 
