@@ -656,23 +656,26 @@
   document.querySelectorAll('section.tutorial').forEach(s=>obs.observe(s));
 </script>
 
-<!-- ============ AI 客服 chat widget ============ -->
+<!-- ============ AI 客服 · 小黑猫 ============ -->
 <div id="chat-widget" data-open="false">
-  <button id="chat-toggle" type="button" aria-label="打开 AI 客服">
-    <span class="ic-open">💬</span>
-    <span class="ic-close">✕</span>
-    <span class="lb-open">问我</span>
-    <span class="lb-close">收起</span>
+  <button id="chat-toggle" type="button" aria-label="打开小黑猫客服">
+    <img src="assets/neko-black.png" alt="小黑猫" class="neko-avatar">
+    <span class="bubble">问我</span>
+    <span class="close-x">✕</span>
   </button>
-  <div id="chat-panel" hidden role="dialog" aria-label="pdf2zh AI 客服">
+  <div id="chat-panel" hidden role="dialog" aria-label="pdf2zh 小黑猫客服">
     <div class="chat-head">
-      <div><b>AI 客服</b><span class="sub">用文档秒答你的问题</span></div>
-      <button id="chat-close" type="button" aria-label="关闭聊天">
+      <img src="assets/neko-black.png" alt="" class="head-avatar">
+      <div class="head-info">
+        <b>小黑猫</b>
+        <span class="sub">喵~ 帮你查文档</span>
+      </div>
+      <button id="chat-close" type="button" aria-label="收起">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
       </button>
     </div>
     <div id="chat-msgs">
-      <div class="msg ai">你好！我是 pdf2zh 的客服助手 ☺<br>有任何使用问题直接问我，比如：<br>「OCR 怎么用？」「Zotero 怎么连？」「翻译卡 0% 怎么办？」</div>
+      <div class="msg ai">喵~ 我是 pdf2zh 的小黑猫客服 🐾<br>有任何使用问题直接问我，比如：<br>「OCR 怎么用？」「Zotero 怎么连？」「翻译卡 0% 怎么办？」</div>
     </div>
     <form id="chat-form">
       <textarea id="chat-input" rows="2" placeholder="问任何 pdf2zh 使用问题…（Esc 收起）" maxlength="500"></textarea>
@@ -681,31 +684,38 @@
   </div>
 </div>
 <style>
-#chat-widget{position:fixed;bottom:28px;right:28px;z-index:9999;font:14px/1.5 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
-#chat-toggle{background:linear-gradient(135deg,#0a84ff 0%,#bf5af2 100%);color:#fff;border:none;border-radius:999px;padding:13px 22px 13px 18px;box-shadow:0 8px 26px rgba(10,132,255,0.32),0 2px 6px rgba(0,0,0,0.08);cursor:pointer;font-size:14px;font-weight:600;letter-spacing:0.2px;display:inline-flex;align-items:center;gap:8px;transition:transform 0.15s, box-shadow 0.15s, background 0.2s}
-#chat-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(10,132,255,0.4),0 2px 6px rgba(0,0,0,0.08)}
-#chat-toggle .ic-open,#chat-toggle .ic-close{font-size:16px;line-height:1}
-#chat-toggle .ic-close,#chat-toggle .lb-close{display:none}
-#chat-widget[data-open="true"] #chat-toggle{background:#1a1a1f}
-#chat-widget[data-open="true"] #chat-toggle .ic-open,#chat-widget[data-open="true"] #chat-toggle .lb-open{display:none}
-#chat-widget[data-open="true"] #chat-toggle .ic-close,#chat-widget[data-open="true"] #chat-toggle .lb-close{display:inline}
-#chat-panel{position:absolute;bottom:64px;right:0;width:380px;height:520px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 32px 80px rgba(0,0,0,0.22);display:flex;flex-direction:column;overflow:hidden;animation:slideUp 0.22s ease}
+#chat-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font:14px/1.5 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
+#chat-toggle{position:relative;background:#fff;border:1.5px solid #232323;border-radius:999px;padding:6px 18px 6px 6px;box-shadow:0 6px 22px rgba(0,0,0,0.16),0 2px 6px rgba(0,0,0,0.06);cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform 0.15s, box-shadow 0.15s}
+#chat-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,0,0,0.22),0 2px 6px rgba(0,0,0,0.06)}
+#chat-toggle:hover .neko-avatar{animation:wiggle 0.6s ease-in-out infinite}
+@keyframes wiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}
+.neko-avatar{width:42px;height:42px;border-radius:50%;display:block;object-fit:cover;background:#fff;border:1.5px solid #f0f0f3;transition:transform 0.2s}
+#chat-toggle .bubble{font-size:14px;font-weight:600;color:#232323;letter-spacing:0.3px}
+#chat-toggle .close-x{display:none;font-size:18px;color:#232323;font-weight:600;width:24px;text-align:center}
+#chat-widget[data-open="true"] #chat-toggle{padding:6px 14px 6px 6px}
+#chat-widget[data-open="true"] #chat-toggle .bubble{display:none}
+#chat-widget[data-open="true"] #chat-toggle .close-x{display:inline-block}
+#chat-panel{position:absolute;bottom:64px;right:0;width:380px;height:520px;background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 32px 80px rgba(0,0,0,0.24);display:flex;flex-direction:column;overflow:hidden;animation:slideUp 0.22s ease}
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.chat-head{padding:14px 18px;background:linear-gradient(135deg,#0a84ff 0%,#bf5af2 100%);color:#fff;display:flex;justify-content:space-between;align-items:center}
-.chat-head .sub{display:block;font-size:11.5px;opacity:0.85;margin-top:1px;font-weight:400}
-.chat-head button{background:rgba(255,255,255,0.12);color:#fff;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background 0.15s, transform 0.15s}
-.chat-head button:hover{background:rgba(255,255,255,0.28);transform:rotate(90deg)}
+.chat-head{padding:14px 16px;background:linear-gradient(135deg,#1a1a1f 0%,#2a2a30 100%);color:#fff;display:flex;align-items:center;gap:12px}
+.head-avatar{width:38px;height:38px;border-radius:50%;background:#fff;object-fit:cover;border:1.5px solid #B4D232;flex-shrink:0}
+.head-info{flex:1;min-width:0}
+.head-info b{display:block;font-size:14.5px;font-weight:600;letter-spacing:0.2px}
+.head-info .sub{display:block;font-size:11.5px;color:#B4D232;margin-top:1px;font-weight:400}
+.chat-head button{background:rgba(255,255,255,0.08);color:#fff;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background 0.15s, transform 0.15s;flex-shrink:0}
+.chat-head button:hover{background:rgba(180,210,50,0.25);transform:rotate(90deg)}
 .chat-head button svg{display:block}
 #chat-msgs{flex:1;padding:16px;overflow-y:auto;background:#fafafa;display:flex;flex-direction:column;gap:10px}
 #chat-msgs .msg{max-width:88%;padding:10px 14px;border-radius:14px;word-wrap:break-word;line-height:1.6;font-size:13.5px;white-space:pre-wrap}
-#chat-msgs .msg.user{background:#0a84ff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+#chat-msgs .msg.user{background:#232323;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
 #chat-msgs .msg.ai{background:#fff;border:1px solid #ebebef;color:var(--ink);align-self:flex-start;border-bottom-left-radius:4px}
 #chat-msgs .msg.ai code{background:#f0f0f3;padding:1px 5px;border-radius:4px;font-size:12.5px;font-family:SF Mono,Menlo,monospace}
-#chat-msgs .msg.err{background:#fff0ee;border-color:#ffd5cf;color:#a8261c}
+#chat-msgs .msg.err{background:#fff0ee;border:1px solid #ffd5cf;color:#a8261c}
 #chat-form{padding:12px;border-top:1px solid var(--line);display:flex;gap:8px;background:#fff}
 #chat-input{flex:1;padding:9px 12px;border:1px solid #d8d8de;border-radius:10px;font:inherit;font-size:13.5px;resize:none;outline:none;background:#fafafa}
-#chat-input:focus{border-color:#0a84ff;background:#fff}
-#chat-send{background:#0a84ff;color:#fff;border:none;border-radius:10px;padding:0 18px;font:inherit;font-weight:600;cursor:pointer;font-size:13.5px}
+#chat-input:focus{border-color:#232323;background:#fff}
+#chat-send{background:#232323;color:#fff;border:none;border-radius:10px;padding:0 18px;font:inherit;font-weight:600;cursor:pointer;font-size:13.5px;transition:background 0.15s}
+#chat-send:hover:not(:disabled){background:#0a0a0a}
 #chat-send:disabled{opacity:0.5;cursor:not-allowed}
 @media (max-width:520px){
   #chat-widget{bottom:18px;right:14px}
