@@ -655,5 +655,155 @@
   },{rootMargin:'-30% 0px -60% 0px'});
   document.querySelectorAll('section.tutorial').forEach(s=>obs.observe(s));
 </script>
+
+<!-- ============ AI 客服 chat widget ============ -->
+<div id="chat-widget">
+  <button id="chat-toggle" type="button" aria-label="问 AI 客服">
+    <span class="ic">💬</span><span class="lb">问我</span>
+  </button>
+  <div id="chat-panel" hidden role="dialog" aria-label="pdf2zh AI 客服">
+    <div class="chat-head">
+      <div><b>AI 客服</b><span class="sub">用文档秒答你的问题</span></div>
+      <button id="chat-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <div id="chat-msgs">
+      <div class="msg ai">你好！我是 pdf2zh 的客服助手 ☺<br>有任何使用问题直接问我，比如：<br>「OCR 怎么用？」「Zotero 怎么连？」「翻译卡 0% 怎么办？」</div>
+    </div>
+    <form id="chat-form">
+      <textarea id="chat-input" rows="2" placeholder="问任何 pdf2zh 使用问题…" maxlength="500"></textarea>
+      <button type="submit" id="chat-send">发送</button>
+    </form>
+  </div>
+</div>
+<style>
+#chat-widget{position:fixed;bottom:28px;right:28px;z-index:9999;font:14px/1.5 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
+#chat-toggle{background:linear-gradient(135deg,#0a84ff 0%,#bf5af2 100%);color:#fff;border:none;border-radius:999px;padding:13px 22px 13px 18px;box-shadow:0 8px 26px rgba(10,132,255,0.32),0 2px 6px rgba(0,0,0,0.08);cursor:pointer;font-size:14px;font-weight:600;letter-spacing:0.2px;display:inline-flex;align-items:center;gap:8px;transition:transform 0.15s, box-shadow 0.15s}
+#chat-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(10,132,255,0.4),0 2px 6px rgba(0,0,0,0.08)}
+#chat-toggle .ic{font-size:16px;line-height:1}
+#chat-panel{position:absolute;bottom:64px;right:0;width:380px;height:520px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 32px 80px rgba(0,0,0,0.22);display:flex;flex-direction:column;overflow:hidden;animation:slideUp 0.22s ease}
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.chat-head{padding:14px 18px;background:linear-gradient(135deg,#0a84ff 0%,#bf5af2 100%);color:#fff;display:flex;justify-content:space-between;align-items:center}
+.chat-head .sub{display:block;font-size:11.5px;opacity:0.85;margin-top:1px;font-weight:400}
+.chat-head button{background:transparent;color:#fff;border:none;font-size:22px;cursor:pointer;padding:0;line-height:1;opacity:0.85}
+.chat-head button:hover{opacity:1}
+#chat-msgs{flex:1;padding:16px;overflow-y:auto;background:#fafafa;display:flex;flex-direction:column;gap:10px}
+#chat-msgs .msg{max-width:88%;padding:10px 14px;border-radius:14px;word-wrap:break-word;line-height:1.6;font-size:13.5px;white-space:pre-wrap}
+#chat-msgs .msg.user{background:#0a84ff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+#chat-msgs .msg.ai{background:#fff;border:1px solid #ebebef;color:var(--ink);align-self:flex-start;border-bottom-left-radius:4px}
+#chat-msgs .msg.ai code{background:#f0f0f3;padding:1px 5px;border-radius:4px;font-size:12.5px;font-family:SF Mono,Menlo,monospace}
+#chat-msgs .msg.err{background:#fff0ee;border-color:#ffd5cf;color:#a8261c}
+#chat-form{padding:12px;border-top:1px solid var(--line);display:flex;gap:8px;background:#fff}
+#chat-input{flex:1;padding:9px 12px;border:1px solid #d8d8de;border-radius:10px;font:inherit;font-size:13.5px;resize:none;outline:none;background:#fafafa}
+#chat-input:focus{border-color:#0a84ff;background:#fff}
+#chat-send{background:#0a84ff;color:#fff;border:none;border-radius:10px;padding:0 18px;font:inherit;font-weight:600;cursor:pointer;font-size:13.5px}
+#chat-send:disabled{opacity:0.5;cursor:not-allowed}
+@media (max-width:520px){
+  #chat-widget{bottom:18px;right:14px}
+  #chat-panel{width:calc(100vw - 28px);height:70vh;right:-7px}
+  #chat-toggle .lb{display:none}
+  #chat-toggle{padding:14px;border-radius:50%}
+}
+</style>
+<script>
+(function(){
+  // ↓↓↓ 部署 worker 后把这个 URL 改成实际地址 ↓↓↓
+  var WORKER_URL = 'https://pdf2zh-chat.aaronzhu210.workers.dev/chat';
+
+  var toggle = document.getElementById('chat-toggle');
+  var panel = document.getElementById('chat-panel');
+  var closeBtn = document.getElementById('chat-close');
+  var msgs = document.getElementById('chat-msgs');
+  var form = document.getElementById('chat-form');
+  var input = document.getElementById('chat-input');
+  var sendBtn = document.getElementById('chat-send');
+  var history = [];
+
+  toggle.onclick = function(){
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) setTimeout(function(){ input.focus(); }, 50);
+  };
+  closeBtn.onclick = function(){ panel.hidden = true; };
+
+  function addMsg(text, cls){
+    var div = document.createElement('div');
+    div.className = 'msg ' + cls;
+    div.textContent = text;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    return div;
+  }
+
+  async function send(text){
+    addMsg(text, 'user');
+    history.push({ role: 'user', content: text });
+    var aiDiv = addMsg('...', 'ai');
+    sendBtn.disabled = true;
+
+    try {
+      var resp = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: history.slice(-8) }),
+      });
+
+      if (!resp.ok) {
+        var err = {};
+        try { err = await resp.json(); } catch(e){}
+        aiDiv.className = 'msg err';
+        aiDiv.textContent = err.error || ('错误 HTTP ' + resp.status);
+        return;
+      }
+
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
+      var acc = '';
+      aiDiv.textContent = '';
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buf += decoder.decode(chunk.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop();
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (!line.startsWith('data: ')) continue;
+          var data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            var j = JSON.parse(data);
+            var delta = (j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content) || '';
+            if (delta) {
+              acc += delta;
+              aiDiv.textContent = acc;
+              msgs.scrollTop = msgs.scrollHeight;
+            }
+          } catch(e){}
+        }
+      }
+      if (acc) history.push({ role: 'assistant', content: acc });
+    } catch (e) {
+      aiDiv.className = 'msg err';
+      aiDiv.textContent = '网络错误，请稍后重试';
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  form.onsubmit = function(e){
+    e.preventDefault();
+    var t = input.value.trim();
+    if (!t) return;
+    input.value = '';
+    send(t);
+  };
+  input.onkeydown = function(e){
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      form.dispatchEvent(new Event('submit', { cancelable: true }));
+    }
+  };
+})();
+</script>
 </body>
 </html>
