@@ -657,35 +657,45 @@
 </script>
 
 <!-- ============ AI 客服 chat widget ============ -->
-<div id="chat-widget">
-  <button id="chat-toggle" type="button" aria-label="问 AI 客服">
-    <span class="ic">💬</span><span class="lb">问我</span>
+<div id="chat-widget" data-open="false">
+  <button id="chat-toggle" type="button" aria-label="打开 AI 客服">
+    <span class="ic-open">💬</span>
+    <span class="ic-close">✕</span>
+    <span class="lb-open">问我</span>
+    <span class="lb-close">收起</span>
   </button>
   <div id="chat-panel" hidden role="dialog" aria-label="pdf2zh AI 客服">
     <div class="chat-head">
       <div><b>AI 客服</b><span class="sub">用文档秒答你的问题</span></div>
-      <button id="chat-close" type="button" aria-label="关闭">×</button>
+      <button id="chat-close" type="button" aria-label="关闭聊天">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
+      </button>
     </div>
     <div id="chat-msgs">
       <div class="msg ai">你好！我是 pdf2zh 的客服助手 ☺<br>有任何使用问题直接问我，比如：<br>「OCR 怎么用？」「Zotero 怎么连？」「翻译卡 0% 怎么办？」</div>
     </div>
     <form id="chat-form">
-      <textarea id="chat-input" rows="2" placeholder="问任何 pdf2zh 使用问题…" maxlength="500"></textarea>
+      <textarea id="chat-input" rows="2" placeholder="问任何 pdf2zh 使用问题…（Esc 收起）" maxlength="500"></textarea>
       <button type="submit" id="chat-send">发送</button>
     </form>
   </div>
 </div>
 <style>
 #chat-widget{position:fixed;bottom:28px;right:28px;z-index:9999;font:14px/1.5 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
-#chat-toggle{background:linear-gradient(135deg,#0a84ff 0%,#bf5af2 100%);color:#fff;border:none;border-radius:999px;padding:13px 22px 13px 18px;box-shadow:0 8px 26px rgba(10,132,255,0.32),0 2px 6px rgba(0,0,0,0.08);cursor:pointer;font-size:14px;font-weight:600;letter-spacing:0.2px;display:inline-flex;align-items:center;gap:8px;transition:transform 0.15s, box-shadow 0.15s}
+#chat-toggle{background:linear-gradient(135deg,#0a84ff 0%,#bf5af2 100%);color:#fff;border:none;border-radius:999px;padding:13px 22px 13px 18px;box-shadow:0 8px 26px rgba(10,132,255,0.32),0 2px 6px rgba(0,0,0,0.08);cursor:pointer;font-size:14px;font-weight:600;letter-spacing:0.2px;display:inline-flex;align-items:center;gap:8px;transition:transform 0.15s, box-shadow 0.15s, background 0.2s}
 #chat-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(10,132,255,0.4),0 2px 6px rgba(0,0,0,0.08)}
-#chat-toggle .ic{font-size:16px;line-height:1}
+#chat-toggle .ic-open,#chat-toggle .ic-close{font-size:16px;line-height:1}
+#chat-toggle .ic-close,#chat-toggle .lb-close{display:none}
+#chat-widget[data-open="true"] #chat-toggle{background:#1a1a1f}
+#chat-widget[data-open="true"] #chat-toggle .ic-open,#chat-widget[data-open="true"] #chat-toggle .lb-open{display:none}
+#chat-widget[data-open="true"] #chat-toggle .ic-close,#chat-widget[data-open="true"] #chat-toggle .lb-close{display:inline}
 #chat-panel{position:absolute;bottom:64px;right:0;width:380px;height:520px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 32px 80px rgba(0,0,0,0.22);display:flex;flex-direction:column;overflow:hidden;animation:slideUp 0.22s ease}
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .chat-head{padding:14px 18px;background:linear-gradient(135deg,#0a84ff 0%,#bf5af2 100%);color:#fff;display:flex;justify-content:space-between;align-items:center}
 .chat-head .sub{display:block;font-size:11.5px;opacity:0.85;margin-top:1px;font-weight:400}
-.chat-head button{background:transparent;color:#fff;border:none;font-size:22px;cursor:pointer;padding:0;line-height:1;opacity:0.85}
-.chat-head button:hover{opacity:1}
+.chat-head button{background:rgba(255,255,255,0.12);color:#fff;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background 0.15s, transform 0.15s}
+.chat-head button:hover{background:rgba(255,255,255,0.28);transform:rotate(90deg)}
+.chat-head button svg{display:block}
 #chat-msgs{flex:1;padding:16px;overflow-y:auto;background:#fafafa;display:flex;flex-direction:column;gap:10px}
 #chat-msgs .msg{max-width:88%;padding:10px 14px;border-radius:14px;word-wrap:break-word;line-height:1.6;font-size:13.5px;white-space:pre-wrap}
 #chat-msgs .msg.user{background:#0a84ff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
@@ -709,6 +719,7 @@
   // ↓↓↓ 部署 worker 后把这个 URL 改成实际地址 ↓↓↓
   var WORKER_URL = 'https://pdf2zh-chat.aaronzhu210.workers.dev/chat';
 
+  var widget = document.getElementById('chat-widget');
   var toggle = document.getElementById('chat-toggle');
   var panel = document.getElementById('chat-panel');
   var closeBtn = document.getElementById('chat-close');
@@ -718,11 +729,33 @@
   var sendBtn = document.getElementById('chat-send');
   var history = [];
 
-  toggle.onclick = function(){
-    panel.hidden = !panel.hidden;
-    if (!panel.hidden) setTimeout(function(){ input.focus(); }, 50);
-  };
-  closeBtn.onclick = function(){ panel.hidden = true; };
+  function openChat(){
+    panel.hidden = false;
+    widget.setAttribute('data-open', 'true');
+    toggle.setAttribute('aria-label', '收起 AI 客服');
+    setTimeout(function(){ input.focus(); }, 50);
+  }
+  function closeChat(){
+    panel.hidden = true;
+    widget.setAttribute('data-open', 'false');
+    toggle.setAttribute('aria-label', '打开 AI 客服');
+  }
+  function toggleChat(){
+    if (panel.hidden) openChat(); else closeChat();
+  }
+
+  // 1) 点 toggle 按钮：打开/收起
+  toggle.onclick = toggleChat;
+  // 2) 点 header 里的 ✕：收起
+  closeBtn.onclick = closeChat;
+  // 3) 按 Esc：收起
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && !panel.hidden) closeChat();
+  });
+  // 4) 点 widget 之外的页面区域：收起
+  document.addEventListener('click', function(e){
+    if (!panel.hidden && !widget.contains(e.target)) closeChat();
+  });
 
   function addMsg(text, cls){
     var div = document.createElement('div');
