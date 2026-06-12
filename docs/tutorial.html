@@ -158,7 +158,9 @@
     <div class="notice warn">
       <span class="ico">⚠</span>
       <div>
-        <strong>App 没有签名</strong>（个人开发者）。如果首次打开被 Gatekeeper 拦截，在 Finder 里 <strong>右键 → 打开</strong>，或者执行一次 <code>xattr -cr /Applications/pdf2zh-desktop.app</code> 解除隔离属性。
+        <strong>提示「文件已损坏 / 已损坏，无法打开」？</strong> 不是真的损坏，是 macOS Gatekeeper 拦了未签名 App。终端跑一行解决：<br>
+        <code>xattr -cr /Applications/pdf2zh.app</code><br>
+        如果还在 Downloads 没拖：<code>xattr -cr ~/Downloads/pdf2zh.app</code>。也可以 Finder 里<strong>右键 → 打开</strong>（不是双击），弹窗点「打开」即可。
       </div>
     </div>
   </section>
@@ -631,6 +633,11 @@
       <div class="card">
         <div class="top"><h5>怎么先判断 PDF 是不是扫描件？</h5></div>
         <p class="desc">最快办法：macOS 预览打开 PDF，用鼠标拖选文字。<b>能选中</b>（光标变 I 型、能复制）= 有文字层，直接翻；<b>选不中</b>（只能拉虚线框）= 扫描件，需要先 OCR。</p>
+      </div>
+
+      <div class="card">
+        <div class="top"><h5>双击 App 提示「已损坏，无法打开」？</h5></div>
+        <p class="desc"><b>不是真的损坏</b>。macOS Gatekeeper 拦了未购买 Apple 开发者证书的 App。终端跑一行立刻解决：<br><code>xattr -cr /Applications/pdf2zh.app</code><br>或者 Finder 里<b>右键 → 打开</b>（不是双击），弹窗点「打开」即可，之后双击都正常。</p>
       </div>
     </div>
   </section>
