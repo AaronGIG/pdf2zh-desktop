@@ -737,34 +737,53 @@
   var form = document.getElementById('chat-form');
   var input = document.getElementById('chat-input');
   var sendBtn = document.getElementById('chat-send');
-  var history = [];
+  var chatHistory = [];
+  var isOpen = false;
+
+  // 初始状态：关闭
+  panel.style.display = 'none';
 
   function openChat(){
-    panel.hidden = false;
+    isOpen = true;
+    panel.style.display = 'flex';
+    panel.removeAttribute('hidden');
     widget.setAttribute('data-open', 'true');
-    toggle.setAttribute('aria-label', '收起 AI 客服');
-    setTimeout(function(){ input.focus(); }, 50);
+    toggle.setAttribute('aria-label', '收起小黑猫客服');
+    setTimeout(function(){ try{input.focus();}catch(e){} }, 50);
   }
   function closeChat(){
-    panel.hidden = true;
+    isOpen = false;
+    panel.style.display = 'none';
+    panel.setAttribute('hidden', '');
     widget.setAttribute('data-open', 'false');
-    toggle.setAttribute('aria-label', '打开 AI 客服');
+    toggle.setAttribute('aria-label', '打开小黑猫客服');
   }
-  function toggleChat(){
-    if (panel.hidden) openChat(); else closeChat();
+  function toggleChat(e){
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (isOpen) closeChat(); else openChat();
   }
 
-  // 1) 点 toggle 按钮：打开/收起
-  toggle.onclick = toggleChat;
-  // 2) 点 header 里的 ✕：收起
-  closeBtn.onclick = closeChat;
+  // 1) 点 toggle 按钮（包括内部任意子元素）：打开/收起
+  toggle.addEventListener('click', toggleChat);
+
+  // 2) 点 header 里的 ✕：收起。用 capture 阶段确保最先触发
+  closeBtn.addEventListener('click', function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    closeChat();
+  }, true);
+
   // 3) 按 Esc：收起
   document.addEventListener('keydown', function(e){
-    if (e.key === 'Escape' && !panel.hidden) closeChat();
+    if (e.key === 'Escape' && isOpen) {
+      e.preventDefault();
+      closeChat();
+    }
   });
+
   // 4) 点 widget 之外的页面区域：收起
   document.addEventListener('click', function(e){
-    if (!panel.hidden && !widget.contains(e.target)) closeChat();
+    if (isOpen && !widget.contains(e.target)) closeChat();
   });
 
   function addMsg(text, cls){
@@ -778,7 +797,7 @@
 
   async function send(text){
     addMsg(text, 'user');
-    history.push({ role: 'user', content: text });
+    chatHistory.push({ role: 'user', content: text });
     var aiDiv = addMsg('...', 'ai');
     sendBtn.disabled = true;
 
@@ -786,7 +805,7 @@
       var resp = await fetch(WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history: history.slice(-8) }),
+        body: JSON.stringify({ message: text, history: chatHistory.slice(-8) }),
       });
 
       if (!resp.ok) {
@@ -838,14 +857,24 @@
     var t = input.value.trim();
     if (!t) return;
     input.value = '';
+    autoResize();
     send(t);
   };
-  input.onkeydown = function(e){
-    if (e.key === 'Enter' && !e.shiftKey) {
+  // 微信式：Enter 换行（不发送），Cmd/Ctrl+Enter 才发送
+  input.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       form.dispatchEvent(new Event('submit', { cancelable: true }));
     }
-  };
+    // 单独 Enter 不拦截，保留默认换行行为
+  });
+  // 输入时自动撑高（最多 6 行）
+  function autoResize(){
+    input.style.height = 'auto';
+    var max = 6 * 20; // ~120px
+    input.style.height = Math.min(input.scrollHeight, max) + 'px';
+  }
+  input.addEventListener('input', autoResize);
 })();
 </script>
 </body>
