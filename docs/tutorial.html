@@ -823,37 +823,52 @@
         return;
       }
 
-      var reader = resp.body.getReader();
-      var decoder = new TextDecoder();
-      var buf = '';
-      var acc = '';
-      aiDiv.textContent = '';
-      while (true) {
-        var chunk = await reader.read();
-        if (chunk.done) break;
-        buf += decoder.decode(chunk.value, { stream: true });
-        var lines = buf.split('\n');
-        buf = lines.pop();
-        for (var i = 0; i < lines.length; i++) {
-          var line = lines[i];
-          if (!line.startsWith('data: ')) continue;
-          var data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-          try {
-            var j = JSON.parse(data);
-            var delta = (j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content) || '';
-            if (delta) {
-              acc += delta;
-              aiDiv.textContent = acc;
-              msgs.scrollTop = msgs.scrollHeight;
-            }
-          } catch(e){}
+      var acc = '';  // 提到 try 顶层，catch 也能访问
+      try {
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder();
+        var buf = '';
+        aiDiv.textContent = '';
+        while (true) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          buf += decoder.decode(chunk.value, { stream: true });
+          var lines = buf.split('\n');
+          buf = lines.pop();
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (!line.startsWith('data: ')) continue;
+            var data = line.slice(6).trim();
+            if (data === '[DONE]') continue;
+            try {
+              var j = JSON.parse(data);
+              var delta = (j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content) || '';
+              if (delta) {
+                acc += delta;
+                aiDiv.textContent = acc;
+                msgs.scrollTop = msgs.scrollHeight;
+              }
+            } catch(e){}
+          }
+        }
+      } catch (streamErr) {
+        // 流式中途断了：保留已收到的内容，不清空
+        if (acc) {
+          aiDiv.textContent = acc + '\n\n[连接中断，回答可能不完整]';
+        } else {
+          throw streamErr;  // 一字未收 → 走外层 catch 报错
         }
       }
-      if (acc) history.push({ role: 'assistant', content: acc });
+      if (acc) chatHistory.push({ role: 'assistant', content: acc });
     } catch (e) {
-      aiDiv.className = 'msg err';
-      aiDiv.textContent = '网络错误，请稍后重试';
+      // 只在 acc 为空（即什么都没收到）时显示纯错误
+      var existing = aiDiv.textContent || '';
+      if (existing && existing !== '...' && existing.indexOf('网络错误') === -1) {
+        // 已有内容，不覆盖
+      } else {
+        aiDiv.className = 'msg err';
+        aiDiv.textContent = '网络错误，请稍后重试';
+      }
     } finally {
       sendBtn.disabled = false;
     }
