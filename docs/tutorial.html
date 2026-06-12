@@ -678,7 +678,7 @@
       <div class="msg ai">喵~ 我是 pdf2zh 的小黑猫客服 🐾<br>有任何使用问题直接问我，比如：<br>「OCR 怎么用？」「Zotero 怎么连？」「翻译卡 0% 怎么办？」</div>
     </div>
     <form id="chat-form">
-      <textarea id="chat-input" rows="2" placeholder="问任何 pdf2zh 使用问题…（Esc 收起）" maxlength="500"></textarea>
+      <textarea id="chat-input" rows="2" placeholder="问 pdf2zh 使用问题…（Shift+Enter 换行）" maxlength="500"></textarea>
       <button type="submit" id="chat-send">发送</button>
     </form>
   </div>
@@ -860,13 +860,21 @@
     autoResize();
     send(t);
   };
-  // 微信式：Enter 换行（不发送），Cmd/Ctrl+Enter 才发送
+  // 微信式：Enter 发送，Shift+Enter 换行
+  // 但要避开中文输入法拼音上屏时的 Enter（IME composition 期间不发送）
+  var composing = false;
+  input.addEventListener('compositionstart', function(){ composing = true; });
+  input.addEventListener('compositionend', function(){ composing = false; });
   input.addEventListener('keydown', function(e){
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    // IME 拼音 / 选词期间 → 永不发送
+    if (composing || e.isComposing || e.keyCode === 229) return;
+    // Shift+Enter → 换行（默认行为，不拦截）
+    if (e.key === 'Enter' && e.shiftKey) return;
+    // 单独 Enter → 发送
+    if (e.key === 'Enter') {
       e.preventDefault();
       form.dispatchEvent(new Event('submit', { cancelable: true }));
     }
-    // 单独 Enter 不拦截，保留默认换行行为
   });
   // 输入时自动撑高（最多 6 行）
   function autoResize(){
