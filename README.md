@@ -25,7 +25,8 @@
 <table align="center"><tr><td align="center" style="padding:18px 28px">
 <h3>📘 强烈推荐先看 → <a href="https://aarongig.github.io/pdf2zh-desktop/">完整图文使用教程（macOS）</a></h3>
 <p>真实截图 · 每一步带红圈编号 · 配 API · 扫描件处理 · 常见问题<br>
-<b>第一次使用？看完这一份就够了，省下你折腾两小时的时间。</b></p>
+<b>第一次使用？看完这一份就够了，省下你折腾两小时的时间。</b><br>
+💬 <i>页面右下角有 AI 客服「小黑猫」在线答疑，问任何使用问题都能秒回</i></p>
 <a href="https://aarongig.github.io/pdf2zh-desktop/"><img src="https://img.shields.io/badge/📘 点 这 里 看 教 程-FF6B35?style=for-the-badge&logoColor=white" alt="使用教程"></a>
 </td></tr></table>
 
@@ -148,13 +149,13 @@
 
 | 平台 | 下载 | 大小 | 启动方式 |
 |------|------|------|---------|
-| 🪟 Windows | [`pdf2zh-desktop-win-v2.2.5.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.2.5/pdf2zh-desktop-win-v2.2.5.zip) | ~340MB | 解压 → 双击 `pdf2zh.bat` |
-| 🍎 macOS | [`pdf2zh-desktop-mac-v2.2.6.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.2.6/pdf2zh-desktop-mac-v2.2.6.zip) | ~620MB | 解压 → 双击 `pdf2zh.app` |
+| 🪟 Windows | [`pdf2zh-desktop-win-v2.2.5.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.2.5/pdf2zh-desktop-win-v2.2.5.zip) | ~286MB | 解压 → 双击 `pdf2zh.bat` |
+| 🍎 macOS | [`pdf2zh-desktop-mac-v2.2.6.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.2.6/pdf2zh-desktop-mac-v2.2.6.zip) | ~226MB | 解压 → 双击 `pdf2zh.app` |
 
 ### 🖱️ 第二步：启动
 
 - **Windows**：双击 `pdf2zh.bat`
-- **macOS**：双击 `pdf2zh.app`（首次需右键 → 打开）
+- **macOS**：双击 `pdf2zh.app`；首次启动若提示「**已损坏，无法打开**」，终端跑一行：`xattr -cr /Applications/pdf2zh.app`，或 Finder 里**右键 → 打开**
 
 ### 📄 第三步：翻译
 
