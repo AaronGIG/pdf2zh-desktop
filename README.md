@@ -156,7 +156,7 @@
 
 - **Windows**：解压后看到多个文件，按下面顺序用——
   - 🟢 **首次使用**：双击 **`install.bat`**（自动检查环境 + 注册到开始菜单/桌面快捷方式）
-  - 🟢 **日常启动**：双击 **`pdf2zh.vbs`**（推荐，无控制台窗口）或 `pdf2zh.bat`（保留控制台便于看输出）
+  - 🟢 **日常启动**（任选其一，三个等价）：**`pdf2zh.exe`**（推荐，最直观）/ `pdf2zh.vbs`（无控制台窗口）/ `pdf2zh.bat`（保留控制台便于看输出）
   - 🟡 **遇到问题**：双击 `debug_start.bat`（看启动日志）或 `diagnostic.bat`（系统诊断）；改设置用 `config_manager.bat`
   - 🔴 **卸载**：双击 `uninstall.bat`
 - **macOS**：双击 `pdf2zh.app`；首次启动若提示「**已损坏，无法打开**」，终端跑一行：`xattr -cr /Applications/pdf2zh.app`，或 Finder 里**右键 → 打开**
