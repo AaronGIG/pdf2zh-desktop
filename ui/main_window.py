@@ -2819,6 +2819,9 @@ class TranslatePage(QWidget):
             if idx >= 0: cb.setCurrentIndex(idx)
             col.addWidget(cb); r1.addLayout(col)
             setattr(self, attr, cb)
+        # 修 #24：切换源/目标语言后立即持久化，即使用户没点开始翻译退出 app 也不丢
+        self.src_combo.currentTextChanged.connect(lambda _: self._save_langs_now())
+        self.tgt_combo.currentTextChanged.connect(lambda _: self._save_langs_now())
         r1.addStretch()
         cl.addLayout(r1)
         cl.addSpacing(8); cl.addWidget(_div()); cl.addSpacing(8)
@@ -2898,6 +2901,27 @@ class TranslatePage(QWidget):
         r4.addStretch()
         cl.addLayout(r4)
 
+        cl.addSpacing(6)
+        # 高级选项：扫描版 / 表格翻译 / OCR（参考 Win 端实现）
+        r5 = QHBoxLayout(); r5.setSpacing(16)
+        self.scan_mode_check = QCheckBox("扫描版 PDF")
+        self.scan_mode_check.setToolTip("扫描版 PDF 的文字嵌在图片中，勾选后会在译文区域覆盖底图原文。\n普通数字 PDF 请勿勾选。")
+        r5.addWidget(self.scan_mode_check)
+        self.translate_tables_check = QCheckBox("翻译表格内容")
+        self.translate_tables_check.setToolTip("按单元格翻译表格，适合专利、检测报告等表格密集型文件。")
+        r5.addWidget(self.translate_tables_check)
+        self.ocr_mode_check = QCheckBox("OCR 识别")
+        self.ocr_mode_check.setToolTip("对纯图片扫描件先进行 OCR 文字识别再翻译。\n需要额外处理时间，普通 PDF 请勿勾选。")
+        r5.addWidget(self.ocr_mode_check)
+        r5.addStretch()
+        cl.addLayout(r5)
+
+        # 自动检测提示行
+        self._scan_hint = QLabel("")
+        self._scan_hint.setObjectName("Cap")
+        self._scan_hint.setVisible(False)
+        cl.addWidget(self._scan_hint)
+
         lo.addWidget(card)
 
         # ── 进度卡片（固定高度占位，避免布局跳动） ──
@@ -2975,6 +2999,7 @@ class TranslatePage(QWidget):
             w.setVisible(checked)
 
     def on_files_added(self, files):
+        new_files = []
         for f in files:
             if not os.path.isfile(f):
                 continue
@@ -2985,6 +3010,7 @@ class TranslatePage(QWidget):
                     exists = True; break
             if exists:
                 continue
+            new_files.append(f)
             name = os.path.basename(f)
             if len(name) > 50:
                 name = name[:22] + "…" + name[-22:]
@@ -2995,6 +3021,8 @@ class TranslatePage(QWidget):
             self.flist.addItem(item)
         self._update_fcount()
         self._check_zotero_source()
+        if new_files:
+            self._auto_detect_pdf_type(new_files)
 
     def _flist_context_menu(self, pos):
         item = self.flist.itemAt(pos)
@@ -3017,6 +3045,7 @@ class TranslatePage(QWidget):
     def _remove_item(self, item):
         self.flist.takeItem(self.flist.row(item))
         self._update_fcount(); self._check_zotero_source()
+        self._scan_hint.setVisible(False)
 
     def _browse_more(self):
         fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
@@ -3042,16 +3071,81 @@ class TranslatePage(QWidget):
                 break
         self._zotero_hint.setVisible(has_zotero)
 
+    def _auto_detect_pdf_type(self, new_files):
+        """检测新加入的 PDF：
+        - 纯扫描件（无文字层）→ 自动开启 OCR
+        - 扫描+OCR 层（如日文教材）→ 仅作为温和提示，不自动勾选扫描模式
+          （scan_mode 会在段落间留白处露出原图，整体观感未必更好，留给用户决定）
+        """
+        need_ocr = False
+        suggest_scan = False
+
+        for path in new_files:
+            try:
+                doc = fitz.open(path)
+                n = doc.page_count
+                if n == 0:
+                    doc.close()
+                    continue
+                check_pages = min(n, 10)
+                text_pages = 0
+                scan_pages = 0       # 有覆盖 >50% 页面的大图
+                invisible_pages = 0  # 含不可见 OCR 文字层（Tr 3）
+                for i in range(check_pages):
+                    page = doc[i]
+                    if page.get_text().strip():
+                        text_pages += 1
+                    page_area = page.rect.width * page.rect.height
+                    if page_area > 0:
+                        for info in page.get_image_info():
+                            bbox = info.get("bbox", (0, 0, 0, 0))
+                            img_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                            if img_area > page_area * 0.5:
+                                scan_pages += 1
+                                break
+                    try:
+                        contents = page.read_contents() or b""
+                        if b" 3 Tr" in contents or b"\n3 Tr" in contents:
+                            invisible_pages += 1
+                    except Exception:
+                        pass
+                doc.close()
+
+                if text_pages == 0:
+                    need_ocr = True
+                elif invisible_pages > check_pages * 0.3 or scan_pages > check_pages * 0.3:
+                    suggest_scan = True
+            except Exception:
+                pass
+
+        hints = []
+        if need_ocr and not self.ocr_mode_check.isChecked():
+            self.ocr_mode_check.setChecked(True)
+            hints.append("检测到纯扫描件，已自动开启 OCR")
+        if suggest_scan and not self.scan_mode_check.isChecked():
+            # 仅提示，不自动勾选
+            hints.append("检测到扫描版 PDF（含底图），如需去除背景文字可手动勾选扫描模式")
+
+        if hints:
+            acc = _C["acc"]
+            self._scan_hint.setStyleSheet(f"color:{acc}; padding-left:2px;")
+            self._scan_hint.setText("  ".join(hints))
+            self._scan_hint.setVisible(True)
+        else:
+            self._scan_hint.setVisible(False)
+
     def _remove_selected_files(self):
         for item in reversed(self.flist.selectedItems()):
             self.flist.takeItem(self.flist.row(item))
         self._update_fcount()
         self._check_zotero_source()
+        self._scan_hint.setVisible(False)
 
     def _clear_files(self):
         self.flist.clear()
         self._update_fcount()
         self._zotero_hint.setVisible(False)
+        self._scan_hint.setVisible(False)
 
     def _get_pages(self):
         preset = self.page_combo.currentText()
@@ -3059,6 +3153,20 @@ class TranslatePage(QWidget):
             txt = self.custom_page.text().strip()
             return parse_page_range(txt) if txt else None
         return PAGE_PRESETS.get(preset)
+
+    def _save_langs_now(self):
+        """修 #24：切换源/目标语言时立即持久化到 config.json，独立于 _save_config
+        （只写 lang_in / lang_out 两个字段，避免读取尚未初始化的其他控件）"""
+        try:
+            cfg = UserConfigManager.load() or {}
+            cfg["lang_in"] = self.src_combo.currentText()
+            cfg["lang_out"] = self.tgt_combo.currentText()
+            UserConfigManager.save(cfg)
+            # 同步到内存 cfg，避免下次 _save_config 时被旧值覆盖
+            self.cfg["lang_in"] = cfg["lang_in"]
+            self.cfg["lang_out"] = cfg["lang_out"]
+        except Exception:
+            pass  # 保存失败不影响翻译主流程
 
     def _save_config(self):
         self.cfg["service"] = self.svc_combo.currentText()
@@ -3082,13 +3190,25 @@ class TranslatePage(QWidget):
         except TypeError: pass
         self.go_btn.clicked.connect(self._start)
 
+        # 先保存翻译页配置（先 save 自己，再让设置页覆盖 API Key 字段，避免互相 stomp）
         self._save_config()
+        # 修复：强制让设置页保存（防 editingFinished 漏触发导致 API Key 丢失）
+        # 必须在 _save_config 之后，因为 _save_config 用 self.cfg 整体覆盖磁盘，会丢失 api_xxx
+        try:
+            mw = self.window()
+            if hasattr(mw, "pages") and "设置" in mw.pages:
+                mw.pages["设置"]._save()
+            # 重新加载 self.cfg 让翻译页拿到最新 api_xxx
+            self.cfg = UserConfigManager.load()
+        except Exception:
+            pass
         self.pending_files = files
         self._batch_idx = 0
         self._batch_results = []     # [(file_path, output_files_dict), ...]
         self._output_dir = os.path.expanduser("~/Documents/pdf2zh_files")
         os.makedirs(self._output_dir, exist_ok=True)
 
+        self._cancel_pending = False
         self.go_btn.setEnabled(False); self.go_btn.setText("翻译中…")
         self.prog_card.setVisible(True); self.stop_btn.setVisible(True)
         self.prog_bar.setValue(0)
@@ -3126,6 +3246,9 @@ class TranslatePage(QWidget):
             chunk_size=self.chunk_size_spin.value(),
             chunk_delay=self.chunk_delay_spin.value(),
             envs=envs,
+            scan_mode=self.scan_mode_check.isChecked(),
+            translate_tables=self.translate_tables_check.isChecked(),
+            ocr_mode=self.ocr_mode_check.isChecked(),
         )
         self.worker.progress.connect(self._on_prog)
         self.worker.status.connect(self._on_status)
@@ -3134,8 +3257,29 @@ class TranslatePage(QWidget):
         self.worker.start()
 
     def _cancel(self):
-        if self.worker: self.worker.cancel()
+        if not self.worker:
+            return
+        self.worker.cancel()
+        self._cancel_pending = True
         self.prog_label.setText("正在取消…")
+        self.stop_btn.setEnabled(False)
+        # 最多等 5 秒，超时强制终止
+        def _force_cleanup():
+            if not self._cancel_pending:
+                return  # 翻译已正常结束，不需要强制清理
+            if self.worker and self.worker.isRunning():
+                self.worker.terminate()
+                self.worker.wait(2000)
+            self.worker = None
+            self._cancel_pending = False
+            self.go_btn.setEnabled(True)
+            self.go_btn.setText("开始翻译")
+            self.stop_btn.setVisible(False)
+            self.stop_btn.setEnabled(True)
+            self.prog_icon.setText("⚠️")
+            self.prog_label.setText("已取消")
+            self.prog_detail.setText("")
+        QTimer.singleShot(5000, _force_cleanup)
 
     _TIPS = [
         "翻译中，请稍候…", "公式和图表会完整保留",
@@ -3171,6 +3315,7 @@ class TranslatePage(QWidget):
 
     def _on_single_done(self, output_files):
         """单文件翻译完成 — 回写 Zotero + 记录历史 + 推进队列"""
+        self._cancel_pending = False  # 正常完成，取消超时回调不再触发
         fp = self.pending_files[self._batch_idx]
 
         if self.worker:
@@ -3202,6 +3347,7 @@ class TranslatePage(QWidget):
 
     def _on_single_err(self, msg):
         """单文件翻译出错 — 记录后继续下一个"""
+        self._cancel_pending = False
         fp = self.pending_files[self._batch_idx]
 
         if self.worker:
@@ -3336,6 +3482,7 @@ class TranslatePage(QWidget):
         self._start()
 
     def _on_err(self, msg):
+        self._cancel_pending = False  # 错误也算结束，取消超时不再触发
         self.prog_icon.setText("❌")
         self.prog_label.setText("翻译出错")
         self.prog_pct.setText("!")
@@ -4026,8 +4173,8 @@ class ReaderPage(QWidget):
         has_files = bool(r.get("output_files"))
         self._btn_reveal.setVisible(has_files)
         self._btn_open_src.setVisible(bool(r.get("file", {}).get("path")))
-        # 加载预览
-        if "output_files" in r:
+        # 加载预览（翻译刚完成时跳过，避免覆盖最新结果）
+        if "output_files" in r and not getattr(self, '_skip_preview_on_select', False):
             self.preview.set_output_files(r["output_files"])
 
     def _open_in_reader(self, item):
@@ -4042,9 +4189,11 @@ class ReaderPage(QWidget):
     def set_output_files(self, files):
         """外部调用（翻译完成后）"""
         self.preview.set_output_files(files)
+        self._skip_preview_on_select = True  # 防止 refresh → setCurrentRow → _on_select 覆盖预览
         self.refresh()
         if self.list_w.count() > 0:
             self.list_w.setCurrentRow(0)
+        self._skip_preview_on_select = False
 
     def _clear(self):
         HistoryManager.clear(); self.refresh()
@@ -4105,7 +4254,7 @@ class SettingsPage(QWidget):
 
     SERVICE_CONFIGS = {
         # 推荐
-        "DeepSeek":        {"key_ph":"密钥",  "models":["deepseek-chat","deepseek-reasoner","deepseek-coder"], "url":"https://api.deepseek.com/v1"},
+        "DeepSeek":        {"key_ph":"密钥",  "models":["deepseek-chat","deepseek-v4-flash","deepseek-v4-pro","deepseek-reasoner","deepseek-coder"], "url":"https://api.deepseek.com/v1"},
         "OpenAI":          {"key_ph":"sk-...", "models":["gpt-4o","gpt-4o-mini","gpt-4-turbo","gpt-3.5-turbo","o1","o1-mini","o1-pro"], "url":"https://api.openai.com/v1"},
         # 国际服务
         "Azure OpenAI":    {"key_ph":"密钥",  "models":["gpt-4o","gpt-4-turbo","gpt-35-turbo"], "url":"https://YOUR_RESOURCE.openai.azure.com"},
@@ -4120,7 +4269,8 @@ class SettingsPage(QWidget):
         "ModelScope":      {"key_ph":"密钥",  "models":["qwen-turbo","qwen-plus"], "url":"https://dashscope.aliyuncs.com/compatible-mode/v1"},
         # 本地 & 其他
         "Ollama 本地":     {"key_ph":"留空",  "models":["qwen2.5:7b","llama3.1:8b","gemma2:9b","deepseek-r1:8b"], "url":"http://localhost:11434/v1"},
-        "Argos Translate":  {"key_ph":"留空",  "models":[], "url":""},
+        # Argos Translate 离线包未集成，桌面版不开放此服务（移除避免用户选择后报 ImportError）
+        # "Argos Translate":  {"key_ph":"留空",  "models":[], "url":""},
         "AnythingLLM":     {"key_ph":"密钥",  "models":[], "url":"http://localhost:3001/api/v1"},
         "Grok":            {"key_ph":"密钥",  "models":["grok-2","grok-2-mini"], "url":"https://api.x.ai/v1"},
         # 自定义
@@ -4141,6 +4291,26 @@ class SettingsPage(QWidget):
 
         cols = QHBoxLayout(); cols.setSpacing(20)
         cfg = UserConfigManager.load()
+        # 旧版 key 名兼容迁移：v2.2.5 及之前部分服务用了简短 svc 名（如 "Silicon"），
+        # v2.2.6 SERVICE_CONFIGS 改成全名（如 "Silicon 硅基流动"），需把旧 key 值合并过来
+        _legacy_alias = {
+            "Silicon 硅基流动": "Silicon",
+            "Tencent 腾讯": "Tencent",
+            "Zhipu 智谱": "Zhipu",
+            "Qwen 通义千问": "Qwen",
+            "Ollama 本地": "Ollama",
+            "OpenAI 兼容": "OpenAI-liked",
+        }
+        _migrated = False
+        for new_k, old_k in _legacy_alias.items():
+            for prefix in ("api_", "url_", "model_"):
+                new_key = f"{prefix}{new_k}"
+                old_key = f"{prefix}{old_k}"
+                if not cfg.get(new_key) and cfg.get(old_key):
+                    cfg[new_key] = cfg[old_key]
+                    _migrated = True
+        if _migrated:
+            UserConfigManager.save(cfg)
         from PyQt5.QtWidgets import QGridLayout, QTextEdit
 
         # ══════════════════════════════════════════
@@ -4432,9 +4602,9 @@ class SettingsPage(QWidget):
         guide_lo.addWidget(_div())
         _paths_col = QVBoxLayout(); _paths_col.setSpacing(1)
         for _pname, _pfile in [
-            ("配置", "~/pdf2zh_gui_config.json"),
-            ("历史", "~/pdf2zh_history.json"),
-            ("术语库", "~/pdf2zh_glossary_*.csv"),
+            ("配置", "~/.config/pdf2zh/config.json"),
+            ("历史", "~/.config/pdf2zh/history.json"),
+            ("术语库", "~/.config/pdf2zh/glossary.json"),
         ]:
             _pl = QLabel(f"{_pname}  {_pfile}")
             _pl.setObjectName("Cap"); _pl.setStyleSheet("font-size:9px;padding:0;")
@@ -4772,7 +4942,7 @@ class SettingsPage(QWidget):
             return
         # 查找 Zotero profile 目录
         profiles_dir = os.path.expanduser("~/Library/Application Support/Zotero/Profiles")
-        profiles = glob.glob(os.path.join(profiles_dir, "*.default"))
+        profiles = glob.glob(os.path.join(profiles_dir, "*.default*"))
         if not profiles:
             self._zot_status.setText("找不到 Zotero 配置目录")
             self._zot_status.setStyleSheet("color:#FF3B30;")
@@ -4871,7 +5041,8 @@ class SettingsPage(QWidget):
             # 在用户目录下创建空术语库文件
             import json
             from pathlib import Path
-            user_dir = Path.home() / "pdf2zh_glossaries"
+            from ui.config_manager import _config_dir
+            user_dir = _config_dir() / "glossaries"
             user_dir.mkdir(exist_ok=True)
             fp = user_dir / f"{name}.json"
             fp.write_text(json.dumps({}, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -4887,7 +5058,8 @@ class SettingsPage(QWidget):
         name = self.gloss_selector.currentText()
         if name in DEFAULT_GLOSSARIES:
             return
-        fp = Path.home() / "pdf2zh_glossaries" / f"{name}.json"
+        from ui.config_manager import _config_dir
+        fp = _config_dir() / "glossaries" / f"{name}.json"
         if fp.exists():
             fp.unlink()
         self._refresh_gloss_list()
@@ -4944,7 +5116,7 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.2.0"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel("v2.2.6"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
@@ -5049,6 +5221,9 @@ class AboutPage(QWidget):
             "零一万物","浮生若梦","技术宅","AI造物主","星河万里",
             "小蜗牛","编程少女","数据猎人","逻辑大师","AI前沿",
             "梦想家","代码如诗","量子跃迁","技术探路者","AI新青年",
+            "Tomo","小红薯63BEBA60","Answer",
+            "C01dSH","小红薯60E9F048","Hittagi","雪儿","デブ",
+            "根本赢不了","七一","Somnia Flora",
         ]
 
         grid = QGridLayout(); grid.setSpacing(3); grid.setContentsMargins(0,0,0,0)
@@ -5338,7 +5513,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.2.0 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel("v2.2.6 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
@@ -5380,9 +5555,9 @@ class MainWindow(QMainWindow):
         cfg = UserConfigManager.load()
         self.switch("翻译"); self._apply()
         _install_tip_filter(QApplication.instance())
-        # 去掉所有 QComboBox 下拉框的系统矩形外框
-        for combo in self.findChildren(QComboBox):
-            _fix_combo_popup(combo)
+        # 去掉所有控件的 macOS 聚焦环（小点边框）
+        for w in self.findChildren(QWidget):
+            w.setAttribute(Qt.WA_MacShowFocusRect, False)
 
         # 恢复窗口尺寸和位置
         if cfg.get("window_geometry"):
