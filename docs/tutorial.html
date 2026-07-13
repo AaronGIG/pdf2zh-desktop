@@ -183,6 +183,22 @@
     </div>
     <p class="lead">这是你日常用得最多的页面。把 PDF 拖到上方的虚线框，挑一个翻译服务，点最下面的「开始翻译」就行。所有选项都有合理默认，第一次用直接拖文件 + 点开始即可出结果。</p>
 
+    <div class="notice tip" style="margin:16px 0 24px">
+      <span class="ico">🎯</span>
+      <div>
+        <strong style="font-size:16px">90% 情况下 —— 拖入 PDF → 点「开始翻译」即可</strong><br>
+        <span style="color:#1d6d3a">绝大部分正常论文、技术文档、图书，<b>全部保持默认</b>（下面 4 个勾选框都不勾）就能翻出最佳效果。</span><br>
+        <span style="display:block;margin-top:6px">下面 4 个勾选框<b>都是特殊场景才勾</b>，一句话简介：</span>
+        <div style="margin-top:10px;padding:10px 14px;background:rgba(52,199,89,0.06);border-left:3px solid #34c759;border-radius:6px;line-height:2">
+          📜 <b>扫描版 PDF</b> · 图库/图书馆扫描的旧书、译文和原文重叠时勾<br>
+          📊 <b>翻译表格内容</b> · <b>专利、检测报告、财报、法规</b> 等表格密集型才勾<br>
+          🔍 <b>OCR 识别</b> · 纯图片 PDF（在预览里选不中文字）才勾<br>
+          📦 <b>分块翻译</b> · &gt; 50 页大文件 + 免费/限流服务才勾
+        </div>
+        <span style="display:block;margin-top:10px">👉 <a href="#options"><b>看每个勾选框的详细使用场景和「别勾」情况</b></a></span>
+      </div>
+    </div>
+
     <div class="stage" id="stage-translate">
       <img src="screenshots/tab-01-translate.png" alt="翻译页截图">
       <div class="pin" style="left:7%;top:13.5%">1</div>
@@ -206,7 +222,7 @@
       <div class="step"><div class="badge">6</div><div class="body"><h4>页码范围</h4><p>默认全部。也可填 <code>1-10</code> 只翻前 10 页，或 <code>1,3,5-8</code> 跳着翻。<strong>建议先小范围试翻</strong>验证服务可用。</p></div></div>
       <div class="step"><div class="badge">7</div><div class="body"><h4>输出格式</h4><p>三选一：<strong>左右并排</strong>（推荐 · 原文译文同页对照）/ <strong>双语对照</strong>（先原文页后译文页）/ <strong>仅译文</strong>（只输出中文版）。</p></div></div>
       <div class="step"><div class="badge">8</div><div class="body"><h4>线程数</h4><p>同时跑多少个翻译请求。免费服务别开太大（容易封 IP），DeepSeek/通义建议 <code>16-32</code>，长文本翻得快。</p></div></div>
-      <div class="step"><div class="badge">9</div><div class="body"><h4>分块翻译 / 扫描件 / 表格 / OCR</h4><p>大文件（>50 页）勾「分块翻译」，按 50 页一块，间隔 10 秒，避免触发 API 限流。扫描版 PDF 勾「扫描版 PDF」启用 OCR — <a href="#ocr">但效果有限，见下文</a>。</p></div></div>
+      <div class="step"><div class="badge">9</div><div class="body"><h4>分块翻译 / 扫描件 / 表格 / OCR</h4><p><strong>4 个特殊场景开关</strong>，普通 PDF <b>全部不勾</b>就好。<a href="#options">→ 什么时候该勾（详细说明）</a></p></div></div>
       <div class="step"><div class="badge">10</div><div class="body"><h4>开始翻译</h4><p>点这里开跑。状态会变成「翻译中…」并显示进度条。完成后会自动跳到「阅读」页预览结果。<strong>骰子按钮</strong>：随便从内置示例论文里抽一篇试翻，验证流程。</p></div></div>
     </div>
 
