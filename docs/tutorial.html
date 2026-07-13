@@ -124,6 +124,7 @@
   <a href="#sec-about">④ 关于页</a>
   <a href="#api">买 API · 服务推荐</a>
   <a href="#ocr">扫描件 / OCR 加文字层</a>
+  <a href="#options">⚙️ 勾选框速查 · 什么时候勾</a>
   <a href="#faq">常见问题</a>
 </aside>
 
@@ -568,6 +569,83 @@
           <li>把这个新 PDF 拖进 pdf2zh-desktop · <strong>不勾「扫描版 PDF」「OCR 识别」</strong></li>
           <li>正常翻译 — 这时候得到的版式、公式、术语效果就跟原生 PDF 一样好</li>
         </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="tutorial" id="options">
+    <div class="head">
+      <span class="num">OPTIONS</span>
+      <h2>⚙️ 勾选框速查 — 什么时候该勾，什么时候别勾</h2>
+    </div>
+    <p class="lead">翻译页有 4 个勾选框、设置页有 4 个开关。每个选项<strong>都有明确的适用场景</strong>，误勾会拖慢速度或让译文效果反而变差。下面表格按「场景 → 是否勾」帮你速查（也可以在软件里把鼠标悬停在勾选框上 1-2 秒，会浮出简短提示）。</p>
+
+    <h3 style="font-size:20px;font-weight:700;margin:24px 0 12px">翻译页 · 4 个勾选框</h3>
+    <div class="grid">
+      <div class="card">
+        <div class="top"><h5>📜 扫描版 PDF</h5></div>
+        <p class="desc"><b>做什么：</b>在译文位置上盖一层白色矩形，把底层的原文遮住。<br>
+        <b style="color:#1d6d3a">✅ 该勾：</b>扫描件（图书馆扫的旧书 / 有文字层但排版乱、译文和原文重叠）<br>
+        <b style="color:#a8261c">❌ 别勾：</b>普通数字 PDF（论文/技术文档）— 段落间隙会露出原文，观感更差</p>
+      </div>
+      <div class="card">
+        <div class="top"><h5>📊 翻译表格内容</h5></div>
+        <p class="desc"><b>做什么：</b>启用<b>按单元格</b>翻译的独立管线，逐格调用 API。<br>
+        <b style="color:#1d6d3a">✅ 该勾：</b><b>专利文件 / 检测报告 / 财报 / 法规条例</b> 等表格密集型 PDF（全文都是表格）<br>
+        <b style="color:#a8261c">❌ 别勾：</b>只有零星几个表格的普通 PDF — 会让整个翻译时间 ×3，得不偿失</p>
+      </div>
+      <div class="card">
+        <div class="top"><h5>🔍 OCR 识别</h5></div>
+        <p class="desc"><b>做什么：</b>翻译前先用 OCR（v2.2.6+ 内置 PaddleOCR）识别图片里的文字生成文字层。<br>
+        <b style="color:#1d6d3a">✅ 该勾：</b>纯图片扫描件（在预览里<b>拖选不中任何文字</b>）<br>
+        <b style="color:#a8261c">❌ 别勾：</b>有文字层的 PDF（拖选能选中）— 浪费几分钟到十几分钟做无用 OCR</p>
+      </div>
+      <div class="card">
+        <div class="top"><h5>📦 分块翻译（大文件推荐）</h5></div>
+        <p class="desc"><b>做什么：</b>按每 50 页一块提交翻译，块间隔 10 秒，避免触发 API 频率限制。<br>
+        <b style="color:#1d6d3a">✅ 该勾：</b>大文件（&gt; 50 页）+ 免费/限流服务（Google / 免费额度 DeepSeek）<br>
+        <b style="color:#a8261c">❌ 别勾：</b>小文件（&lt; 20 页）或已充值大额度的付费服务 — 白白等 10 秒 × N 次</p>
+      </div>
+    </div>
+
+    <h3 style="font-size:20px;font-weight:700;margin:32px 0 12px">设置页 · 4 个开关</h3>
+    <div class="grid">
+      <div class="card">
+        <div class="top"><h5>🎨 深色模式</h5></div>
+        <p class="desc"><b>做什么：</b>整个 app 换深色主题。<br>
+        <b style="color:#1d6d3a">✅ 该开：</b>夜间使用 / 眼睛怕光<br>
+        <b style="color:#666">⚪ 无所谓：</b>纯偏好，不影响翻译效果</p>
+      </div>
+      <div class="card">
+        <div class="top"><h5>💾 翻译缓存</h5></div>
+        <p class="desc"><b>做什么：</b>把「原文段落 → 译文」存到本地 SQLite，同段落只调一次 API。<br>
+        <b style="color:#1d6d3a">✅ 该开（默认）：</b>永远开着 — 重翻同文件不烧钱，多次调整参数省时间<br>
+        <b style="color:#a8261c">❌ 临时关：</b>换了模型/prompt/术语表想强制重翻时</p>
+      </div>
+      <div class="card">
+        <div class="top"><h5>🧠 AI 布局检测</h5></div>
+        <p class="desc"><b>做什么：</b>用 doclayout-yolo 视觉模型识别页面结构（正文 / 标题 / 公式 / 表格），只翻正文和标题。<br>
+        <b style="color:#1d6d3a">✅ 该开：</b>学术论文（有公式、多栏、复杂排版）<br>
+        <b style="color:#a8261c">❌ 关掉试试：</b>公式翻乱、正文和公式串在一起时；或纯文本无公式文档（关掉快 20%）</p>
+      </div>
+      <div class="card">
+        <div class="top"><h5>🔤 字体子集化</h5></div>
+        <p class="desc"><b>做什么：</b>输出 PDF 只嵌入用到的中文字符（而不是整个 20MB 字体），减小文件体积。<br>
+        <b style="color:#1d6d3a">✅ 该开（默认）：</b>只需要在 Adobe / Preview / 微信 里阅读<br>
+        <b style="color:#a8261c">❌ 关掉：</b>输出 PDF 要拿给第三方 OCR、二次编辑、或对方阅读器不支持子集字体 — 关掉后复制粘贴才不会缺字</p>
+      </div>
+    </div>
+
+    <div class="notice info" style="margin-top:24px">
+      <span class="ico">ⓘ</span>
+      <div>
+        <strong>最容易误勾的 3 个：</strong>
+        <ol style="margin:8px 0 0 22px;line-height:1.9">
+          <li><b>「扫描版 PDF」</b>—— 数字 PDF 勾了会让段落间露原文，看着更乱</li>
+          <li><b>「翻译表格内容」</b>—— 只有一两个表格勾了会让整篇文档慢 3 倍</li>
+          <li><b>「OCR 识别」</b>—— 已有文字层勾了浪费大量时间没收益</li>
+        </ol>
+        <span style="display:block;margin-top:8px">这 3 个是<b>专门的场景开关</b>，<b>默认全不勾</b>就好，除非你确定当前 PDF 属于对应场景。</span>
       </div>
     </div>
   </section>
