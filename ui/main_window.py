@@ -3190,6 +3190,29 @@ class TranslatePage(QWidget):
         except TypeError: pass
         self.go_btn.clicked.connect(self._start)
 
+        # A：Zotero 联动健康检查 — 从 storage 拖入但插件没响应时提前提示
+        try:
+            from ui.translate_worker import detect_zotero_source, zotero_plugin_installed
+            zotero_sourced = [f for f in files if detect_zotero_source(f)]
+            if zotero_sourced and not zotero_plugin_installed():
+                from PyQt5.QtWidgets import QMessageBox
+                reply = QMessageBox.question(
+                    self, "Zotero 联动提示",
+                    f"检测到 {len(zotero_sourced)} 个文件来自 Zotero storage 目录，\n"
+                    "但 Zotero 插件（pdf2zh Connector）没响应，翻译完不会自动加到 Zotero 库里。\n\n"
+                    "可能原因：\n"
+                    "  1. Zotero 没打开 → 请打开 Zotero 后重试\n"
+                    "  2. 插件没装 → 下载 pdf2zh-connector-v1.0.7.xpi 手动装到 Zotero\n"
+                    "  3. 插件启动失败 → 到 Zotero「附加组件」检查有没有错误\n\n"
+                    "是否仍要继续翻译？（结果会保存在默认目录，不同步到 Zotero）",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                if reply != QMessageBox.Yes:
+                    return
+        except Exception:
+            pass  # 健康检查失败不阻断主流程
+
         # 先保存翻译页配置（先 save 自己，再让设置页覆盖 API Key 字段，避免互相 stomp）
         self._save_config()
         # 修复：强制让设置页保存（防 editingFinished 漏触发导致 API Key 丢失）

@@ -34,7 +34,8 @@ SERVICE_MAP = {
     "Tencent (腾讯)": "tencent",
     "Dify": "dify",
     "AnythingLLM": "anythingllm",
-    "Argos Translate": "argos",
+    # Argos Translate 因离线包依赖（ctranslate2 等）过大未集成，桌面版不开放此服务
+    # "Argos Translate": "argos",
     "Groq": "groq",
     "Grok": "grok",
     "Silicon": "silicon",
@@ -79,9 +80,10 @@ def zotero_auto_link(item_key: str, file_path: str, title: str):
     """
     通过 pdf2zh-connector 插件将译文自动添加为 Zotero 附件。
     端点: POST http://127.0.0.1:23119/pdf2zh/attach
-    返回 (success: bool, message: str)
+    返回 (success: bool, message: str) — B：把不同失败原因分开返回明确消息
     """
     import urllib.request
+    import urllib.error
     import json
     payload = json.dumps({
         "itemKey": item_key,
@@ -99,12 +101,19 @@ def zotero_auto_link(item_key: str, file_path: str, title: str):
             body = resp.read().decode("utf-8", errors="ignore")
             data = json.loads(body)
             if "error" in data:
-                return False, data["error"]
-            return True, f"已关联到 Zotero (key={data.get('key', '?')})"
-    except urllib.error.URLError:
-        return False, "pdf2zh Connector 未安装或 Zotero 未运行"
+                return False, f"Zotero 插件报错：{data['error']}"
+            return True, (f"✅ 已同步到 Zotero(key={data.get('key','?')})"
+                          " → 打开 Zotero 看原文献下的『Translated PDF』附件")
+    except urllib.error.HTTPError as e:
+        # HTTP 层错误（404/500）— 插件端点存在但内部报错
+        if e.code == 404:
+            return False, "❌ Zotero 联动失败：插件未装或未启用 → 请下载 pdf2zh-connector-v1.0.7.xpi 手动装"
+        return False, f"❌ Zotero 联动失败：HTTP {e.code} {e.reason}"
+    except urllib.error.URLError as e:
+        # 连不上 Zotero
+        return False, "❌ Zotero 联动失败：Zotero 未打开 → 请打开 Zotero 后重新翻译"
     except Exception as e:
-        return False, str(e)
+        return False, f"❌ Zotero 联动失败：{str(e)[:120]}"
 
 
 def zotero_plugin_installed():
@@ -375,6 +384,7 @@ def build_service_envs(svc_display_name):
     # 翻译页显示名 → (设置页配置前缀, {gui字段: translator环境变量名})
     _MAP = {
         "OpenAI":          ("OpenAI",           {"api": "OPENAI_API_KEY",       "url": "OPENAI_BASE_URL",       "model": "OPENAI_MODEL"}),
+        "Azure":           ("Azure",            {"api": "AZURE_API_KEY",        "url": "AZURE_ENDPOINT"}),
         "AzureOpenAI":     ("Azure OpenAI",     {"api": "AZURE_OPENAI_API_KEY", "url": "AZURE_OPENAI_BASE_URL", "model": "AZURE_OPENAI_MODEL"}),
         "DeepL":           ("DeepL",            {"api": "DEEPL_AUTH_KEY"}),
         "Gemini":          ("Gemini",           {"api": "GEMINI_API_KEY",       "url": "GEMINI_BASE_URL",       "model": "GEMINI_MODEL"}),
@@ -382,10 +392,12 @@ def build_service_envs(svc_display_name):
         "DeepSeek":        ("DeepSeek",         {"api": "DEEPSEEK_API_KEY",     "url": "DEEPSEEK_BASE_URL",     "model": "DEEPSEEK_MODEL"}),
         "Zhipu (智谱)":   ("Zhipu 智谱",      {"api": "ZHIPU_API_KEY",        "url": "ZHIPU_BASE_URL",        "model": "ZHIPU_MODEL"}),
         "Tencent (腾讯)": ("Tencent 腾讯",     {"api": "TENCENTCLOUD_SECRET_ID"}),
+        "Dify":            ("Dify",             {"api": "DIFY_API_KEY",         "url": "DIFY_API_URL"}),
         "Silicon":         ("Silicon 硅基流动", {"api": "SILICON_API_KEY",      "url": "SILICON_BASE_URL",      "model": "SILICON_MODEL"}),
         "Ollama":          ("Ollama 本地",      {"model": "OLLAMA_MODEL"}),
         "AnythingLLM":     ("AnythingLLM",      {"api": "AnythingLLM_APIKEY",   "url": "AnythingLLM_URL"}),
         "Grok":            ("Grok",             {"api": "GORK_API_KEY",         "url": "GORK_BASE_URL",         "model": "GORK_MODEL"}),
+        "Ali Qwen":        ("Qwen 通义千问",   {"api": "OPENAI_API_KEY",       "url": "OPENAI_BASE_URL",       "model": "OPENAI_MODEL"}),
         "OpenAI-liked":    ("OpenAI 兼容",     {"api": "OPENAILIKED_API_KEY",  "url": "OPENAILIKED_BASE_URL",  "model": "OPENAILIKED_MODEL"}),
     }
 
@@ -487,6 +499,7 @@ class TranslateWorker(QThread):
                  pages=None, thread_count=8, chunk_enabled=False,
                  chunk_size=50, chunk_delay=10, envs=None,
                  skip_subset_fonts=False, ignore_cache=False,
+                 scan_mode=False, translate_tables=False, ocr_mode=False,
                  parent=None):
         super().__init__(parent)
         self.file_path = file_path
@@ -502,6 +515,9 @@ class TranslateWorker(QThread):
         self.envs = envs
         self.skip_subset_fonts = skip_subset_fonts
         self.ignore_cache = ignore_cache
+        self.scan_mode = scan_mode
+        self.translate_tables = translate_tables
+        self.ocr_mode = ocr_mode
         self.cancelled = False
         self._cancel_event = None
 
@@ -520,24 +536,41 @@ class TranslateWorker(QThread):
             self.error.emit(f"模块加载失败: {e}")
             return
 
-        # API Key 预检查
+        # API Key 预检查（修复 issue #16: 精确检查当前 service 对应的 key 字段）
         if self.service in self.SERVICES_NEED_KEY:
-            from ui.config_manager import UserConfigManager
-            cfg = UserConfigManager.load()
-            has_key = False
-            for k, v in cfg.items():
-                if k.startswith("api_") and v:
-                    has_key = True
-                    break
-            # 同时检查环境变量
+            envs_for_check = self.envs or {}
+            # service 名 → API Key 环境变量名
+            _SVC_TO_ENV = {
+                "deepseek": "DEEPSEEK_API_KEY",
+                "openai": "OPENAI_API_KEY",
+                "azure": "AZURE_API_KEY",
+                "azure-openai": "AZURE_OPENAI_API_KEY",
+                "deepl": "DEEPL_AUTH_KEY",
+                "deeplx": "DEEPLX_AUTH_KEY",
+                "gemini": "GEMINI_API_KEY",
+                "zhipu": "ZHIPU_API_KEY",
+                "tencent": "TENCENTCLOUD_SECRET_ID",
+                "dify": "DIFY_API_KEY",
+                "anythingllm": "AnythingLLM_APIKEY",
+                "groq": "GROQ_API_KEY",
+                "grok": "GORK_API_KEY",
+                "silicon": "SILICON_API_KEY",
+                "qwen-mt": "OPENAI_API_KEY",
+                "openai-liked": "OPENAILIKED_API_KEY",
+            }
+            need_env = _SVC_TO_ENV.get(self.service)
             import os as _os
-            for env_name in ["OPENAI_API_KEY", "DEEPL_AUTH_KEY", "DEEPSEEK_API_KEY"]:
-                if _os.environ.get(env_name):
-                    has_key = True
+            has_key = bool(envs_for_check.get(need_env)) if need_env else False
+            if not has_key and need_env:
+                # 兜底：环境变量
+                has_key = bool(_os.environ.get(need_env))
             if not has_key:
                 self.error.emit(
-                    f"「{self.service}」需要 API Key。\n"
-                    f"请在「设置 → 翻译服务密钥」中填写，或使用免费服务（Bing/Google）。"
+                    f"「{self.service}」的 API Key 未配置。\n\n"
+                    f"请进入「设置」页，找到对应服务（如 DeepSeek）填入密钥，"
+                    f"然后**点击输入框外任意位置**或按 Tab，确保保存生效。\n\n"
+                    f"如已填写仍报错：检查 ~/.config/pdf2zh/config.json 里 "
+                    f"api_<服务名> 字段是否为空。"
                 )
                 return
 
@@ -563,9 +596,17 @@ class TranslateWorker(QThread):
             total_pages = len(doc)
             doc.close()
 
-            # 翻译参数基础模板（和原版一致）
+            # 预处理链
+            actual_file = self.file_path
+
+            # OCR 预处理：纯图片扫描件 → 添加不可见文字层
+            if self.ocr_mode:
+                self.status.emit("正在 OCR 识别…")
+                actual_file = self._ocr_preprocess(actual_file)
+
+            # 翻译参数基础模板（pdf2zh 1.8.9 兼容）
             base_param = dict(
-                files=[self.file_path],
+                files=[actual_file],
                 output=self.output_dir,
                 lang_in=self.lang_in,
                 lang_out=self.lang_out,
@@ -574,6 +615,7 @@ class TranslateWorker(QThread):
                 model=model,
                 cancellation_event=self._cancel_event,
                 envs=self.envs or {},
+                scan_mode=self.scan_mode,
             )
 
             def on_progress(p):
@@ -648,6 +690,13 @@ class TranslateWorker(QThread):
 
             mono_path, dual_path = result_list[0]
 
+            # ── 表格翻译后处理 ──
+            if self.translate_tables:
+                self.status.emit("正在翻译表格内容…")
+                for pdf_path in [mono_path, dual_path]:
+                    if pdf_path and os.path.exists(pdf_path):
+                        self._translate_tables_postprocess(pdf_path)
+
             # ── 生成 Side-by-Side ──
             self.status.emit("正在生成左右并排版…")
             base = os.path.splitext(mono_path)[0]
@@ -681,6 +730,124 @@ class TranslateWorker(QThread):
                 loop.close()
             except Exception:
                 pass
+            # 清理 OCR 预处理产生的临时文件
+            if actual_file != self.file_path and os.path.exists(actual_file):
+                try:
+                    os.remove(actual_file)
+                except OSError:
+                    pass
+
+    # ── OCR 预处理：纯图片扫描件添加不可见文字层 ──
+
+    def _ocr_preprocess(self, file_path):
+        """对纯图片 PDF 先 OCR 识别，添加文字层后返回临时文件路径"""
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+        except ImportError:
+            self.status.emit("OCR 模块未安装，跳过")
+            return file_path
+
+        doc = None
+        try:
+            ocr = RapidOCR()
+            doc = fitz.open(file_path)
+            modified = False
+
+            for page_num in range(doc.page_count):
+                if self.cancelled:
+                    break
+                page = doc[page_num]
+                if page.get_text().strip():
+                    continue  # 已有文字层，跳过
+
+                pix = page.get_pixmap(dpi=300)
+                img_data = pix.tobytes("png")
+                result, _ = ocr(img_data)
+                if not result:
+                    continue
+
+                scale_x = page.rect.width / pix.width
+                scale_y = page.rect.height / pix.height
+                for line in result:
+                    box, text, confidence = line
+                    if confidence < 0.5:
+                        continue
+                    x0 = min(p[0] for p in box) * scale_x
+                    y0 = min(p[1] for p in box) * scale_y
+                    x1 = max(p[0] for p in box) * scale_x
+                    y1 = max(p[1] for p in box) * scale_y
+                    font_size = max((y1 - y0) * 0.8, 4)
+                    rc = fitz.Rect(x0, y0, x1, y1)
+                    page.insert_textbox(
+                        rc, text, fontsize=font_size,
+                        fontname="helv", color=(0, 0, 0),
+                        render_mode=3,  # 3 = invisible
+                    )
+                    modified = True
+                self.status.emit(f"OCR 识别中… {page_num+1}/{doc.page_count}")
+
+            if modified:
+                import tempfile
+                tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+                doc.save(tmp.name)
+                doc.close()
+                doc = None
+                return tmp.name
+        except Exception as e:
+            self.status.emit(f"OCR 失败: {e}")
+        finally:
+            if doc:
+                try: doc.close()
+                except Exception: pass
+        return file_path
+
+    # ── 表格翻译后处理 ──
+
+    def _translate_tables_postprocess(self, pdf_path):
+        """提取表格文字，翻译后写回（独立管线，不影响正文排版）"""
+        try:
+            doc = fitz.open(pdf_path)
+            from ui.ai_client import chat_completion
+            for page_num in range(doc.page_count):
+                if self.cancelled:
+                    break
+                page = doc[page_num]
+                tables = page.find_tables()
+                if not tables or not tables.tables:
+                    continue
+                for table in tables.tables:
+                    for cell in table.cells:
+                        if cell is None:
+                            continue
+                        rect = fitz.Rect(cell)
+                        text = page.get_textbox(rect).strip()
+                        if not text or len(text) < 2:
+                            continue
+                        # 翻译单元格文字
+                        try:
+                            translated = chat_completion([
+                                {"role": "system", "content": f"Translate to {self.lang_out}. Output ONLY the translation, nothing else."},
+                                {"role": "user", "content": text}
+                            ])
+                            if translated and translated.strip():
+                                # 白底覆盖 + 写入译文
+                                shape = page.new_shape()
+                                shape.draw_rect(rect)
+                                shape.finish(color=None, fill=(1, 1, 1))
+                                shape.commit()
+                                font_size = max(min((rect.height * 0.7), 12), 5)
+                                page.insert_textbox(
+                                    rect, translated.strip(),
+                                    fontsize=font_size, fontname="china-s",
+                                    color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT,
+                                )
+                        except Exception:
+                            pass  # 单个单元格失败不影响其他
+                self.status.emit(f"表格翻译… {page_num+1}/{doc.page_count}")
+            doc.saveIncr()
+            doc.close()
+        except Exception:
+            pass
 
     def cancel(self):
         self.cancelled = True
