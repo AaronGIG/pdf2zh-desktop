@@ -76,20 +76,31 @@ def get_zotero_item_key(file_path: str):
     return m.group(1) if m else None
 
 
+def _local_opener():
+    """v2.3.2: 到 127.0.0.1 / localhost 的请求必须绕过系统 HTTP 代理
+    (clash/v2ray/学术代理 等会把 loopback 请求转到外网返回 502 Bad Gateway)
+    """
+    import urllib.request
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 def zotero_auto_link(item_key: str, file_path: str, title: str):
     """
     通过 pdf2zh-connector 插件将译文自动添加为 Zotero 附件。
     端点: POST http://127.0.0.1:23119/pdf2zh/attach
-    返回 (success: bool, message: str) — B：把不同失败原因分开返回明确消息
+    返回 (success: bool, message: str)
     """
     import urllib.request
     import urllib.error
+    import unicodedata
     import json
+    # macOS 文件系统用 NFD，Python 默认 NFC，混用会导致 Zotero 找不到文件
+    normalized_path = unicodedata.normalize('NFC', os.path.abspath(file_path))
     payload = json.dumps({
         "itemKey": item_key,
-        "filePath": file_path,
+        "filePath": normalized_path,
         "title": title,
-    }).encode("utf-8")
+    }, ensure_ascii=False).encode("utf-8")
     try:
         req = urllib.request.Request(
             "http://127.0.0.1:23119/pdf2zh/attach",
@@ -97,7 +108,7 @@ def zotero_auto_link(item_key: str, file_path: str, title: str):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with _local_opener().open(req, timeout=10) as resp:
             body = resp.read().decode("utf-8", errors="ignore")
             data = json.loads(body)
             if "error" in data:
@@ -105,12 +116,12 @@ def zotero_auto_link(item_key: str, file_path: str, title: str):
             return True, (f"✅ 已同步到 Zotero(key={data.get('key','?')})"
                           " → 打开 Zotero 看原文献下的『Translated PDF』附件")
     except urllib.error.HTTPError as e:
-        # HTTP 层错误（404/500）— 插件端点存在但内部报错
         if e.code == 404:
-            return False, "❌ Zotero 联动失败：插件未装或未启用 → 请下载 pdf2zh-connector-v1.0.7.xpi 手动装"
+            return False, "❌ Zotero 联动失败：插件未装或未启用 → 请下载最新 xpi 手动装"
+        if e.code == 502:
+            return False, "❌ Zotero 联动失败：HTTP 502 (代理拦截了 loopback 请求；已修，请重启 pdf2zh)"
         return False, f"❌ Zotero 联动失败：HTTP {e.code} {e.reason}"
     except urllib.error.URLError as e:
-        # 连不上 Zotero
         return False, "❌ Zotero 联动失败：Zotero 未打开 → 请打开 Zotero 后重新翻译"
     except Exception as e:
         return False, f"❌ Zotero 联动失败：{str(e)[:120]}"
@@ -121,7 +132,8 @@ def zotero_plugin_installed():
     import urllib.request
     try:
         req = urllib.request.Request("http://127.0.0.1:23119/pdf2zh/ping")
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        # v2.3.2: 绕过系统代理
+        with _local_opener().open(req, timeout=3) as resp:
             return resp.status == 200
     except Exception:
         return False
@@ -697,18 +709,34 @@ class TranslateWorker(QThread):
                     if pdf_path and os.path.exists(pdf_path):
                         self._translate_tables_postprocess(pdf_path)
 
-            # ── 生成 Side-by-Side ──
-            self.status.emit("正在生成左右并排版…")
+            # ── 生成 Side-by-Side（可选：output_formats 控制是否生成）──
             base = os.path.splitext(mono_path)[0]
             if base.endswith("-mono"):
                 base = base[:-5]
             sbs_path = base + "-side_by_side.pdf"
 
-            try:
-                create_side_by_side_pdf(mono_path, dual_path, sbs_path)
-            except Exception as e:
+            # v2.3.0：output_formats 控制只输出用户要的格式（默认全出保持兼容）
+            output_formats = getattr(self, "output_formats", None) or ["mono", "dual", "side_by_side"]
+            need_sbs = "side_by_side" in output_formats
+
+            if need_sbs:
+                self.status.emit("正在生成左右并排版…")
+                try:
+                    create_side_by_side_pdf(mono_path, dual_path, sbs_path)
+                except Exception as e:
+                    sbs_path = ""
+                    self.status.emit(f"并排版生成失败: {e}")
+            else:
                 sbs_path = ""
-                self.status.emit(f"并排版生成失败: {e}")
+
+            # 删掉用户不要的中间文件（比如只要 side_by_side 时删 mono/dual）
+            try:
+                if "mono" not in output_formats and mono_path and os.path.exists(mono_path):
+                    os.remove(mono_path); mono_path = ""
+                if "dual" not in output_formats and dual_path and os.path.exists(dual_path):
+                    os.remove(dual_path); dual_path = ""
+            except Exception:
+                pass
 
             self.status.emit("翻译完成")
             self.finished.emit({

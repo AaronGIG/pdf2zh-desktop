@@ -1,4 +1,4 @@
-"""配置与历史管理 — 持久化到 ~/pdf2zh_gui_config.json 和 ~/pdf2zh_history.json"""
+"""配置与历史管理 — 持久化到 ~/.config/pdf2zh/ 目录"""
 
 import json
 import base64
@@ -6,8 +6,33 @@ import uuid
 import hmac
 import hashlib
 import platform
+import shutil
 from pathlib import Path
 from datetime import datetime
+
+
+def _config_dir():
+    """统一配置目录 ~/.config/pdf2zh/，首次使用自动创建 + 迁移旧文件"""
+    d = Path.home() / ".config" / "pdf2zh"
+    d.mkdir(parents=True, exist_ok=True)
+    # 自动迁移旧版散落在 ~/ 下的配置文件
+    _migrations = {
+        "pdf2zh_gui_config.json": "config.json",
+        "pdf2zh_history.json": "history.json",
+        "pdf2zh_glossary.json": "glossary.json",
+        "pdf2zh_prompts.json": "prompts.json",
+    }
+    for old_name, new_name in _migrations.items():
+        old = Path.home() / old_name
+        new = d / new_name
+        if old.exists() and not new.exists():
+            shutil.move(str(old), str(new))
+    # 迁移术语库目录
+    old_gdir = Path.home() / "pdf2zh_glossaries"
+    new_gdir = d / "glossaries"
+    if old_gdir.exists() and not new_gdir.exists():
+        shutil.move(str(old_gdir), str(new_gdir))
+    return d
 
 
 class UserConfigManager:
@@ -15,7 +40,7 @@ class UserConfigManager:
 
     @staticmethod
     def path():
-        return Path.home() / "pdf2zh_gui_config.json"
+        return _config_dir() / "config.json"
 
     @classmethod
     def load(cls):
@@ -90,7 +115,7 @@ class HistoryManager:
 
     @staticmethod
     def path():
-        return Path.home() / "pdf2zh_history.json"
+        return _config_dir() / "history.json"
 
     # ── 核心读写 ──
 

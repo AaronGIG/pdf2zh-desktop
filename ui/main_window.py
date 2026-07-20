@@ -3191,27 +3191,29 @@ class TranslatePage(QWidget):
         self.go_btn.clicked.connect(self._start)
 
         # A：Zotero 联动健康检查 — 从 storage 拖入但插件没响应时提前提示
-        try:
-            from ui.translate_worker import detect_zotero_source, zotero_plugin_installed
-            zotero_sourced = [f for f in files if detect_zotero_source(f)]
-            if zotero_sourced and not zotero_plugin_installed():
-                from PyQt5.QtWidgets import QMessageBox
-                reply = QMessageBox.question(
-                    self, "Zotero 联动提示",
-                    f"检测到 {len(zotero_sourced)} 个文件来自 Zotero storage 目录，\n"
-                    "但 Zotero 插件（pdf2zh Connector）没响应，翻译完不会自动加到 Zotero 库里。\n\n"
-                    "可能原因：\n"
-                    "  1. Zotero 没打开 → 请打开 Zotero 后重试\n"
-                    "  2. 插件没装 → 下载 pdf2zh-connector-v1.0.7.xpi 手动装到 Zotero\n"
-                    "  3. 插件启动失败 → 到 Zotero「附加组件」检查有没有错误\n\n"
-                    "是否仍要继续翻译？（结果会保存在默认目录，不同步到 Zotero）",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No,
-                )
-                if reply != QMessageBox.Yes:
-                    return
-        except Exception:
-            pass  # 健康检查失败不阻断主流程
+        # v2.3.2: --auto CLI 唤起时跳过所有 modal（避免锁屏/无 UI 场景阻塞主线程）
+        if not getattr(self, "_cli_format", None):
+            try:
+                from ui.translate_worker import detect_zotero_source, zotero_plugin_installed
+                zotero_sourced = [f for f in files if detect_zotero_source(f)]
+                if zotero_sourced and not zotero_plugin_installed():
+                    from PyQt5.QtWidgets import QMessageBox
+                    reply = QMessageBox.question(
+                        self, "Zotero 联动提示",
+                        f"检测到 {len(zotero_sourced)} 个文件来自 Zotero storage 目录，\n"
+                        "但 Zotero 插件（pdf2zh Connector）没响应，翻译完不会自动加到 Zotero 库里。\n\n"
+                        "可能原因：\n"
+                        "  1. Zotero 没打开 → 请打开 Zotero 后重试\n"
+                        "  2. 插件没装 → 下载 pdf2zh-connector-v1.0.7.xpi 手动装到 Zotero\n"
+                        "  3. 插件启动失败 → 到 Zotero「附加组件」检查有没有错误\n\n"
+                        "是否仍要继续翻译？（结果会保存在默认目录，不同步到 Zotero）",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    if reply != QMessageBox.Yes:
+                        return
+            except Exception:
+                pass  # 健康检查失败不阻断主流程
 
         # 先保存翻译页配置（先 save 自己，再让设置页覆盖 API Key 字段，避免互相 stomp）
         self._save_config()
@@ -3273,6 +3275,13 @@ class TranslatePage(QWidget):
             translate_tables=self.translate_tables_check.isChecked(),
             ocr_mode=self.ocr_mode_check.isChecked(),
         )
+        # v2.3.0: 传递 output_formats 到 worker（如果单文件模式被激活）
+        # 由 _cli_format 属性（Zotero 唤起时设置）决定
+        _cli_fmt = getattr(self, "_cli_format", None)
+        if _cli_fmt and _cli_fmt != "all":
+            self.worker.output_formats = [_cli_fmt]
+            # 用完清掉，避免影响下次手动翻译
+            self._cli_format = None
         self.worker.progress.connect(self._on_prog)
         self.worker.status.connect(self._on_status)
         self.worker.finished.connect(self._on_single_done)
@@ -3393,20 +3402,28 @@ class TranslatePage(QWidget):
     def _zotero_writeback(self, file_path, output_files):
         """把译文复制回 Zotero 原位 + 尝试自动关联附件"""
         import shutil
+        _dbg_write(f"_zotero_writeback file_path={file_path!r} output_files={output_files}")
         zotero_dir = detect_zotero_source(file_path)
+        _dbg_write(f"  detect_zotero_source → {zotero_dir!r}")
         if not zotero_dir:
+            _dbg_write("  ✗ not from Zotero storage, skip writeback")
             return
         cfg = UserConfigManager.load()
         modes = cfg.get("zotero_output_modes", ["side_by_side"])
         keep_copy = cfg.get("zotero_keep_copy", True)
         item_key = get_zotero_item_key(file_path)
+        _dbg_write(f"  modes={modes} item_key={item_key!r}")
         for mode in modes:
             src = output_files.get(mode)
+            _dbg_write(f"  mode={mode} src={src!r}")
             if not src or not os.path.exists(src):
+                _dbg_write(f"    ✗ src missing or not exists, skip")
                 continue
             dst = os.path.join(zotero_dir, os.path.basename(src))
+            _dbg_write(f"    dst={dst!r}")
             if os.path.abspath(src) != os.path.abspath(dst):
                 shutil.copy2(src, dst)
+                _dbg_write(f"    ✓ copied to storage")
                 if not keep_copy:
                     try:
                         os.remove(src)
@@ -3414,8 +3431,26 @@ class TranslatePage(QWidget):
                         pass
             # 尝试通过 pdf2zh Connector 插件自动关联附件
             if item_key:
-                mode_label = {"side_by_side": "并排", "dual": "双语", "mono": "译文"}.get(mode, mode)
-                zotero_auto_link(item_key, dst, f"翻译 ({mode_label})")
+                mode_label = {"side_by_side": "中外并排", "dual": "上下双语", "mono": "纯中文"}.get(mode, mode)
+                base = os.path.splitext(os.path.basename(dst))[0]
+                for suffix in ("-side_by_side", "-dual", "-mono"):
+                    if base.endswith(suffix):
+                        base = base[: -len(suffix)]
+                        break
+                title = f"译文 · {mode_label} · {base}"
+                _dbg_write(f"    POST /pdf2zh/attach itemKey={item_key} title={title!r}")
+                try:
+                    ok, msg = zotero_auto_link(item_key, dst, title)
+                    _dbg_write(f"    zotero_auto_link → ok={ok} msg={msg!r}")
+                    if not ok:
+                        try: self.prog_detail.setText(f"⚠️ {msg}")
+                        except Exception: pass
+                except Exception as e:
+                    _dbg_write(f"    ✗ zotero_auto_link EXCEPTION: {e}")
+                    try: self.prog_detail.setText(f"⚠️ Zotero 联动异常: {e}")
+                    except Exception: pass
+            else:
+                _dbg_write(f"    ✗ item_key is None → no attach POST")
 
     def _on_batch_done(self):
         """全部文件翻译完成"""
@@ -4977,11 +5012,25 @@ class SettingsPage(QWidget):
         dst = os.path.join(ext_dir, "pdf2zh-connector@aarongig.com.xpi")
         shutil.copy2(xpi, dst)
         # 2. 设置 autoDisableScopes=0 允许 profile 级别的扩展自动加载
+        # v2.3.2 (对齐 issue #26 修复): 改 prefs.js 前先备份 + 出错时 rollback,
+        # 保证不会比之前效果差。同时备份 extensions.json 作为 catalog 出问题时的兜底
         prefs_path = os.path.join(profile, "prefs.js")
         pref_line = 'user_pref("extensions.autoDisableScopes", 0);\n'
+        # 备份 extensions.json (即使 Mac 版不动它,兜底给用户手动 rollback)
+        ext_json_path = os.path.join(profile, "extensions.json")
+        if os.path.exists(ext_json_path):
+            try:
+                shutil.copy2(ext_json_path, ext_json_path + ".pdf2zh-backup")
+            except Exception:
+                pass
         try:
             prefs_content = open(prefs_path, 'r', encoding='utf-8').read()
             if 'autoDisableScopes' not in prefs_content:
+                # 先备份再改
+                try:
+                    shutil.copy2(prefs_path, prefs_path + ".pdf2zh-backup")
+                except Exception:
+                    pass
                 with open(prefs_path, 'a', encoding='utf-8') as f:
                     f.write(pref_line)
         except FileNotFoundError:
@@ -5139,7 +5188,7 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.2.6"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel("v2.3.1"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
@@ -5536,7 +5585,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.2.6 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel("v2.3.1 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
@@ -5851,25 +5900,77 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(700, lambda: (self.raise_(), self.activateWindow()))
 
 
+def _dbg_write(msg):
+    """v2.3.2 debug: 写到 /tmp/pdf2zh-cli-debug.log + stderr，双保险"""
+    try:
+        from datetime import datetime as _dt
+        line = f"[{_dt.now().strftime('%H:%M:%S.%f')[:-3]}] {msg}\n"
+        try:
+            fd = os.open("/tmp/pdf2zh-cli-debug.log", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+            os.write(fd, line.encode("utf-8", errors="replace"))
+            os.close(fd)
+        except Exception:
+            pass
+        try:
+            sys.stderr.write(line)
+            sys.stderr.flush()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _parse_cli_args(argv):
+    """解析命令行参数 (向后兼容 — 老 pdf2zh xxx.pdf 依然工作)
+    支持:
+      pdf2zh file.pdf                    ← 旧行为
+      pdf2zh --format=side_by_side --auto file.pdf   ← 新行为（Zotero 右键唤起）
+      pdf2zh --format=dual file.pdf
+    返回 dict: {file: str|None, format: str|None, auto: bool}
+    """
+    result = {"file": None, "format": None, "auto": False}
+    try:
+        for arg in argv[1:]:
+            if arg.startswith("--format="):
+                fmt = arg.split("=", 1)[1].strip()
+                if fmt in ("mono", "dual", "side_by_side", "all"):
+                    result["format"] = fmt
+            elif arg == "--auto":
+                result["auto"] = True
+            elif arg.lower().endswith(".pdf") and os.path.isfile(arg):
+                result["file"] = arg
+    except Exception:
+        pass
+    return result
+
+
 class Pdf2zhApp(QApplication):
-    """单实例 QApplication：第二个实例把文件发给第一个实例后退出"""
-    file_opened = pyqtSignal(str)
+    """单实例 QApplication：第二个实例把文件+参数发给第一个实例后退出"""
+    file_opened = pyqtSignal(dict)  # {file, format, auto}
     _SERVER_NAME = "com.aarongig.pdf2zh.single"
 
     def __init__(self, argv):
+        # v2.3.2: 最早的 debug log 用 sys.stderr + /tmp 双保险
+        _dbg_write(f"Pdf2zhApp.__init__ START argv[{len(argv)}]={argv!r}")
         super().__init__(argv)
+        _dbg_write("Pdf2zhApp.__init__ super() done")
         from PyQt5.QtNetwork import QLocalServer, QLocalSocket
         self._pending_file = None
+
+        # 解析命令行参数
+        cli = _parse_cli_args(argv)
+        _dbg_write(f"Pdf2zhApp.__init__ cli parsed = {cli!r}")
 
         # 尝试连接已有实例
         sock = QLocalSocket()
         sock.connectToServer(self._SERVER_NAME)
         if sock.waitForConnected(500):
-            # 已有实例在运行 → 把文件路径发过去，然后退出
-            for arg in argv[1:]:
-                if arg.lower().endswith('.pdf') and os.path.isfile(arg):
-                    sock.write(arg.encode('utf-8'))
-                    sock.waitForBytesWritten(1000)
+            # 已有实例在运行 → 把 payload 发过去，然后退出
+            if cli["file"]:
+                import json as _json
+                payload = _json.dumps(cli).encode("utf-8")
+                sock.write(payload)
+                sock.waitForBytesWritten(1000)
             sock.disconnectFromServer()
             sys.exit(0)
 
@@ -5879,42 +5980,141 @@ class Pdf2zhApp(QApplication):
         self._server.listen(self._SERVER_NAME)
         self._server.newConnection.connect(self._on_new_connection)
 
+        # 记录启动时命令行参数（有文件的话 main() 会用到）
+        self._launch_cli = cli
+
     def _on_new_connection(self):
         conn = self._server.nextPendingConnection()
         if conn:
             conn.waitForReadyRead(1000)
-            data = conn.readAll().data().decode('utf-8', errors='ignore')
+            data = conn.readAll().data().decode("utf-8", errors="ignore")
             conn.close()
-            if data and data.lower().endswith('.pdf'):
-                self.file_opened.emit(data)
+            # 兼容旧格式（纯文件路径）+ 新格式（JSON payload）
+            payload = None
+            if data.startswith("{"):
+                try:
+                    import json as _json
+                    payload = _json.loads(data)
+                except Exception:
+                    pass
+            if payload is None and data.lower().endswith(".pdf"):
+                payload = {"file": data, "format": None, "auto": False}
+            if payload and payload.get("file"):
+                self.file_opened.emit(payload)
 
     def event(self, e):
+        # v2.3.2 修 bug: FileOpen event 收到路径时，之前 emit(str) 与 signal dict 定义不匹配 → 静默丢失
         if e.type() == e.FileOpen:
             path = e.file()
+            _dbg_write(f"Pdf2zhApp.event FileOpen path={path!r}")
             if path and path.lower().endswith('.pdf'):
-                self.file_opened.emit(path)
+                # 用 CLI 里保存的 format/auto 参数（如果启动时带了）
+                cli = getattr(self, '_launch_cli', {}) or {}
+                payload = {
+                    "file": path,
+                    "format": cli.get("format"),
+                    "auto": cli.get("auto", False),
+                }
+                self.file_opened.emit(payload)
                 return True
         return super().event(e)
 
 
 def main():
+    _dbg_write("main() entered")
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    _dbg_write("main() creating Pdf2zhApp")
     app = Pdf2zhApp(sys.argv); app.setStyle("Fusion")
-    w = MainWindow(); w.show()
+    _dbg_write("main() Pdf2zhApp created, creating MainWindow")
+    try:
+        w = MainWindow()
+        _dbg_write(f"main() MainWindow created type={type(w).__name__}")
+    except Exception as _mw_e:
+        import traceback as _tb
+        _dbg_write(f"main() MainWindow FAILED: {_mw_e}\n{_tb.format_exc()}")
+        raise
+    _dbg_write("main() calling w.show()")
+    w.show()
+    _dbg_write(f"main() after show(), isVisible={w.isVisible()} geom={w.geometry().getRect()}")
 
-    # 文件打开事件 → 送到翻译页
-    def _on_file_open(path):
-        tp = w.pages.get("翻译")
-        if tp:
-            tp.on_files_added([path])
-            w.switch("翻译")
-            w.raise_()
-            w.activateWindow()
-    app.file_opened.connect(_on_file_open)
+    # v2.3.2: debug log 到磁盘方便排查 CLI 唤起失败问题
+    _dbg_log = os.path.expanduser("~/.config/pdf2zh/cli-debug.log")
+
+    def _dbg(msg):
+        try:
+            os.makedirs(os.path.dirname(_dbg_log), exist_ok=True)
+            with open(_dbg_log, "a", encoding="utf-8") as f:
+                from datetime import datetime as _dt
+                f.write(f"[{_dt.now().strftime('%H:%M:%S')}] {msg}\n")
+        except Exception:
+            pass
+
+    # 处理文件 + 可选参数（format / auto）
+    def _handle_payload(payload):
+        """payload = {file, format, auto}"""
+        _dbg_write(f"_handle_payload called payload={payload}")
+        try:
+            pages_keys = list(w.pages.keys()) if hasattr(w, "pages") else "no pages"
+            _dbg_write(f"  pages_keys={pages_keys}")
+            tp = w.pages.get("翻译")
+            _dbg_write(f"  tp={tp}")
+            if not tp:
+                _dbg_write("  ✗ tp is None, giving up")
+                return
+            file_path = payload.get("file")
+            _dbg_write(f"  file_path={file_path!r}")
+            if file_path:
+                exists = os.path.isfile(file_path)
+                _dbg_write(f"  isfile={exists}")
+                tp.on_files_added([file_path])
+                _dbg_write(f"  after on_files_added, flist count={tp.flist.count()}")
+                w.switch("翻译")
+                w.raise_(); w.activateWindow()
+
+                fmt = payload.get("format")
+                if fmt:
+                    tp._cli_format = fmt
+                    _dbg_write(f"  set _cli_format={fmt}")
+
+                if payload.get("auto"):
+                    _dbg_write(f"  scheduling _start() in 800ms")
+                    QTimer.singleShot(800, lambda: (_dbg_write("  calling _start"), tp._start()) if hasattr(tp, "_start") else _dbg_write("  ✗ no _start"))
+        except Exception as e:
+            import traceback
+            _dbg_write(f"  ✗ EXCEPTION: {e}\n{traceback.format_exc()}")
+
+    app.file_opened.connect(_handle_payload)
+
+    # 启动时如果就带了文件参数（首次启动直接从 Zotero 唤起），也处理
+    if hasattr(app, "_launch_cli") and app._launch_cli.get("file"):
+        QTimer.singleShot(300, lambda: _handle_payload(app._launch_cli))
 
     sys.exit(app.exec_())
 
 
+def _early_log(tag):
+    """v2.3.2: 最早期日志，绕过所有 helper（即使 datetime import 失败也能写）"""
+    try:
+        import os as _os, sys as _sys, time as _time
+        line = f"[{_time.strftime('%H:%M:%S')}] {tag} name={__name__!r} argv={_sys.argv!r}\n"
+        fd = _os.open("/tmp/pdf2zh-early.log", _os.O_WRONLY | _os.O_APPEND | _os.O_CREAT, 0o644)
+        _os.write(fd, line.encode("utf-8", errors="replace"))
+        _os.close(fd)
+        try:
+            _sys.stderr.write(line); _sys.stderr.flush()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+# v2.3.2: __name__ 会是 "__main__"（终端启动）或 "ui.main_window"（frozen 打包）
+_early_log("module top-level import")
+
 if __name__ == "__main__":
+    _early_log("__main__ before main()")
     main()
+else:
+    # PyInstaller frozen 可能在别处启动 main()，但为了保险这里也 log 一下
+    _early_log(f"__name__ != __main__ (={__name__})")

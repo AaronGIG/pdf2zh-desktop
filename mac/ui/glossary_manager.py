@@ -43,13 +43,12 @@ class GlossaryManager:
     术语库：存储为 JSON，格式 {"source_term": "target_term", ...}
     支持从 CSV/JSON 导入，翻译完成后自动替换。
     首次使用自动加载默认学术术语。
-    存储路径: ~/.config/pdf2zh/glossary.json
+    存储路径: ~/pdf2zh_glossary.json
     """
 
     @staticmethod
     def path():
-        from ui.config_manager import _config_dir
-        return _config_dir() / "glossary.json"
+        return Path.home() / "pdf2zh_glossary.json"
 
     @classmethod
     def load(cls):
@@ -79,8 +78,7 @@ class GlossaryManager:
         """加载所有预设 + 用户自定义"""
         all_g = dict(DEFAULT_GLOSSARIES)
         # 扫描用户自定义术语库文件
-        from ui.config_manager import _config_dir
-        user_dir = _config_dir() / "glossaries"
+        user_dir = Path.home() / "pdf2zh_glossaries"
         if user_dir.exists():
             for f in user_dir.glob("*.json"):
                 try:
