@@ -12,6 +12,102 @@ from pathlib import Path
 import fitz
 
 
+def _install_pdf2zh_color_fix():
+    """v2.3.3 运行时热补丁 (import hook, 不改 pdf2zh 模块本身):
+    修复某些期刊 PDF(ICC 颜色空间) 白色矩形 '1 1 1 scn' 被截断成 '1 scn' → 渲染成红色,
+    以及译文文字继承颜色导致变红。在 pdf2zh.pdfinterp / pdf2zh.converter 被导入时自动打补丁。
+    """
+    import sys as _sys
+    import importlib.util as _ilu
+    from importlib.abc import MetaPathFinder
+
+    _patched = set()
+
+    def _patch_pdfinterp(mod):
+        for cn in ("PDFPageInterpreterEx", "PDFPageInterpreter"):
+            cls = getattr(mod, cn, None)
+            if not cls or getattr(cls, "_p2z_scn_fixed", False):
+                continue
+
+            def _mk(is_stroke):
+                attr = "scs" if is_stroke else "ncs"
+                cattr = "scolor" if is_stroke else "ncolor"
+
+                def _f(self):
+                    cs = getattr(self.graphicstate, attr, None) or getattr(self, attr, None)
+                    n = cs.ncomponents if cs else 1
+                    _num = 0
+                    for _v in reversed(self.argstack):
+                        if isinstance(_v, (int, float)):
+                            _num += 1
+                        else:
+                            break
+                    if _num > n:
+                        n = _num
+                    a = self.pop(n)
+                    setattr(self.graphicstate, cattr, a)
+                    return a
+
+                return _f
+
+            cls.do_scn = _mk(False)
+            cls.do_sc = cls.do_scn
+            cls.do_SCN = _mk(True)
+            cls.do_SC = cls.do_SCN
+            cls._p2z_scn_fixed = True
+
+    def _patch_converter(mod):
+        tc = getattr(mod, "TranslateConverter", None)
+        if not tc or getattr(tc, "_p2z_color_fixed", False):
+            return
+        _orig = tc.receive_layout
+
+        def _wrapped(self, ltpage):
+            ops = _orig(self, ltpage)
+            if isinstance(ops, str) and ops:
+                return "0 g 0 G " + ops
+            return ops
+
+        tc.receive_layout = _wrapped
+        tc._p2z_color_fixed = True
+
+    _patchers = {
+        "pdf2zh.pdfinterp": _patch_pdfinterp,
+        "pdf2zh.converter": _patch_converter,
+    }
+
+    class _Finder(MetaPathFinder):
+        def find_spec(self, name, path, target=None):
+            if name not in _patchers or name in _patched:
+                return None
+            _patched.add(name)  # 防递归
+            try:
+                spec = _ilu.find_spec(name)
+            except Exception:
+                return None
+            if spec is None or spec.loader is None:
+                return None
+            _orig_exec = spec.loader.exec_module
+
+            def _exec(module):
+                _orig_exec(module)
+                try:
+                    _patchers[name](module)
+                except Exception:
+                    pass
+
+            spec.loader.exec_module = _exec
+            return spec
+
+    try:
+        _sys.meta_path.insert(0, _Finder())
+    except Exception:
+        pass
+
+
+_install_pdf2zh_color_fix()
+
+
 def _res(*parts):
     """获取资源文件路径，兼容 PyInstaller 打包和开发环境"""
     if getattr(sys, '_MEIPASS', None):
@@ -5188,7 +5284,7 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.3.2"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel("v2.3.3"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
@@ -5585,7 +5681,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.3.2 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel("v2.3.3 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
