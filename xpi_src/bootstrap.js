@@ -1,5 +1,5 @@
 /*
- * pdf2zh Connector for Zotero  v1.0.15
+ * pdf2zh Connector for Zotero  v1.0.16
  *
  * 功能：
  *   1. HTTP 端点 /pdf2zh/attach — 接收 pdf2zh 翻译结果作为子附件（原有回写机制，一行不动）
@@ -90,7 +90,7 @@ function _makePingEndpoint() {
             return [200, 'application/json', JSON.stringify({
                 status: 'ok',
                 plugin: 'pdf2zh-desktop-connector',
-                version: '1.0.15'
+                version: '1.0.16'
             })];
         }
     };
@@ -99,7 +99,7 @@ function _makePingEndpoint() {
 
 // ============ NEW: 右键菜单唤起 pdf2zh ============
 
-// v1.0.15: Zotero 9 (Firefox 128+) 移除了 OS 全局。用 PathUtils / nsIEnvironment 三层 fallback。
+// v1.0.16: Zotero 9 (Firefox 128+) 移除了 OS 全局。用 PathUtils / nsIEnvironment 三层 fallback。
 function _homeDir() {
     try { if (typeof PathUtils !== 'undefined' && PathUtils.homeDir) return PathUtils.homeDir; } catch (e) {}
     try { if (typeof OS !== 'undefined' && OS.Constants && OS.Constants.Path) return OS.Constants.Path.homeDir; } catch (e) {}
@@ -116,7 +116,7 @@ function _pathJoin(a, b) {
     return a + sep + b;
 }
 
-// v1.0.15: 用户手动配置的路径 (Zotero pref)。找不到时可让用户设置 extensions.pdf2zh.exePath
+// v1.0.16: 用户手动配置的路径 (Zotero pref)。找不到时可让用户设置 extensions.pdf2zh.exePath
 function _getSavedExePath() {
     try {
         var p = Zotero.Prefs.get('extensions.pdf2zh.exePath', true);
@@ -132,32 +132,41 @@ function _fileExists(path) {
     } catch (e) { return null; }
 }
 
-// 在某目录下浅层扫描 pdf2zh.exe: 直接子文件 + 一层子目录(处理带版本号外层)
+// 在某目录下浅层扫描 pdf2zh.exe (v1.0.16 增强):
+// 遍历每个子目录(含 D:\31376 这种自定义中间文件夹), 查子目录内是否有
+// pdf2zh.exe 或 pdf2zh-desktop-win\pdf2zh.exe。限制数量避免全盘慢扫。
 function _scanDirForExe(dir, exeName) {
     try {
         var d = Zotero.File.pathToFile(dir);
         if (!d || !d.exists() || !d.isDirectory()) return null;
         var direct = _fileExists(_pathJoin(dir, exeName));
         if (direct) return direct;
+        var winRoot = _fileExists(_pathJoin(_pathJoin(dir, 'pdf2zh-desktop-win'), exeName));
+        if (winRoot) return winRoot;
+        var skip = {'windows': 1, '$recycle.bin': 1, 'system volume information': 1,
+                    'programdata': 1, 'recovery': 1, 'perflogs': 1, 'appdata': 1};
         var entries = d.directoryEntries;
-        while (entries.hasMoreElements()) {
-            var sub = entries.getNext().QueryInterface(Components.interfaces.nsIFile);
-            if (sub.isDirectory()) {
-                var name = sub.leafName || '';
-                // 只进 pdf2zh 相关子目录, 避免全盘扫描
-                if (name.toLowerCase().indexOf('pdf2zh') === -1) continue;
-                var hit = _fileExists(_pathJoin(sub.path, exeName));
-                if (hit) return hit;
-                // 再深一层: <base>\pdf2zh-desktop-win-v2.3.3\pdf2zh-desktop-win\pdf2zh.exe
-                var hit2 = _fileExists(_pathJoin(sub.path, 'pdf2zh-desktop-win\\' + exeName));
-                if (hit2) return hit2;
-            }
+        var count = 0;
+        while (entries.hasMoreElements() && count < 120) {
+            var sub;
+            try { sub = entries.getNext().QueryInterface(Components.interfaces.nsIFile); }
+            catch (e) { continue; }
+            if (!sub.isDirectory()) continue;
+            count++;
+            var name = (sub.leafName || '').toLowerCase();
+            if (skip[name]) continue;
+            // 任意中间文件夹下: <sub>\pdf2zh.exe
+            var hit = _fileExists(_pathJoin(sub.path, exeName));
+            if (hit) return hit;
+            // <sub>\pdf2zh-desktop-win\pdf2zh.exe  (处理 D:\31376\pdf2zh-desktop-win\)
+            var hit2 = _fileExists(_pathJoin(_pathJoin(sub.path, 'pdf2zh-desktop-win'), exeName));
+            if (hit2) return hit2;
         }
     } catch (e) {}
     return null;
 }
 
-// 找 pdf2zh 可执行文件（跨平台）— v1.0.15 大幅增强搜索
+// 找 pdf2zh 可执行文件（跨平台）— v1.0.16 大幅增强搜索
 function _findPdf2zhExecutable() {
     var home = _homeDir();
 
@@ -209,7 +218,7 @@ function _findPdf2zhExecutable() {
     return null;
 }
 
-// v1.0.15: 日志到 /tmp/pdf2zh-xpi-debug.log 便于用户复制粘贴排查
+// v1.0.16: 日志到 /tmp/pdf2zh-xpi-debug.log 便于用户复制粘贴排查
 function _dbgLog(msg) {
     try {
         var line = '[' + (new Date()).toISOString() + '] ' + msg + '\n';
@@ -240,7 +249,7 @@ function _loadSubprocess() {
 async function _launchPdf2zh(filePath, format, auto) {
     var exe = _findPdf2zhExecutable();
     if (!exe) {
-        // v1.0.15: 找不到时让用户手动指定 pdf2zh.exe / pdf2zh.app 路径, 存进 pref 永久生效
+        // v1.0.16: 找不到时让用户手动指定 pdf2zh.exe / pdf2zh.app 路径, 存进 pref 永久生效
         var picked = null;
         try {
             var win = Zotero.getMainWindow();
