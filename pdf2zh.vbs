@@ -41,4 +41,9 @@ shell.Environment("Process")("PYTHONIOENCODING") = "utf-8"
 
 Dim cmd
 cmd = Chr(34) & pythonw & Chr(34) & " " & Chr(34) & script & Chr(34)
+' v2.3.4: 转发命令行参数给 _launcher.py (Zotero 右键唤起 --format/--auto/file)
+Dim ai
+For ai = 0 To WScript.Arguments.Count - 1
+    cmd = cmd & " " & Chr(34) & WScript.Arguments(ai) & Chr(34)
+Next
 shell.Run cmd, 1, False

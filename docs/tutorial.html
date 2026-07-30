@@ -264,7 +264,7 @@
       <div class="step"><div class="badge">7</div><div class="body"><h4>翻译设置</h4><p>四个开关：<strong>深色模式</strong>（界面跟随）/ <strong>翻译缓存</strong>（建议开 · 同一段重复翻只调一次 API）/ <strong>AI 布局检测</strong>（实验性，开了会更准但更慢）/ <strong>字体子集化</strong>（开了输出 PDF 更小）。</p></div></div>
       <div class="step"><div class="badge">8</div><div class="body"><h4>翻译提示词</h4><p>给 AI 的指令模板。默认「直译」，你可以改成「学术」「口语」「保留专业术语」等风格，<strong>支持多套预设</strong>，点「保存 / 新建 / 导入 / 导出」管理。改完点「保存」生效。</p></div></div>
       <div class="step"><div class="badge">9</div><div class="body"><h4>术语表</h4><p>固定专业名词的翻法。比如 <code>Transformer → Transformer（不译）</code>、<code>token → 词元</code>。<strong>每个学科一份术语表</strong>，翻译前选对的一份。</p></div></div>
-      <div class="step"><div class="badge">10</div><div class="body"><h4>Zotero 联动（Zotero 7/8/9 通用 · v2.3.0 新增右键翻译）</h4><p>把翻译好的 PDF <b>作为原文献的子附件自动加入 Zotero</b>。点「一键安装」装 Zotero 插件（当前 <code>v1.0.16</code>（pdf2zh-desktop Connector，跟原版 pdf2zh 区分），兼容 Zotero 7/8/9 整个系列）。<br><b>🚀 v2.3.0 新增</b>：在 Zotero 里对 PDF <b>右键 → 「📖 用 pdf2zh-desktop 翻译」</b> 一键翻译，还能选单文件输出（只出并排/双语/纯中文），不用打开 pdf2zh。<br><b>翻译前会自动检查</b>插件是否响应，翻译完状态栏显示同步结果。<a href="#faq">→ 同步没成功？看 FAQ</a></p></div></div>
+      <div class="step"><div class="badge">10</div><div class="body"><h4>Zotero 联动（Zotero 7/8/9 通用 · v2.3.0 新增右键翻译）</h4><p>把翻译好的 PDF <b>作为原文献的子附件自动加入 Zotero</b>。点「一键安装」装 Zotero 插件（当前 <code>v1.0.17</code>（pdf2zh-desktop Connector，跟原版 pdf2zh 区分），兼容 Zotero 7/8/9 整个系列）。<br><b>🚀 v2.3.0 新增</b>：在 Zotero 里对 PDF <b>右键 → 「📖 用 pdf2zh-desktop 翻译」</b> 一键翻译，还能选单文件输出（只出并排/双语/纯中文），不用打开 pdf2zh。<br><b>翻译前会自动检查</b>插件是否响应，翻译完状态栏显示同步结果。<a href="#faq">→ 同步没成功？看 FAQ</a></p></div></div>
       <div class="step"><div class="badge">11</div><div class="body"><h4>打开数据目录</h4><p>跳转到 <code>~/.config/pdf2zh/</code>。出问题时把 <code>config.json</code> 和 <code>history.json</code> 截图发给我们排查。<strong>不要手动改</strong>这两个文件，App 会覆盖。</p></div></div>
     </div>
 
@@ -750,14 +750,14 @@
         <b>关键：不要看物理磁盘路径</b>，看 Zotero 里那篇原论文 → <b>展开</b> → 有没有出现「<code>Translated PDF - xxx</code>」子附件。<br>
         <b>没有子附件 = 联动失败</b>，v2.2.5+ / v2.2.6+ 会在状态栏给出明确原因：<br>
         - ❌ <b>Zotero 未打开</b> → 请打开 Zotero 后重新翻译<br>
-        - ❌ <b>插件未装/未启用</b> → 下载最新 <a href="https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.3/pdf2zh-connector-v1.0.16.xpi"><code>pdf2zh-connector-v1.0.16.xpi</code></a>，Zotero 里「工具 → 附加组件 → ⚙ → Install Add-on From File」装上后重启 Zotero<br>
+        - ❌ <b>插件未装/未启用</b> → 下载最新 <a href="https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.3/pdf2zh-connector-v1.0.17.xpi"><code>pdf2zh-connector-v1.0.17.xpi</code></a>，Zotero 里「工具 → 附加组件 → ⚙ → Install Add-on From File」装上后重启 Zotero<br>
         - ❌ <b>PDF 不在 Zotero storage 里</b> → 必须从 Zotero「右键 PDF → 显示文件」拖入 pdf2zh，从 Downloads/桌面拖不会触发同步<br>
         <br>翻译输出的 PDF 存在 <code>~/Documents/pdf2zh_files/</code> 是<b>默认行为</b>，正确联动时 Zotero 会自己把它拷进 storage 新目录 —— 不需要你手动调路径。</p>
       </div>
 
       <div class="card">
         <div class="top"><h5>Zotero 9.0.4+ 提示插件不兼容？</h5></div>
-        <p class="desc">这是旧 v1.0.5 插件的通配符 bug。下载最新 <a href="https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.3/pdf2zh-connector-v1.0.16.xpi"><code>pdf2zh-connector-v1.0.16.xpi</code></a>（1.6 KB）拖进 Zotero「附加组件」重装，兼容整个 Zotero 9.x 系列。<br>Mac/Win 用户<b>用同一份 xpi</b>（Zotero 插件是纯 JavaScript，跨平台）。</p>
+        <p class="desc">这是旧 v1.0.5 插件的通配符 bug。下载最新 <a href="https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.3/pdf2zh-connector-v1.0.17.xpi"><code>pdf2zh-connector-v1.0.17.xpi</code></a>（1.6 KB）拖进 Zotero「附加组件」重装，兼容整个 Zotero 9.x 系列。<br>Mac/Win 用户<b>用同一份 xpi</b>（Zotero 插件是纯 JavaScript，跨平台）。</p>
       </div>
 
       <div class="card">

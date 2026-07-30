@@ -1,5 +1,5 @@
 /*
- * pdf2zh Connector for Zotero  v1.0.16
+ * pdf2zh Connector for Zotero  v1.0.17
  *
  * 功能：
  *   1. HTTP 端点 /pdf2zh/attach — 接收 pdf2zh 翻译结果作为子附件（原有回写机制，一行不动）
@@ -90,7 +90,7 @@ function _makePingEndpoint() {
             return [200, 'application/json', JSON.stringify({
                 status: 'ok',
                 plugin: 'pdf2zh-desktop-connector',
-                version: '1.0.16'
+                version: '1.0.17'
             })];
         }
     };
@@ -99,7 +99,7 @@ function _makePingEndpoint() {
 
 // ============ NEW: 右键菜单唤起 pdf2zh ============
 
-// v1.0.16: Zotero 9 (Firefox 128+) 移除了 OS 全局。用 PathUtils / nsIEnvironment 三层 fallback。
+// v1.0.17: Zotero 9 (Firefox 128+) 移除了 OS 全局。用 PathUtils / nsIEnvironment 三层 fallback。
 function _homeDir() {
     try { if (typeof PathUtils !== 'undefined' && PathUtils.homeDir) return PathUtils.homeDir; } catch (e) {}
     try { if (typeof OS !== 'undefined' && OS.Constants && OS.Constants.Path) return OS.Constants.Path.homeDir; } catch (e) {}
@@ -116,7 +116,7 @@ function _pathJoin(a, b) {
     return a + sep + b;
 }
 
-// v1.0.16: 用户手动配置的路径 (Zotero pref)。找不到时可让用户设置 extensions.pdf2zh.exePath
+// v1.0.17: 用户手动配置的路径 (Zotero pref)。找不到时可让用户设置 extensions.pdf2zh.exePath
 function _getSavedExePath() {
     try {
         var p = Zotero.Prefs.get('extensions.pdf2zh.exePath', true);
@@ -132,7 +132,7 @@ function _fileExists(path) {
     } catch (e) { return null; }
 }
 
-// 在某目录下浅层扫描 pdf2zh.exe (v1.0.16 增强):
+// 在某目录下浅层扫描 pdf2zh.exe (v1.0.17 增强):
 // 遍历每个子目录(含 D:\31376 这种自定义中间文件夹), 查子目录内是否有
 // pdf2zh.exe 或 pdf2zh-desktop-win\pdf2zh.exe。限制数量避免全盘慢扫。
 function _scanDirForExe(dir, exeName) {
@@ -166,7 +166,7 @@ function _scanDirForExe(dir, exeName) {
     return null;
 }
 
-// 找 pdf2zh 可执行文件（跨平台）— v1.0.16 大幅增强搜索
+// 找 pdf2zh 可执行文件（跨平台）— v1.0.17 大幅增强搜索
 function _findPdf2zhExecutable() {
     var home = _homeDir();
 
@@ -218,7 +218,7 @@ function _findPdf2zhExecutable() {
     return null;
 }
 
-// v1.0.16: 日志到 /tmp/pdf2zh-xpi-debug.log 便于用户复制粘贴排查
+// v1.0.17: 日志到 /tmp/pdf2zh-xpi-debug.log 便于用户复制粘贴排查
 function _dbgLog(msg) {
     try {
         var line = '[' + (new Date()).toISOString() + '] ' + msg + '\n';
@@ -249,7 +249,7 @@ function _loadSubprocess() {
 async function _launchPdf2zh(filePath, format, auto) {
     var exe = _findPdf2zhExecutable();
     if (!exe) {
-        // v1.0.16: 找不到时让用户手动指定 pdf2zh.exe / pdf2zh.app 路径, 存进 pref 永久生效
+        // v1.0.17: 找不到时让用户手动指定 pdf2zh.exe / pdf2zh.app 路径, 存进 pref 永久生效
         var picked = null;
         try {
             var win = Zotero.getMainWindow();
@@ -288,9 +288,33 @@ async function _launchPdf2zh(filePath, format, auto) {
     args.push(filePath);
 
     var command, allArgs;
+    var subOpts = null;   // v1.0.17: Windows 直跑 pythonw 时用的 env/workdir
     if (Zotero.isMac) {
         command = '/usr/bin/open';
         allArgs = ['-a', exe, '--args'].concat(args);
+    } else if (Zotero.isWin) {
+        // v1.0.17 关键修复: pdf2zh.exe / pdf2zh.vbs 都不转发命令行参数给 _launcher.py,
+        // 导致 Zotero 右键唤起后不自动翻译。改成直接跑 core\runtime\pythonw.exe _launcher.py <args>
+        // (Subprocess 走 CreateProcessW, 中文路径 Unicode 安全) + 复刻 vbs 的环境变量。
+        var appDir = exe.replace(/[\\\/]+pdf2zh\.exe$/i, '');
+        var pythonw = appDir + '\\core\\runtime\\pythonw.exe';
+        var launcher = appDir + '\\_launcher.py';
+        if (_fileExists(pythonw) && _fileExists(launcher)) {
+            command = pythonw;
+            allArgs = [launcher].concat(args);
+            subOpts = {
+                environment: {
+                    PYTHONHOME: '', PYTHONPATH: '', PYTHONDONTWRITEBYTECODE: '1',
+                    PYTHONIOENCODING: 'utf-8',
+                    QT_PLUGIN_PATH: appDir + '\\core\\site-packages\\PyQt5\\Qt5\\plugins'
+                },
+                environmentAppend: true,
+                workdir: appDir
+            };
+        } else {
+            command = exe;   // 兜底(理论不该走到)
+            allArgs = args;
+        }
     } else {
         command = exe;
         allArgs = args;
@@ -304,7 +328,13 @@ async function _launchPdf2zh(filePath, format, auto) {
     if (Subprocess) {
         try {
             _dbgLog('calling Subprocess.call...');
-            await Subprocess.call({ command: command, arguments: allArgs });
+            var _callOpts = { command: command, arguments: allArgs };
+            if (subOpts) {
+                _callOpts.environment = subOpts.environment;
+                _callOpts.environmentAppend = subOpts.environmentAppend;
+                _callOpts.workdir = subOpts.workdir;
+            }
+            await Subprocess.call(_callOpts);
             _dbgLog('Subprocess.call SUCCESS');
             return;
         } catch (subErr) {

@@ -40,4 +40,4 @@ set "PYTHONIOENCODING=utf-8"
 set "QT_PLUGIN_PATH=%APP_DIR%core\site-packages\PyQt5\Qt5\plugins"
 
 :: Launch GUI (pythonw.exe = no console window)
-start "" "%PYTHONW%" "%SCRIPT%"
+start "" "%PYTHONW%" "%SCRIPT%" %*

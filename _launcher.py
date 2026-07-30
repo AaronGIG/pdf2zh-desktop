@@ -110,6 +110,26 @@ def ensure_window_visible(window, app):
     log(f"屏幕逻辑分辨率: {sw}x{sh}, 窗口: {w}x{h}")
 
 
+def _parse_cli_args(argv):
+    """v2.3.4: 解析 Zotero 右键唤起的命令行参数
+    支持: pdf2zh.exe [--format=side_by_side|dual|mono|all] [--auto] <file.pdf>
+    """
+    result = {"file": None, "format": None, "auto": False}
+    try:
+        for arg in argv[1:]:
+            if arg.startswith("--format="):
+                fmt = arg.split("=", 1)[1].strip()
+                if fmt in ("mono", "dual", "side_by_side", "all"):
+                    result["format"] = fmt
+            elif arg == "--auto":
+                result["auto"] = True
+            elif arg.lower().endswith(".pdf") and os.path.isfile(arg):
+                result["file"] = arg
+    except Exception:
+        pass
+    return result
+
+
 def main():
     log("=== pdf2zh 桌面版启动 ===")
     log(f"Python: {sys.version}")
@@ -139,14 +159,26 @@ def main():
         app = QApplication(sys.argv)
         app.setStyle('Fusion')
 
-        # ── 单实例检测：防止重复启动多个窗口 ──
+        # v2.3.4: 解析 Zotero 右键传来的 CLI 参数
+        _cli = _parse_cli_args(sys.argv)
+        log(f"[cli] parsed = {_cli}")
+
+        # ── 单实例检测 + CLI 参数转发（Zotero 右键唤起）──
         from PyQt5.QtNetwork import QLocalServer, QLocalSocket
+        import json as _json
         _instance_key = "pdf2zh-desktop-singleton-lock"
         _socket = QLocalSocket()
         _socket.connectToServer(_instance_key)
         if _socket.waitForConnected(500):
-            # 已有实例在运行，退出
-            log("检测到已有实例运行，退出")
+            # 已有实例：把文件+参数发过去让它翻译，本进程退出
+            log("检测到已有实例，转发参数后退出")
+            if _cli.get("file"):
+                try:
+                    _socket.write(_json.dumps(_cli).encode("utf-8"))
+                    _socket.waitForBytesWritten(1000)
+                except Exception:
+                    pass
+            _socket.disconnectFromServer()
             _socket.close()
             sys.exit(0)
         _socket.close()
@@ -249,6 +281,61 @@ def main():
         window.raise_()
         window.activateWindow()
         log("GUI 窗口已显示")
+
+        # v2.3.4: Zotero 右键唤起处理 —— 加文件 + 设格式 + 自动翻译
+        from PyQt5.QtCore import QTimer as _QTimer
+
+        def _handle_cli(payload):
+            try:
+                log(f"[cli] _handle_cli payload={payload}")
+                file_path = payload.get("file")
+                if not file_path or not os.path.isfile(file_path):
+                    log(f"[cli] file invalid: {file_path}")
+                    return
+                if hasattr(window, "batch_files"):
+                    if file_path not in window.batch_files:
+                        window.batch_files.append(file_path)
+                    if hasattr(window, "current_file") and not window.current_file:
+                        window.current_file = file_path
+                    if hasattr(window, "file_list_widget"):
+                        try:
+                            window.file_list_widget.addItem(os.path.basename(file_path))
+                        except Exception:
+                            pass
+                fmt = payload.get("format")
+                if fmt:
+                    window._cli_output_format = fmt
+                if payload.get("auto"):
+                    window._cli_auto = True
+                    log("[cli] auto=True, 600ms后触发 start_translation")
+                    _QTimer.singleShot(600,
+                        lambda: (log("[cli] 调用 start_translation"), window.start_translation()) if hasattr(window, "start_translation") else log("[cli] 无 start_translation 方法"))
+                try:
+                    window.raise_(); window.activateWindow()
+                except Exception:
+                    pass
+            except Exception as _e:
+                log(f"[cli handle] {_e}")
+
+        def _on_new_conn():
+            conn = _server.nextPendingConnection()
+            if conn:
+                conn.waitForReadyRead(1000)
+                data = conn.readAll().data().decode("utf-8", errors="ignore")
+                conn.close()
+                try:
+                    payload = _json.loads(data) if data.startswith("{") else {"file": data, "format": None, "auto": False}
+                    _handle_cli(payload)
+                except Exception:
+                    pass
+        try:
+            _server.newConnection.connect(_on_new_conn)
+        except Exception:
+            pass
+
+        if _cli.get("file"):
+            _QTimer.singleShot(400, lambda: _handle_cli(_cli))
+
         sys.exit(app.exec_())
     except ImportError as e:
         msg = f"模块导入失败: {e}\n\n请检查 core\\site-packages 是否完整。"
