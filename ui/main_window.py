@@ -71,9 +71,33 @@ def _install_pdf2zh_color_fix():
         tc.receive_layout = _wrapped
         tc._p2z_color_fixed = True
 
+    def _patch_translator(mod):
+        # v2.3.5: DeepSeek V4(v4-flash/v4-pro, 及已映射到 v4 的 deepseek-chat 别名)是混合推理模型,
+        # 裸调默认走"思考模式" → 逐段先推理再输出 → 翻译极慢/偶发漏译/(经代理时)推理泄漏进译文。
+        # 对这些实例注入 thinking:disabled 退回直出(=旧 deepseek-chat 行为); deepseek-reasoner 纯推理不动。
+        dt = getattr(mod, "DeepseekTranslator", None)
+        if not dt or getattr(dt, "_p2z_thinking_fixed", False):
+            return
+        _orig_init = dt.__init__
+
+        def _new_init(self, *a, **kw):
+            _orig_init(self, *a, **kw)
+            try:
+                _m = (getattr(self, "model", "") or "").lower()
+                if ("v4" in _m) or ("chat" in _m):
+                    if not getattr(self, "options", None):
+                        self.options = {}
+                    self.options["extra_body"] = {"thinking": {"type": "disabled"}}
+            except Exception:
+                pass
+
+        dt.__init__ = _new_init
+        dt._p2z_thinking_fixed = True
+
     _patchers = {
         "pdf2zh.pdfinterp": _patch_pdfinterp,
         "pdf2zh.converter": _patch_converter,
+        "pdf2zh.translator": _patch_translator,
     }
 
     class _Finder(MetaPathFinder):
@@ -103,6 +127,15 @@ def _install_pdf2zh_color_fix():
         _sys.meta_path.insert(0, _Finder())
     except Exception:
         pass
+
+    # 兜底: 若目标模块在 Finder 安装前已被导入(import 顺序不定), 直接补一次
+    for _n, _p in _patchers.items():
+        if _n in _sys.modules and _n not in _patched:
+            _patched.add(_n)
+            try:
+                _p(_sys.modules[_n])
+            except Exception:
+                pass
 
 
 _install_pdf2zh_color_fix()
@@ -4427,7 +4460,7 @@ class SettingsPage(QWidget):
 
     SERVICE_CONFIGS = {
         # 推荐
-        "DeepSeek":        {"key_ph":"密钥",  "models":["deepseek-chat","deepseek-v4-flash","deepseek-v4-pro","deepseek-reasoner","deepseek-coder"], "url":"https://api.deepseek.com/v1"},
+        "DeepSeek":        {"key_ph":"密钥",  "models":["deepseek-v4-flash","deepseek-v4-pro","deepseek-chat","deepseek-reasoner","deepseek-coder"], "url":"https://api.deepseek.com/v1"},
         "OpenAI":          {"key_ph":"sk-...", "models":["gpt-4o","gpt-4o-mini","gpt-4-turbo","gpt-3.5-turbo","o1","o1-mini","o1-pro"], "url":"https://api.openai.com/v1"},
         # 国际服务
         "Azure OpenAI":    {"key_ph":"密钥",  "models":["gpt-4o","gpt-4-turbo","gpt-35-turbo"], "url":"https://YOUR_RESOURCE.openai.azure.com"},
@@ -5303,7 +5336,7 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.3.4"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel("v2.3.5"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
@@ -5700,7 +5733,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.3.4 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel("v2.3.5 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
