@@ -1,5 +1,5 @@
 /*
- * pdf2zh Connector for Zotero  v1.0.17
+ * pdf2zh Connector for Zotero  v1.0.18
  *
  * 功能：
  *   1. HTTP 端点 /pdf2zh/attach — 接收 pdf2zh 翻译结果作为子附件（原有回写机制，一行不动）
@@ -90,7 +90,7 @@ function _makePingEndpoint() {
             return [200, 'application/json', JSON.stringify({
                 status: 'ok',
                 plugin: 'pdf2zh-desktop-connector',
-                version: '1.0.17'
+                version: '1.0.18'
             })];
         }
     };
@@ -99,7 +99,7 @@ function _makePingEndpoint() {
 
 // ============ NEW: 右键菜单唤起 pdf2zh ============
 
-// v1.0.17: Zotero 9 (Firefox 128+) 移除了 OS 全局。用 PathUtils / nsIEnvironment 三层 fallback。
+// v1.0.18: Zotero 9 (Firefox 128+) 移除了 OS 全局。用 PathUtils / nsIEnvironment 三层 fallback。
 function _homeDir() {
     try { if (typeof PathUtils !== 'undefined' && PathUtils.homeDir) return PathUtils.homeDir; } catch (e) {}
     try { if (typeof OS !== 'undefined' && OS.Constants && OS.Constants.Path) return OS.Constants.Path.homeDir; } catch (e) {}
@@ -116,7 +116,7 @@ function _pathJoin(a, b) {
     return a + sep + b;
 }
 
-// v1.0.17: 用户手动配置的路径 (Zotero pref)。找不到时可让用户设置 extensions.pdf2zh.exePath
+// v1.0.18: 用户手动配置的路径 (Zotero pref)。找不到时可让用户设置 extensions.pdf2zh.exePath
 function _getSavedExePath() {
     try {
         var p = Zotero.Prefs.get('extensions.pdf2zh.exePath', true);
@@ -132,7 +132,17 @@ function _fileExists(path) {
     } catch (e) { return null; }
 }
 
-// 在某目录下浅层扫描 pdf2zh.exe (v1.0.17 增强):
+// v1.0.18: 后台静默翻译开关 (存 Zotero pref, 右键菜单可切换)
+function _isSilentMode() {
+    try { return Zotero.Prefs.get('extensions.pdf2zh.silent', true) === true; } catch (e) { return false; }
+}
+function _toggleSilentMode() {
+    var now = !_isSilentMode();
+    try { Zotero.Prefs.set('extensions.pdf2zh.silent', now, true); } catch (e) {}
+    return now;
+}
+
+// 在某目录下浅层扫描 pdf2zh.exe (v1.0.18 增强):
 // 遍历每个子目录(含 D:\31376 这种自定义中间文件夹), 查子目录内是否有
 // pdf2zh.exe 或 pdf2zh-desktop-win\pdf2zh.exe。限制数量避免全盘慢扫。
 function _scanDirForExe(dir, exeName) {
@@ -166,7 +176,7 @@ function _scanDirForExe(dir, exeName) {
     return null;
 }
 
-// 找 pdf2zh 可执行文件（跨平台）— v1.0.17 大幅增强搜索
+// 找 pdf2zh 可执行文件（跨平台）— v1.0.18 大幅增强搜索
 function _findPdf2zhExecutable() {
     var home = _homeDir();
 
@@ -218,7 +228,7 @@ function _findPdf2zhExecutable() {
     return null;
 }
 
-// v1.0.17: 日志到 /tmp/pdf2zh-xpi-debug.log 便于用户复制粘贴排查
+// v1.0.18: 日志到 /tmp/pdf2zh-xpi-debug.log 便于用户复制粘贴排查
 function _dbgLog(msg) {
     try {
         var line = '[' + (new Date()).toISOString() + '] ' + msg + '\n';
@@ -249,7 +259,7 @@ function _loadSubprocess() {
 async function _launchPdf2zh(filePath, format, auto) {
     var exe = _findPdf2zhExecutable();
     if (!exe) {
-        // v1.0.17: 找不到时让用户手动指定 pdf2zh.exe / pdf2zh.app 路径, 存进 pref 永久生效
+        // v1.0.18: 找不到时让用户手动指定 pdf2zh.exe / pdf2zh.app 路径, 存进 pref 永久生效
         var picked = null;
         try {
             var win = Zotero.getMainWindow();
@@ -285,15 +295,17 @@ async function _launchPdf2zh(filePath, format, auto) {
     var args = [];
     if (format) args.push('--format=' + format);
     if (auto) args.push('--auto');
+    // v1.0.18: 后台静默模式(用户在右键菜单里开启, 存 pref) —— 传 --silent 给 pdf2zh
+    if (_isSilentMode()) args.push('--silent');
     args.push(filePath);
 
     var command, allArgs;
-    var subOpts = null;   // v1.0.17: Windows 直跑 pythonw 时用的 env/workdir
+    var subOpts = null;   // v1.0.18: Windows 直跑 pythonw 时用的 env/workdir
     if (Zotero.isMac) {
         command = '/usr/bin/open';
         allArgs = ['-a', exe, '--args'].concat(args);
     } else if (Zotero.isWin) {
-        // v1.0.17 关键修复: pdf2zh.exe / pdf2zh.vbs 都不转发命令行参数给 _launcher.py,
+        // v1.0.18 关键修复: pdf2zh.exe / pdf2zh.vbs 都不转发命令行参数给 _launcher.py,
         // 导致 Zotero 右键唤起后不自动翻译。改成直接跑 core\runtime\pythonw.exe _launcher.py <args>
         // (Subprocess 走 CreateProcessW, 中文路径 Unicode 安全) + 复刻 vbs 的环境变量。
         var appDir = exe.replace(/[\\\/]+pdf2zh\.exe$/i, '');
@@ -435,9 +447,12 @@ function _installContextMenu(window) {
         { label: '只出「纯中文」（mono）', format: 'mono', auto: false },
         { label: '出全部 3 种格式', format: 'all', auto: false },
         { label: '─────────', separator: true },
+        { label: '后台静默翻译（不弹窗，完成自动关闭）', silentToggle: true },
+        { label: '─────────', separator: true },
         { label: '⚙️ 打开 pdf2zh-desktop 手动配置', format: null, auto: false }
     ];
 
+    var _silentCheckItem = null;
     items.forEach(function (item) {
         if (item.separator) {
             var sep = doc.createXULElement ? doc.createXULElement('menuseparator') : doc.createElement('menuseparator');
@@ -446,10 +461,28 @@ function _installContextMenu(window) {
         }
         var mi = doc.createXULElement ? doc.createXULElement('menuitem') : doc.createElement('menuitem');
         mi.setAttribute('label', item.label);
-        mi.addEventListener('command', function () {
-            _triggerTranslate(item.format, item.auto);
-        });
+        if (item.silentToggle) {
+            // 后台静默开关: checkbox 菜单项, 点击切换 pref
+            mi.setAttribute('type', 'checkbox');
+            mi.setAttribute('autocheck', 'false');
+            _silentCheckItem = mi;
+            mi.addEventListener('command', function () {
+                var on = _toggleSilentMode();
+                try { mi.setAttribute('checked', on ? 'true' : 'false'); } catch (e) {}
+            });
+        } else {
+            mi.addEventListener('command', function () {
+                _triggerTranslate(item.format, item.auto);
+            });
+        }
         subpopup.appendChild(mi);
+    });
+
+    // 每次打开菜单时同步静默开关的勾选状态
+    subpopup.addEventListener('popupshowing', function () {
+        if (_silentCheckItem) {
+            try { _silentCheckItem.setAttribute('checked', _isSilentMode() ? 'true' : 'false'); } catch (e) {}
+        }
     });
 
     menu.appendChild(subpopup);

@@ -114,7 +114,7 @@ def _parse_cli_args(argv):
     """v2.3.4: 解析 Zotero 右键唤起的命令行参数
     支持: pdf2zh.exe [--format=side_by_side|dual|mono|all] [--auto] <file.pdf>
     """
-    result = {"file": None, "format": None, "auto": False}
+    result = {"file": None, "format": None, "auto": False, "silent": False}
     try:
         for arg in argv[1:]:
             if arg.startswith("--format="):
@@ -123,6 +123,8 @@ def _parse_cli_args(argv):
                     result["format"] = fmt
             elif arg == "--auto":
                 result["auto"] = True
+            elif arg == "--silent":
+                result["silent"] = True
             elif arg.lower().endswith(".pdf") and os.path.isfile(arg):
                 result["file"] = arg
     except Exception:
@@ -305,13 +307,21 @@ def main():
                 fmt = payload.get("format")
                 if fmt:
                     window._cli_output_format = fmt
+                # v2.3.4: 后台静默模式 —— 最小化窗口不抢焦点, 完成后自动关闭
+                silent = bool(payload.get("silent"))
+                if silent:
+                    window._cli_silent = True
                 if payload.get("auto"):
                     window._cli_auto = True
-                    log("[cli] auto=True, 600ms后触发 start_translation")
+                    log(f"[cli] auto=True silent={silent}, 600ms后触发 start_translation")
                     _QTimer.singleShot(600,
                         lambda: (log("[cli] 调用 start_translation"), window.start_translation()) if hasattr(window, "start_translation") else log("[cli] 无 start_translation 方法"))
                 try:
-                    window.raise_(); window.activateWindow()
+                    if silent:
+                        window.showMinimized()
+                    else:
+                        # v2.3.4: showNormal 确保被上次静默最小化/隐藏的窗口能重现
+                        window.showNormal(); window.raise_(); window.activateWindow()
                 except Exception:
                     pass
             except Exception as _e:

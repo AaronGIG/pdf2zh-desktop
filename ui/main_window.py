@@ -3374,6 +3374,8 @@ class TranslatePage(QWidget):
         # v2.3.0: 传递 output_formats 到 worker（如果单文件模式被激活）
         # 由 _cli_format 属性（Zotero 唤起时设置）决定
         _cli_fmt = getattr(self, "_cli_format", None)
+        # v2.3.4: 记住本次右键唤起的格式, 供 Zotero 回写跟随(而非只按 config 勾选)
+        self._writeback_format = _cli_fmt if _cli_fmt in ("side_by_side", "dual", "mono", "all") else None
         if _cli_fmt and _cli_fmt != "all":
             self.worker.output_formats = [_cli_fmt]
             # 用完清掉，避免影响下次手动翻译
@@ -3505,7 +3507,14 @@ class TranslatePage(QWidget):
             _dbg_write("  ✗ not from Zotero storage, skip writeback")
             return
         cfg = UserConfigManager.load()
-        modes = cfg.get("zotero_output_modes", ["side_by_side"])
+        # v2.3.4: 右键唤起指定了格式时, 回写格式跟随右键选择(而非 config 勾选)
+        _wb_fmt = getattr(self, "_writeback_format", None)
+        if _wb_fmt == "all":
+            modes = ["side_by_side", "dual", "mono"]
+        elif _wb_fmt in ("side_by_side", "dual", "mono"):
+            modes = [_wb_fmt]
+        else:
+            modes = cfg.get("zotero_output_modes", ["side_by_side"])
         keep_copy = cfg.get("zotero_keep_copy", True)
         item_key = get_zotero_item_key(file_path)
         _dbg_write(f"  modes={modes} item_key={item_key!r}")
@@ -3595,6 +3604,16 @@ class TranslatePage(QWidget):
             ])
         except Exception:
             pass
+
+        # v2.3.4: 后台静默模式 —— 翻译+回写完成后自动关窗(全成功); 有失败则恢复窗口看错误
+        _win = self.window()
+        if _win is not None and getattr(_win, "_cli_silent", False):
+            _win._cli_silent = False
+            if failed == 0:
+                QTimer.singleShot(1800, _win.close)
+            else:
+                try: _win.showNormal(); _win.raise_(); _win.activateWindow()
+                except Exception: pass
 
         # 关怀消息
         from ui.caring import get_caring_message, get_session_tip
@@ -5284,7 +5303,7 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.3.3"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel("v2.3.4"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
@@ -5681,7 +5700,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.3.3 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel("v2.3.4 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
@@ -6024,7 +6043,7 @@ def _parse_cli_args(argv):
       pdf2zh --format=dual file.pdf
     返回 dict: {file: str|None, format: str|None, auto: bool}
     """
-    result = {"file": None, "format": None, "auto": False}
+    result = {"file": None, "format": None, "auto": False, "silent": False}
     try:
         for arg in argv[1:]:
             if arg.startswith("--format="):
@@ -6033,6 +6052,8 @@ def _parse_cli_args(argv):
                     result["format"] = fmt
             elif arg == "--auto":
                 result["auto"] = True
+            elif arg == "--silent":
+                result["silent"] = True
             elif arg.lower().endswith(".pdf") and os.path.isfile(arg):
                 result["file"] = arg
     except Exception:
@@ -6110,6 +6131,7 @@ class Pdf2zhApp(QApplication):
                     "file": path,
                     "format": cli.get("format"),
                     "auto": cli.get("auto", False),
+                    "silent": cli.get("silent", False),
                 }
                 self.file_opened.emit(payload)
                 return True
@@ -6166,7 +6188,16 @@ def main():
                 tp.on_files_added([file_path])
                 _dbg_write(f"  after on_files_added, flist count={tp.flist.count()}")
                 w.switch("翻译")
-                w.raise_(); w.activateWindow()
+                # v2.3.4: 后台静默模式 —— 最小化不抢焦点, 完成后自动关闭(见 _on_batch_done)
+                _silent = bool(payload.get("silent"))
+                w._cli_silent = _silent
+                if _silent:
+                    _dbg_write("  silent mode: showMinimized")
+                    try: w.showMinimized()
+                    except Exception: pass
+                else:
+                    # v2.3.4: showNormal 确保上次静默 close() 隐藏的窗口能重现(仅 raise_ 不足以显示隐藏窗口)
+                    w.showNormal(); w.raise_(); w.activateWindow()
 
                 fmt = payload.get("format")
                 if fmt:
