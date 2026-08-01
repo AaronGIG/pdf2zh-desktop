@@ -101,7 +101,7 @@
 <nav class="top">
   <div class="inner">
     <a href="https://www.metaeidos.com/" target="_blank" rel="noopener" class="me-logo" title="MetaEidos · 北京知元智行科技有限公司">MetaEidos</a>
-    <span class="brand">pdf2zh-desktop<span class="ver">macOS · v2.3.5</span></span>
+    <span class="brand">pdf2zh-desktop<span class="ver">macOS · v2.3.6</span></span>
     <a href="#install" class="tab">安装</a>
     <a href="#sec-translate" class="tab">翻译</a>
     <a href="#sec-settings" class="tab">设置</a>
@@ -131,7 +131,7 @@
 <div class="wrap">
 
   <header class="hero">
-    <div class="eyebrow">macOS Edition · v2.3.5</div>
+    <div class="eyebrow">macOS Edition · v2.3.6</div>
     <h1>把外文论文翻成<span class="grad">中文 PDF</span><br>排版照旧、公式不糊</h1>
     <p class="sub">pdf2zh-desktop 是一款 macOS 学术 PDF 翻译工具，保留原始排版、公式、图表，支持多家翻译服务，自带阅读器与 AI 助手。本教程用真实截图带你走完每一步操作。</p>
     <div class="meta">
@@ -257,7 +257,7 @@
     <div class="steps">
       <div class="step"><div class="badge">1</div><div class="body"><h4>翻译服务选择</h4><p>下拉选你要配的服务。<strong>每选一个服务，下面的 Key/URL/Model 字段会切换</strong>。每个服务的配置独立保存。</p></div></div>
       <div class="step"><div class="badge">2</div><div class="body"><h4>API Key</h4><p>从服务商后台复制粘贴。本地存储为 base64 + 文件权限 600，不上传任何服务器。<strong>失焦自动保存</strong>（点别处或按回车）。</p></div></div>
-      <div class="step"><div class="badge">3</div><div class="body"><h4>模型</h4><p>下拉选具体模型。DeepSeek 推荐 <code>deepseek-v4-flash</code>（便宜快，默认已选）；<b>别选 <code>deepseek-reasoner</code></b>——纯推理模型逐段翻译又慢又贵、还可能漏译。OpenAI 用 <code>gpt-4o-mini</code>。</p></div></div>
+      <div class="step"><div class="badge">3</div><div class="body"><h4>模型</h4><p>下拉选具体模型。DeepSeek 推荐 <code>deepseek-v4-flash</code>（便宜快，默认已选）；<b>别选 <code>deepseek-reasoner</code></b>——纯推理模型逐段翻译又慢又贵、还可能漏译。OpenAI 用 <code>gpt-4o-mini</code>。<b>自定义 / 硅基流动</b>选指令遵循强的<b>非推理</b>模型（如 <code>Qwen/Qwen2.5-72B-Instruct</code>、<code>deepseek-ai/DeepSeek-V3</code>），别用 <code>DeepSeek-R1</code> 这类——译文易混进「（注：…）」解释。（v2.3.6 起会自动清掉多余的译者注）</p></div></div>
       <div class="step"><div class="badge">4</div><div class="body"><h4>Base URL</h4><p>API 端点。一般保持默认，除非你用三方代理（Cloudflare AI Gateway / OpenRouter / 自建中转）。</p></div></div>
       <div class="step"><div class="badge">5</div><div class="body"><h4>测试连接</h4><p>点一下让程序发一个最小翻译请求验证 Key 有效。失败时会弹错误信息（额度不足 / Key 无效 / 网络超时）。</p></div></div>
       <div class="step"><div class="badge">6</div><div class="body"><h4>AI 助手（独立配置）</h4><p>阅读页右侧的「AI 问答」用的服务。可以和翻译服务<strong>用同一家</strong>（默认勾上「使用独立配置」就关闭，沿用翻译服务）。也可以让翻译用便宜的，AI 助手用更聪明的。</p></div></div>
@@ -334,7 +334,7 @@
     </div>
 
     <div class="steps">
-      <div class="step"><div class="badge">1</div><div class="body"><h4>版本与简介</h4><p>左上角是当前版本号（v2.3.5）。下面是简短描述：「开箱即用的学术 PDF 翻译工具」。</p></div></div>
+      <div class="step"><div class="badge">1</div><div class="body"><h4>版本与简介</h4><p>左上角是当前版本号（v2.3.6）。下面是简短描述：「开箱即用的学术 PDF 翻译工具」。</p></div></div>
       <div class="step"><div class="badge">2</div><div class="body"><h4>macOS 版特性</h4><p>列出本版本的核心能力：原生设计、深色模式、Dual/Mono/Side by Side、历史管理、智能分块、触摸板手势、术语表、AI 问答、Zotero 联动等。</p></div></div>
       <div class="step"><div class="badge">3</div><div class="body"><h4>小红书账号</h4><p>「艾伦说」是项目作者的小红书号。发布更新预告、使用技巧、用户案例。点「关注」直接跳到主页。</p></div></div>
       <div class="step"><div class="badge">4</div><div class="body"><h4>GitHub ↗</h4><p>跳转到 <a href="https://github.com/AaronGIG/pdf2zh-desktop">仓库主页</a>。看 Release 页下载新版、看 Issue 报 bug、看 Star 涨了多少。</p></div></div>
@@ -772,7 +772,7 @@
   </section>
 
   <footer>
-    <p>pdf2zh-desktop · macOS Edition · v2.3.5</p>
+    <p>pdf2zh-desktop · macOS Edition · v2.3.6</p>
     <p>基于 PDFMathTranslate / MuPDF / PyQt5 ·  <a href="https://github.com/AaronGIG/pdf2zh-desktop">GitHub</a> · QQ 群从「关于」页加</p>
     <p style="margin-top:14px;font-size:13px;color:#666">出品方 · <a href="https://www.metaeidos.com/" target="_blank" rel="noopener" style="font-family:'DM Sans','Noto Sans SC',sans-serif;font-weight:700;letter-spacing:-0.3px;color:#222">MetaEidos</a> 北京知元智行科技有限公司</p>
     <p style="margin-top:6px;font-size:11px;color:#aaa">本教程截图来自实际运行的 v2.3.4 · macOS 14 · 1421×894 窗口 · 截图已脱敏</p>

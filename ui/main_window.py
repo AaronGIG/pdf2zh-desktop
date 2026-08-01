@@ -72,27 +72,98 @@ def _install_pdf2zh_color_fix():
         tc._p2z_color_fixed = True
 
     def _patch_translator(mod):
+        import re as _re
+        dt = getattr(mod, "DeepseekTranslator", None)
+        ot = getattr(mod, "OpenAITranslator", None)
+
         # v2.3.5: DeepSeek V4(v4-flash/v4-pro, 及已映射到 v4 的 deepseek-chat 别名)是混合推理模型,
         # 裸调默认走"思考模式" → 逐段先推理再输出 → 翻译极慢/偶发漏译/(经代理时)推理泄漏进译文。
-        # 对这些实例注入 thinking:disabled 退回直出(=旧 deepseek-chat 行为); deepseek-reasoner 纯推理不动。
-        dt = getattr(mod, "DeepseekTranslator", None)
-        if not dt or getattr(dt, "_p2z_thinking_fixed", False):
-            return
-        _orig_init = dt.__init__
+        # 对这些实例注入 thinking:disabled 退回直出; deepseek-reasoner 纯推理不动。
+        if dt is not None and not getattr(dt, "_p2z_thinking_fixed", False):
+            _orig_init = dt.__init__
 
-        def _new_init(self, *a, **kw):
-            _orig_init(self, *a, **kw)
-            try:
-                _m = (getattr(self, "model", "") or "").lower()
-                if ("v4" in _m) or ("chat" in _m):
-                    if not getattr(self, "options", None):
-                        self.options = {}
-                    self.options["extra_body"] = {"thinking": {"type": "disabled"}}
-            except Exception:
-                pass
+            def _new_init(self, *a, **kw):
+                _orig_init(self, *a, **kw)
+                try:
+                    _m = (getattr(self, "model", "") or "").lower()
+                    if ("v4" in _m) or ("chat" in _m):
+                        if not getattr(self, "options", None):
+                            self.options = {}
+                        self.options["extra_body"] = {"thinking": {"type": "disabled"}}
+                except Exception:
+                    pass
 
-        dt.__init__ = _new_init
-        dt._p2z_thinking_fixed = True
+            dt.__init__ = _new_init
+            dt._p2z_thinking_fixed = True
+
+        # v2.3.6: 弱模型/推理模型往译文里加译者注(注：...)/前言/思考块(见 issue #27)。
+        # A 强约束 system prompt(所有 OpenAI 兼容服务) + B 输出兜底清洗。
+        if ot is not None and not getattr(ot, "_p2z_mt_clean", False):
+            _NOTE = _re.compile(
+                r"\s*[（(]\s*(注|註|译者注|譯者註|译注|譯注|Note|N\.?B\.?)\s*[：:].*$",
+                _re.DOTALL | _re.IGNORECASE,
+            )
+            _PRE = _re.compile(
+                r"^\s*(译文|译|翻译|Translation|Translated text)\s*[：:]\s*", _re.IGNORECASE
+            )
+            _THK = _re.compile(r"<think>.*?</think>", _re.DOTALL | _re.IGNORECASE)
+            _SYS = (
+                "You are a professional translation engine. Output ONLY the translated text — nothing else.\n"
+                "STRICT RULES:\n"
+                "1. NEVER add explanations, comments, annotations, or translator notes.\n"
+                "2. NEVER add parenthetical remarks such as （注：…）, (注:…), (Note:…), or ［译者注：…］.\n"
+                "3. NEVER add a prefix like '译文：', '翻译：', or 'Translation:'.\n"
+                "4. NEVER comment on terminology or justify your word choices.\n"
+                "5. Keep formula placeholders {v*} / {{v*}} exactly unchanged.\n"
+                "6. Translate terms and short fragments directly and concisely — still translation only."
+            )
+
+            def _clean(t):
+                if not t or not isinstance(t, str):
+                    return t
+                o = t
+                t = _THK.sub("", t)
+                t = _PRE.sub("", t)
+                t = _NOTE.sub("", t)
+                t = t.strip()
+                return t if t else o.strip()
+
+            # A: OpenAITranslator 加 _SYSTEM_PROMPT + prompt override(无 system 则加)
+            if not hasattr(ot, "_SYSTEM_PROMPT"):
+                ot._SYSTEM_PROMPT = _SYS
+            _orig_prompt = ot.prompt
+
+            def _new_prompt(self, text, prompt_template=None):
+                msgs = _orig_prompt(self, text, prompt_template)
+                sysp = getattr(self, "_SYSTEM_PROMPT", None)
+                if sysp and not (
+                    msgs and isinstance(msgs[0], dict) and msgs[0].get("role") == "system"
+                ):
+                    return [{"role": "system", "content": sysp}] + list(msgs)
+                return msgs
+
+            ot.prompt = _new_prompt
+            # DeepSeek 去掉自己的 prompt override → 继承(用 DeepSeek 自己的 _SYSTEM_PROMPT), 避免双 system
+            if dt is not None and "prompt" in dt.__dict__:
+                try:
+                    del dt.prompt
+                except Exception:
+                    pass
+
+            # B: do_translate 后清洗(并防 frozen 版 content=None 崩)
+            _orig_do = ot.do_translate
+
+            def _new_do(self, text):
+                try:
+                    out = _orig_do(self, text)
+                except AttributeError as _e:
+                    if "NoneType" in str(_e):
+                        return ""
+                    raise
+                return _clean(out)
+
+            ot.do_translate = _new_do
+            ot._p2z_mt_clean = True
 
     _patchers = {
         "pdf2zh.pdfinterp": _patch_pdfinterp,
@@ -5336,7 +5407,7 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.3.5"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel("v2.3.6"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
@@ -5733,7 +5804,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.3.5 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel("v2.3.6 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
