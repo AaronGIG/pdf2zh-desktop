@@ -234,8 +234,10 @@ from ui.translate_worker import (
     TranslateWorker, LANG_MAP, SERVICE_MAP, PAGE_PRESETS,
     OUTPUT_MODES, parse_page_range, detect_zotero_source,
     get_zotero_item_key, zotero_auto_link, zotero_plugin_installed,
-    build_service_envs, SummaryWorker, QAWorker,
+    build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
+
+APP_VERSION = "2.3.7"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -3602,7 +3604,10 @@ class TranslatePage(QWidget):
             self._on_err(msg)
 
     def _zotero_writeback(self, file_path, output_files):
-        """把译文复制回 Zotero 原位 + 尝试自动关联附件"""
+        """把译文关联为 Zotero 子附件(直接从本地输出路径导入, 不再复制进原文献 storage 文件夹)
+        v2.3.7: 之前先复制进原文献 storage 文件夹再关联, 关联成功后那份复制就成了没人引用的孤儿文件,
+        一直堆在原文献文件夹里(issue反馈)。importFromFile 能直接从任意本地路径导入, 不需要先复制。
+        只在关联真正失败时才落一份到原文献文件夹做人工兜底。"""
         import shutil
         _dbg_write(f"_zotero_writeback file_path={file_path!r} output_files={output_files}")
         zotero_dir = detect_zotero_source(file_path)
@@ -3628,30 +3633,25 @@ class TranslatePage(QWidget):
             if not src or not os.path.exists(src):
                 _dbg_write(f"    ✗ src missing or not exists, skip")
                 continue
-            dst = os.path.join(zotero_dir, os.path.basename(src))
-            _dbg_write(f"    dst={dst!r}")
-            if os.path.abspath(src) != os.path.abspath(dst):
-                shutil.copy2(src, dst)
-                _dbg_write(f"    ✓ copied to storage")
-                if not keep_copy:
-                    try:
-                        os.remove(src)
-                    except OSError:
-                        pass
-            # 尝试通过 pdf2zh Connector 插件自动关联附件
+            mode_label = {"side_by_side": "中外并排", "dual": "上下双语", "mono": "纯中文"}.get(mode, mode)
+            base = os.path.splitext(os.path.basename(src))[0]
+            for suffix in ("-side_by_side", "-dual", "-mono"):
+                if base.endswith(suffix):
+                    base = base[: -len(suffix)]
+                    break
+            title = f"译文 · {mode_label} · {base}"
+
+            linked = False
             if item_key:
-                mode_label = {"side_by_side": "中外并排", "dual": "上下双语", "mono": "纯中文"}.get(mode, mode)
-                base = os.path.splitext(os.path.basename(dst))[0]
-                for suffix in ("-side_by_side", "-dual", "-mono"):
-                    if base.endswith(suffix):
-                        base = base[: -len(suffix)]
-                        break
-                title = f"译文 · {mode_label} · {base}"
-                _dbg_write(f"    POST /pdf2zh/attach itemKey={item_key} title={title!r}")
+                _dbg_write(f"    POST /pdf2zh/attach itemKey={item_key} title={title!r} file={src!r}")
                 try:
-                    ok, msg = zotero_auto_link(item_key, dst, title)
+                    ok, msg = zotero_auto_link(item_key, src, title)
                     _dbg_write(f"    zotero_auto_link → ok={ok} msg={msg!r}")
-                    if not ok:
+                    # v2.3.7 修正: zotero_auto_link 内部吞掉了所有异常, 失败时返回 (False, msg) 而不是抛出,
+                    # 之前只判断"有没有抛异常"永远为真, 会把失败误判成功导致该删的没删/该兜底的没兜底
+                    if ok:
+                        linked = True
+                    else:
                         try: self.prog_detail.setText(f"⚠️ {msg}")
                         except Exception: pass
                 except Exception as e:
@@ -3660,6 +3660,23 @@ class TranslatePage(QWidget):
                     except Exception: pass
             else:
                 _dbg_write(f"    ✗ item_key is None → no attach POST")
+
+            if linked:
+                if not keep_copy:
+                    try:
+                        os.remove(src)
+                        _dbg_write(f"    ✓ linked, removed local copy (keep_copy=False)")
+                    except OSError:
+                        pass
+            else:
+                # 兜底: 关联失败(插件没响应/未装)时落一份到原文献文件夹方便手动找到; 绝不删 src
+                dst = os.path.join(zotero_dir, os.path.basename(src))
+                if os.path.abspath(src) != os.path.abspath(dst):
+                    try:
+                        shutil.copy2(src, dst)
+                        _dbg_write(f"    ⚠ fallback copied to {dst!r}(关联失败, 留本地兜底)")
+                    except Exception as e:
+                        _dbg_write(f"    ✗ fallback copy failed: {e}")
 
     def _on_batch_done(self):
         """全部文件翻译完成"""
@@ -5407,8 +5424,16 @@ class AboutPage(QWidget):
         tn.setCursor(Qt.PointingHandCursor); tn.setFlat(True)
         tn.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
         top.addWidget(tn)
-        tv = QLabel("v2.3.6"); tv.setObjectName("Cap"); top.addWidget(tv)
+        tv = QLabel(f"v{APP_VERSION}"); tv.setObjectName("Cap"); top.addWidget(tv)
         tt = QLabel("macOS"); tt.setObjectName("Tag"); tt.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed); top.addWidget(tt)
+        # v2.3.7: 检查更新提示(默认隐藏, 有新版才显示; 只提示不自动下载替换, 点击才跳浏览器)
+        self._update_btn = QPushButton(""); self._update_btn.setObjectName("Gh")
+        self._update_btn.setCursor(Qt.PointingHandCursor); self._update_btn.setVisible(False)
+        top.addWidget(self._update_btn)
+        self._update_dismiss_btn = QPushButton("✕"); self._update_dismiss_btn.setObjectName("Gh")
+        self._update_dismiss_btn.setCursor(Qt.PointingHandCursor); self._update_dismiss_btn.setVisible(False)
+        self._update_dismiss_btn.setToolTip("忽略此版本(下次仍会提示更新的版本)")
+        top.addWidget(self._update_dismiss_btn)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
         gb.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
@@ -5574,6 +5599,33 @@ class AboutPage(QWidget):
         cols.addLayout(right, 7)
 
         lo.addLayout(cols)
+
+    def show_update_notice(self, version, url):
+        """v2.3.7: 显示"有新版本"提示; 只提示, 不下载不替换任何文件"""
+        self._update_btn.setText(f"🎉 新版本 v{version} 可用")
+        try:
+            self._update_btn.clicked.disconnect()
+        except TypeError:
+            pass
+        self._update_btn.clicked.connect(lambda: webbrowser.open(url))
+        self._update_btn.setVisible(True)
+
+        def _dismiss():
+            try:
+                cfg = UserConfigManager.load()
+                cfg["dismissed_update_version"] = version
+                UserConfigManager.save(cfg)
+            except Exception:
+                pass
+            self._update_btn.setVisible(False)
+            self._update_dismiss_btn.setVisible(False)
+
+        try:
+            self._update_dismiss_btn.clicked.disconnect()
+        except TypeError:
+            pass
+        self._update_dismiss_btn.clicked.connect(_dismiss)
+        self._update_dismiss_btn.setVisible(True)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -5804,7 +5856,7 @@ class MainWindow(QMainWindow):
             sbl.addWidget(b); self.nav.append((label, b))
         sbl.addStretch()
 
-        vl = QLabel("v2.3.6 · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
+        vl = QLabel(f"v{APP_VERSION} · macOS"); vl.setObjectName("Cap"); vl.setAlignment(Qt.AlignCenter)
         vl.setStyleSheet("font-size:10px;")
         sbl.addWidget(vl)
         # 底部链接 — 独立按钮，支持 hover 变色
@@ -5874,6 +5926,32 @@ class MainWindow(QMainWindow):
         now = datetime.now()
         if now.hour == 3 and 25 <= now.minute <= 35:
             QTimer.singleShot(800, self._midnight_bloom)
+
+        # ── v2.3.7: 启动后检查更新(只检测+提示, 不下载不替换任何文件) ──
+        QTimer.singleShot(3_000, self._check_for_update)
+
+    def _check_for_update(self):
+        self._update_worker = UpdateCheckWorker()
+        self._update_worker.found.connect(self._on_update_found)
+        self._update_worker.start()
+
+    def _on_update_found(self, version, url):
+        try:
+            cur = tuple(int(x) for x in APP_VERSION.split("."))
+            new = tuple(int(x) for x in version.split("."))
+        except Exception:
+            return
+        if new <= cur:
+            return
+        try:
+            cfg = UserConfigManager.load() or {}
+            if cfg.get("dismissed_update_version") == version:
+                return
+        except Exception:
+            pass
+        ap = self.pages.get("关于")
+        if ap:
+            ap.show_update_notice(version, url)
 
     # ─────────────────────────────────────────────
     #  凌晨 3:30 彩蛋 — 烟花 + 暖心寄语

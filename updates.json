@@ -1,0 +1,18 @@
+{
+    "addons": {
+        "pdf2zh-connector@aarongig.com": {
+            "updates": [
+                {
+                    "version": "1.0.19",
+                    "update_link": "https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.7/pdf2zh-connector-v1.0.19.xpi",
+                    "applications": {
+                        "zotero": {
+                            "strict_min_version": "6.999",
+                            "strict_max_version": "9.*"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

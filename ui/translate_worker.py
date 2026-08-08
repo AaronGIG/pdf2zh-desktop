@@ -944,3 +944,28 @@ class QAWorker(QThread):
             self.finished.emit(full)
         except Exception as e:
             self.error.emit(str(e))
+
+
+# ─── 检查更新 Worker ──────────────────────────────────────────
+
+class UpdateCheckWorker(QThread):
+    """后台查询 GitHub 最新 Release, 只检测+返回信息, 不下载不替换任何文件"""
+    found = pyqtSignal(str, str)  # 最新版本号(不带v前缀), release 页面 URL
+    error = pyqtSignal(str)
+
+    def run(self):
+        try:
+            import json
+            import urllib.request
+            req = urllib.request.Request(
+                "https://api.github.com/repos/AaronGIG/pdf2zh-desktop/releases/latest",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "pdf2zh-desktop"},
+            )
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode())
+            tag = (data.get("tag_name") or "").lstrip("vV").strip()
+            url = data.get("html_url") or "https://github.com/AaronGIG/pdf2zh-desktop/releases/latest"
+            if tag:
+                self.found.emit(tag, url)
+        except Exception as e:
+            self.error.emit(str(e))
