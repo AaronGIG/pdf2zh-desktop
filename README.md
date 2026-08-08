@@ -7,7 +7,7 @@
 <br>
 <br>
 
-# 📖 pdf2zh-desktop · pdf2zh 桌面版 v2.3.6
+# 📖 pdf2zh-desktop · pdf2zh 桌面版 v2.3.7
 
 ### 开箱即用的 PDF 学术翻译神器 🚀
 
@@ -18,7 +18,7 @@
 [![Windows](https://img.shields.io/badge/Windows-10/11-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
 [![macOS](https://img.shields.io/badge/macOS-13.0+-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Version](https://img.shields.io/badge/Version-2.2.0-blue?style=flat-square)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
+[![Version](https://img.shields.io/badge/Version-2.3.7-blue?style=flat-square)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
 
 <br>
 
@@ -111,6 +111,8 @@
 - 🔗 **一键测试连接**：填完配置立即验证，通过后自动保存
 - 📝 **自定义提示词**：内置风格模板 + 自定义保存/导入/导出
 - 📚 **术语库**：5 个学科内置（计算机/医学/金融/法律/电气），支持 txt/csv/json 导入
+- 🚫 **译文更干净**：所有 OpenAI 兼容服务（含硅基流动等自定义接口）都会自动挡掉模型夹带的「（注：…）」译者注/前言废话
+- 🧠 **DeepSeek V4 默认直出**：自动关闭 V4 的思考模式，翻译更快更稳，不会把推理过程混进译文
 
 ### 🧠 智能检测
 
@@ -119,13 +121,16 @@
 - ✅ **翻译前预检**：API Key / 加密 / 语言检查
 - ⏱️ **预估剩余时间**：窗口标题显示进度百分比
 - 💾 **崩溃恢复**：异常退出后下次启动自动恢复
+- 🔔 **自动检查更新**：启动后台静默检测新版本，只提示不自动下载替换文件
 
 ### 📚 Zotero 深度联动
 
 - 🔗 **自动检测**：从 Zotero 拖入 PDF 或条目，自动识别来源
-- 📎 **自动关联**：翻译完成后译文自动添加为 Zotero 附件
+- 📎 **自动关联**：翻译完成后译文自动添加为 Zotero 附件，不留冗余副本
 - 🔌 **一键安装插件**：设置页一键安装 pdf2zh Connector，开箱即用
 - 📐 **格式多选**：左右并排 / 双语对照 / 仅译文，任意组合放回 Zotero
+- 🖱️ **右键直接翻译**：Zotero 里对 PDF 右键 → 「用 pdf2zh-desktop 翻译」，格式跟随右键菜单选择
+- 🌙 **后台静默翻译**：右键菜单勾选后不弹窗、不抢焦点，翻完自动关窗
 
 ### 📖 PDF 预览 & 历史记录
 
@@ -149,8 +154,8 @@
 
 | 平台 | 下载 | 大小 | 启动方式 |
 |------|------|------|---------|
-| 🪟 Windows | [`pdf2zh-desktop-win-v2.3.6.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.6/pdf2zh-desktop-win-v2.3.6.zip) | ~286MB | 解压 → 双击 `pdf2zh.bat` |
-| 🍎 macOS | [`pdf2zh-desktop-mac-v2.3.6.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.6/pdf2zh-desktop-mac-v2.3.6.zip) | ~228MB | 解压 → 双击 `pdf2zh.app` |
+| 🪟 Windows | [`pdf2zh-desktop-win-v2.3.7.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.7/pdf2zh-desktop-win-v2.3.7.zip) | ~287MB | 解压 → 双击 `pdf2zh.bat` |
+| 🍎 macOS | [`pdf2zh-desktop-mac-v2.3.7.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.7/pdf2zh-desktop-mac-v2.3.7.zip) | ~228MB | 解压 → 双击 `pdf2zh.app` |
 
 ### 🖱️ 第二步：启动
 
@@ -204,6 +209,10 @@
 3. 翻译 → 译文自动关联为 Zotero 附件，标题带格式标签（如 `side by side - 论文名`）
 
 > 不需要每次操作，插件只装一次。没装 Zotero 的用户完全不受影响。
+
+**更快的方式：Zotero 里右键直接翻译**
+
+不用打开 pdf2zh，在 Zotero 里对着 PDF **右键 → 「📖 用 pdf2zh-desktop 翻译」**即可，格式跟随右键菜单选择。右键菜单还能勾选**「后台静默翻译」**——不弹窗、不抢焦点，翻完自动关窗，适合批量挂后台处理。
 
 ---
 
@@ -267,6 +276,46 @@
 ---
 
 ## 📋 更新日志
+
+### v2.3.7（2026-08-08）
+
+- 🔧 **Zotero 写回不再留冗余文件**：之前译文会先复制进原文献的 Zotero storage 文件夹再关联附件，关联成功后那份复制品就成了没人引用的孤儿文件。现在直接从本地输出路径关联，只有关联失败时才会保留一份本地兜底副本，绝不误删翻译产物
+- 🔧 **修复 xpi 自动更新地址配置错误**（之前一直指向别的项目，形同虚设），Connector 插件升到 v1.0.19
+- ✨ **新增桌面 App 检查更新**：启动后台静默检测新版本，只提示不自动下载替换任何文件
+
+### v2.3.6（2026-08-01）
+
+- 🔧 **修复自定义 / OpenAI 兼容 API（含硅基流动等）译文混入译者注**：给所有 OpenAI 兼容服务加上强约束提示词 + 输出兜底清洗，不再冒出「（注：…）」这类多余解释（[#27](https://github.com/AaronGIG/pdf2zh-desktop/issues/27)）
+
+### v2.3.5（2026-07-31）
+
+- 🔧 **修复 DeepSeek V4 翻译问题**：V4 系列裸调默认走「思考模式」导致翻译慢/偶发漏译/费用上涨，现自动关闭思考模式退回直出；默认模型换成 `deepseek-v4-flash`
+
+### v2.3.4（2026-07-31）
+
+- 🔧 **Zotero 右键翻译格式选择修复**：之前无论选哪种格式，回写 Zotero 的都只有中外并排，现在严格跟随右键菜单选择
+- ✨ **新增后台静默翻译**：Zotero 右键菜单可勾选，翻译时不弹窗不抢焦点，完成后自动关窗
+
+### v2.3.3（2026-07-26）— 修复部分期刊 PDF（ICC 颜色空间）译文页渲染成大片红色
+
+### v2.3.2（2026-07-20）— Zotero 右键翻译完整链路修复（Zotero 9 兼容 + Windows 唤起参数转发）
+
+### v2.3.1（2026-07-17）— Zotero 子附件标题去重 + macOS Unicode 路径匹配修复
+
+### v2.3.0（2026-07-17）
+
+- ✨ **新增 Zotero 右键翻译**：不用打开 pdf2zh，Zotero 里对 PDF 右键直接翻译，自动作为子附件加回原文献
+- ✨ 支持单文件输出格式选择（仅并排 / 仅双语 / 仅译文）
+
+### v2.2.6（2026-04-28）— API Key 配置修复 + DeepSeek V4 模型支持 + 内置 OCR 引擎升级
+
+### v2.2.5（2026-04-17）— Zotero 9 适配 + 插件兼容性修复
+
+### v2.2.3（2026-04-08）— Zotero 联动修复 + 高分屏（HiDPI）显示优化
+
+### v2.2.2（2026-04-07）— HiDPI 清晰预览 + 多屏适配
+
+### v2.2.1（2026-04-06）— Windows 端问题修复
 
 ### v2.2.0（2026-04-06）
 
