@@ -7,7 +7,7 @@
 <br>
 <br>
 
-# 📖 pdf2zh-desktop · pdf2zh 桌面版 v2.3.7
+# 📖 pdf2zh-desktop · pdf2zh 桌面版 v2.3.9
 
 ### 开箱即用的 PDF 学术翻译神器 🚀
 
@@ -18,7 +18,7 @@
 [![Windows](https://img.shields.io/badge/Windows-10/11-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
 [![macOS](https://img.shields.io/badge/macOS-13.0+-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Version](https://img.shields.io/badge/Version-2.3.7-blue?style=flat-square)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
+[![Version](https://img.shields.io/badge/Version-2.3.9-blue?style=flat-square)](https://github.com/AaronGIG/pdf2zh-desktop/releases)
 
 <br>
 
@@ -154,16 +154,18 @@
 
 | 平台 | 下载 | 大小 | 启动方式 |
 |------|------|------|---------|
-| 🪟 Windows | [`pdf2zh-desktop-win-v2.3.7.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.7/pdf2zh-desktop-win-v2.3.7.zip) | ~287MB | 解压 → 双击 `pdf2zh.bat` |
-| 🍎 macOS | [`pdf2zh-desktop-mac-v2.3.7.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.7/pdf2zh-desktop-mac-v2.3.7.zip) | ~228MB | 解压 → 双击 `pdf2zh.app` |
+| 🪟 Windows | [`pdf2zh-desktop-win-v2.3.9.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.9/pdf2zh-desktop-win-v2.3.9.zip) | ~287MB | 解压 → 双击 `pdf2zh.exe` |
+| 🍎 macOS | [`pdf2zh-desktop-mac-v2.3.9.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.9/pdf2zh-desktop-mac-v2.3.9.zip) | ~228MB | 解压 → 双击 `pdf2zh.app` |
 
 ### 🖱️ 第二步：启动
 
-- **Windows**：解压后看到多个文件，按下面顺序用——
-  - 🟢 **首次使用**：双击 **`install.bat`**（自动检查环境 + 注册到开始菜单/桌面快捷方式）
-  - 🟢 **日常启动**（任选其一，三个等价）：**`pdf2zh.exe`**（推荐，最直观）/ `pdf2zh.vbs`（无控制台窗口）/ `pdf2zh.bat`（保留控制台便于看输出）
+- **Windows**：解压后看到多个文件，**多种方式并存，按需选**——
+  - 🟢 **推荐 / 最省心**：直接双击 **`pdf2zh.exe`**，不需要任何安装步骤，解压即用，首次使用和日常使用都是这一个
+  - 🟢 **等价备选**：`pdf2zh.vbs`（无控制台窗口）/ `pdf2zh.bat`（保留控制台便于看输出），效果和 `pdf2zh.exe`完全一样，个人喜好选一个
+  - 🔵 **可选，不是必须**：想要桌面快捷方式 / 开始菜单 / 自动检查安装 VC++ 运行库，可以额外双击一次 **`install.bat`**（跑完就没用了，不影响其他启动方式）
   - 🟡 **遇到问题**：双击 `debug_start.bat`（看启动日志）或 `diagnostic.bat`（系统诊断）；改设置用 `config_manager.bat`
   - 🔴 **卸载**：双击 `uninstall.bat`
+  - ⚠️ `install.bat`/`uninstall.bat`/`debug_start.bat`/`diagnostic.bat`/`config_manager.bat` 这几个是批处理脚本，v2.3.9 起已修复中文 Windows 上的编码乱码问题；`pdf2zh.exe`/`pdf2zh.vbs` 不受此类问题影响，追求最稳就选它们
 - **macOS**：双击 `pdf2zh.app`；首次启动若提示「**已损坏，无法打开**」，终端跑一行：`xattr -cr /Applications/pdf2zh.app`，或 Finder 里**右键 → 打开**
 
 ### 📄 第三步：翻译
@@ -276,6 +278,14 @@
 ---
 
 ## 📋 更新日志
+
+### v2.3.9（2026-08-10）
+
+- 🔧 **修复 Windows 安装脚本乱码崩溃**：`install.bat` 等批处理脚本在部分中文 Windows 上会因编码问题乱码崩溃（详见下方「启动」章节说明）；同时调整首次启动的推荐方式，`pdf2zh.exe` 现在是首选，`install.bat` 降级为可选的快捷方式创建工具
+
+### v2.3.8（2026-08-10）
+
+- 🔧 **修复某些 PDF 翻译到一半崩溃**：论文附录里常见的小尺寸图表页，会因版面检测分辨率过低导致底层 ONNX 报错（`TopK k argument...`），使整个翻译任务崩溃；现已修复，正常页面不受影响
 
 ### v2.3.7（2026-08-08）
 
