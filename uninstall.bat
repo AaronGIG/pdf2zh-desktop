@@ -1,66 +1,65 @@
 @echo off
-chcp 65001>nul 2>&1
 setlocal enabledelayedexpansion
 
-:: pdf2zh æ¡Œé¢ç‰ˆå¸è½½ç¨‹åº
-title pdf2zh æ¡Œé¢ç‰ˆ - å¸è½½ç¨‹åº
+:: pdf2zh ×ÀÃæ°æÐ¶ÔØ³ÌÐò
+title pdf2zh ×ÀÃæ°æ - Ð¶ÔØ³ÌÐò
 
 echo ================================================================
-echo   pdf2zh æ¡Œé¢ç‰ˆ - å¸è½½ç¨‹åº
+echo   pdf2zh ×ÀÃæ°æ - Ð¶ÔØ³ÌÐò
 echo ================================================================
 echo.
 
-:: è­¦å‘Šæç¤º
-echo [è­¦å‘Š] æ­¤æ“ä½œå°†å®Œå…¨ç§»é™¤ pdf2zh æ¡Œé¢ç‰ˆåŠå…¶æ‰€æœ‰æ•°æ®
+:: ¾¯¸æÌáÊ¾
+echo [¾¯¸æ] ´Ë²Ù×÷½«ÍêÈ«ÒÆ³ý pdf2zh ×ÀÃæ°æ¼°ÆäËùÓÐÊý¾Ý
 echo.
-echo å°†è¦åˆ é™¤çš„å†…å®¹:
-echo   - ç¨‹åºæ–‡ä»¶å’Œè¿è¡Œæ—¶
-echo   - é…ç½®æ–‡ä»¶å’Œç”¨æˆ·è®¾ç½®
-echo   - ç¼“å­˜æ–‡ä»¶å’Œä¸´æ—¶æ•°æ®
-echo   - æ¡Œé¢å¿«æ·æ–¹å¼
-echo   - ç¿»è¯‘åŽ†å²è®°å½•
+echo ½«ÒªÉ¾³ýµÄÄÚÈÝ:
+echo   - ³ÌÐòÎÄ¼þºÍÔËÐÐÊ±
+echo   - ÅäÖÃÎÄ¼þºÍÓÃ»§ÉèÖÃ
+echo   - »º´æÎÄ¼þºÍÁÙÊ±Êý¾Ý
+echo   - ×ÀÃæ¿ì½Ý·½Ê½
+echo   - ·­ÒëÀúÊ·¼ÇÂ¼
 echo.
-echo [æ³¨æ„] ç¿»è¯‘è¾“å‡ºçš„PDFæ–‡ä»¶(pdf2zh_filesç›®å½•)å°†è¢«ä¿ç•™
+echo [×¢Òâ] ·­ÒëÊä³öµÄPDFÎÄ¼þ(pdf2zh_filesÄ¿Â¼)½«±»±£Áô
 echo.
 
-choice /c YN /m "ç¡®å®šè¦å¸è½½ pdf2zh æ¡Œé¢ç‰ˆå—"
+choice /c YN /m "È·¶¨ÒªÐ¶ÔØ pdf2zh ×ÀÃæ°æÂð"
 if %errorlevel% == 2 (
-    echo å–æ¶ˆå¸è½½
+    echo È¡ÏûÐ¶ÔØ
     pause
     exit /b 0
 )
 
 echo.
-echo å¼€å§‹å¸è½½...
+echo ¿ªÊ¼Ð¶ÔØ...
 
-:: å…³é—­å¯èƒ½è¿è¡Œçš„ç¨‹åº
-echo [1/6] å…³é—­è¿è¡Œä¸­çš„ç¨‹åº...
+:: ¹Ø±Õ¿ÉÄÜÔËÐÐµÄ³ÌÐò
+echo [1/6] ¹Ø±ÕÔËÐÐÖÐµÄ³ÌÐò...
 taskkill /f /im python.exe 2>nul
 taskkill /f /im pdf2zh.exe 2>nul
 timeout /t 2 /nobreak >nul
 
-:: åˆ é™¤æ¡Œé¢å¿«æ·æ–¹å¼
-echo [2/6] åˆ é™¤æ¡Œé¢å¿«æ·æ–¹å¼...
+:: É¾³ý×ÀÃæ¿ì½Ý·½Ê½
+echo [2/6] É¾³ý×ÀÃæ¿ì½Ý·½Ê½...
 set "DESKTOP=%USERPROFILE%\Desktop"
-del "%DESKTOP%\pdf2zh æ¡Œé¢ç‰ˆ.lnk" 2>nul
-if exist "%DESKTOP%\pdf2zh æ¡Œé¢ç‰ˆ.lnk" (
-    echo [!] æ— æ³•åˆ é™¤æ¡Œé¢å¿«æ·æ–¹å¼
+del "%DESKTOP%\pdf2zh ×ÀÃæ°æ.lnk" 2>nul
+if exist "%DESKTOP%\pdf2zh ×ÀÃæ°æ.lnk" (
+    echo [!] ÎÞ·¨É¾³ý×ÀÃæ¿ì½Ý·½Ê½
 ) else (
-    echo [âœ“] æ¡Œé¢å¿«æ·æ–¹å¼å·²åˆ é™¤
+    echo [7½7] ×ÀÃæ¿ì½Ý·½Ê½ÒÑÉ¾³ý
 )
 
-:: åˆ é™¤å¼€å§‹èœå•å¿«æ·æ–¹å¼
-echo [3/6] åˆ é™¤å¼€å§‹èœå•å¿«æ·æ–¹å¼...
+:: É¾³ý¿ªÊ¼²Ëµ¥¿ì½Ý·½Ê½
+echo [3/6] É¾³ý¿ªÊ¼²Ëµ¥¿ì½Ý·½Ê½...
 set "STARTMENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs"
-del "%STARTMENU%\pdf2zh æ¡Œé¢ç‰ˆ.lnk" 2>nul
+del "%STARTMENU%\pdf2zh ×ÀÃæ°æ.lnk" 2>nul
 
-:: å¤‡ä»½ç”¨æˆ·æ•°æ®
-echo [4/6] å¤‡ä»½ç”¨æˆ·æ•°æ®...
+:: ±¸·ÝÓÃ»§Êý¾Ý
+echo [4/6] ±¸·ÝÓÃ»§Êý¾Ý...
 set "BACKUP_DIR=%USERPROFILE%\pdf2zh_backup_%date:~0,4%%date:~5,2%%date:~8,2%"
 mkdir "%BACKUP_DIR%" 2>nul
 
 if exist "pdf2zh_files" (
-    echo æ­£åœ¨å¤‡ä»½ç¿»è¯‘æ–‡ä»¶åˆ°: %BACKUP_DIR%
+    echo ÕýÔÚ±¸·Ý·­ÒëÎÄ¼þµ½: %BACKUP_DIR%
     xcopy "pdf2zh_files" "%BACKUP_DIR%\pdf2zh_files" /e /i /q 2>nul
 )
 
@@ -72,14 +71,14 @@ if exist "%USERPROFILE%\pdf2zh_history.json" (
     copy "%USERPROFILE%\pdf2zh_history.json" "%BACKUP_DIR%\" 2>nul
 )
 
-echo [âœ“] ç”¨æˆ·æ•°æ®å·²å¤‡ä»½åˆ°: %BACKUP_DIR%
+echo [7½7] ÓÃ»§Êý¾ÝÒÑ±¸·Ýµ½: %BACKUP_DIR%
 
-:: åˆ é™¤ç¨‹åºæ–‡ä»¶
-echo [5/6] åˆ é™¤ç¨‹åºæ–‡ä»¶...
+:: É¾³ý³ÌÐòÎÄ¼þ
+echo [5/6] É¾³ý³ÌÐòÎÄ¼þ...
 cd /d "%~dp0"
 set "INSTALL_DIR=%~dp0"
 
-:: åˆ é™¤æ ¸å¿ƒæ–‡ä»¶
+:: É¾³ýºËÐÄÎÄ¼þ
 rmdir /s /q "core" 2>nul
 rmdir /s /q "models" 2>nul
 rmdir /s /q "plugins" 2>nul
@@ -88,7 +87,7 @@ rmdir /s /q "assets" 2>nul
 del "config\*.json" 2>nul
 rmdir /s /q "config" 2>nul
 
-:: åˆ é™¤è„šæœ¬æ–‡ä»¶
+:: É¾³ý½Å±¾ÎÄ¼þ
 del "run_desktop.bat" 2>nul
 del "install.bat" 2>nul
 del "module_manager.bat" 2>nul
@@ -98,48 +97,48 @@ del "requirements.txt" 2>nul
 del ".gitignore" 2>nul
 del "pyproject.toml" 2>nul
 
-:: æ¸…ç†æ³¨å†Œè¡¨å’Œç”¨æˆ·é…ç½®
-echo [6/6] æ¸…ç†ç”¨æˆ·é…ç½®...
+:: ÇåÀí×¢²á±íºÍÓÃ»§ÅäÖÃ
+echo [6/6] ÇåÀíÓÃ»§ÅäÖÃ...
 del "%USERPROFILE%\pdf2zh_gui_config.json" 2>nul
 del "%USERPROFILE%\pdf2zh_history.json" 2>nul
 rmdir /s /q "%USERPROFILE%\.config\PDFMathTranslate" 2>nul
 
-:: å¸è½½å®Œæˆ
+:: Ð¶ÔØÍê³É
 echo.
 echo ================================================================
-echo   å¸è½½å®Œæˆï¼
+echo   Ð¶ÔØÍê³É£¡
 echo ================================================================
 echo.
-echo å¸è½½ä¿¡æ¯:
-echo   - ç¨‹åºæ–‡ä»¶: å·²åˆ é™¤
-echo   - é…ç½®æ–‡ä»¶: å·²åˆ é™¤
-echo   - ç¼“å­˜æ–‡ä»¶: å·²åˆ é™¤
-echo   - å¿«æ·æ–¹å¼: å·²åˆ é™¤
+echo Ð¶ÔØÐÅÏ¢:
+echo   - ³ÌÐòÎÄ¼þ: ÒÑÉ¾³ý
+echo   - ÅäÖÃÎÄ¼þ: ÒÑÉ¾³ý
+echo   - »º´æÎÄ¼þ: ÒÑÉ¾³ý
+echo   - ¿ì½Ý·½Ê½: ÒÑÉ¾³ý
 echo.
-echo ä¿ç•™å†…å®¹:
-echo   - ç¿»è¯‘æ–‡ä»¶å¤‡ä»½: %BACKUP_DIR%
-echo   - åŽŸå§‹pdf2zh_filesç›®å½•: å·²ä¿ç•™
+echo ±£ÁôÄÚÈÝ:
+echo   - ·­ÒëÎÄ¼þ±¸·Ý: %BACKUP_DIR%
+echo   - Ô­Ê¼pdf2zh_filesÄ¿Â¼: ÒÑ±£Áô
 echo.
-echo å¦‚éœ€å®Œå…¨æ¸…ç†ï¼Œè¯·æ‰‹åŠ¨åˆ é™¤:
+echo ÈçÐèÍêÈ«ÇåÀí£¬ÇëÊÖ¶¯É¾³ý:
 echo   - %BACKUP_DIR%
 echo   - %INSTALL_DIR%pdf2zh_files
 echo.
 
-:: è¯¢é—®æ˜¯å¦åˆ é™¤å®‰è£…ç›®å½•
-choice /c YN /m "æ˜¯å¦åˆ é™¤æ•´ä¸ªå®‰è£…ç›®å½•"
+:: Ñ¯ÎÊÊÇ·ñÉ¾³ý°²×°Ä¿Â¼
+choice /c YN /m "ÊÇ·ñÉ¾³ýÕû¸ö°²×°Ä¿Â¼"
 if %errorlevel% == 1 (
-    echo æ­£åœ¨åˆ é™¤å®‰è£…ç›®å½•...
+    echo ÕýÔÚÉ¾³ý°²×°Ä¿Â¼...
     cd /d "%TEMP%"
     rmdir /s /q "%INSTALL_DIR%" 2>nul
-    echo [âœ“] å®‰è£…ç›®å½•å·²åˆ é™¤
+    echo [7½7] °²×°Ä¿Â¼ÒÑÉ¾³ý
 ) else (
-    echo å®‰è£…ç›®å½•å·²ä¿ç•™: %INSTALL_DIR%
+    echo °²×°Ä¿Â¼ÒÑ±£Áô: %INSTALL_DIR%
 )
 
 echo.
-echo æ„Ÿè°¢ä½¿ç”¨ pdf2zh æ¡Œé¢ç‰ˆï¼
-echo å¦‚æœ‰é—®é¢˜æˆ–å»ºè®®ï¼Œæ¬¢è¿Žè®¿é—®é¡¹ç›®ä¸»é¡µåé¦ˆ
+echo ¸ÐÐ»Ê¹ÓÃ pdf2zh ×ÀÃæ°æ£¡
+echo ÈçÓÐÎÊÌâ»ò½¨Òé£¬»¶Ó­·ÃÎÊÏîÄ¿Ö÷Ò³·´À¡
 pause
 
-:: åˆ é™¤å¸è½½è„šæœ¬è‡ªèº«
+:: É¾³ýÐ¶ÔØ½Å±¾×ÔÉí
 del "%~f0" 2>nul

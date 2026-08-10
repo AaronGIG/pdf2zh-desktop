@@ -1,71 +1,70 @@
 @echo off
-chcp 65001>nul 2>&1
 setlocal enabledelayedexpansion
 
-:: pdf2zh æ¡Œé¢ç‰ˆæ¨¡å—ç®¡ç†å™¨
-title pdf2zh æ¡Œé¢ç‰ˆ - æ¨¡å—ç®¡ç†å™¨
+:: pdf2zh ×ÀÃæ°æÄ£¿é¹ÜÀíÆ÷
+title pdf2zh ×ÀÃæ°æ - Ä£¿é¹ÜÀíÆ÷
 
 echo ================================================================
-echo   pdf2zh æ¡Œé¢ç‰ˆ - æ¨¡å—ç®¡ç†å™¨
+echo   pdf2zh ×ÀÃæ°æ - Ä£¿é¹ÜÀíÆ÷
 echo ================================================================
 echo.
 
-:: è®¾ç½®å˜é‡
+:: ÉèÖÃ±äÁ¿
 set "BASE_URL=https://github.com/your-username/pdf2zh-desktop/releases/download"
-set "VERSION=v1.9.9"
+set "VERSION=v2.3.9"
 set "CONFIG_FILE=config\modules.json"
 
-:: æ£€æŸ¥é…ç½®æ–‡ä»¶
+:: ¼ì²éÅäÖÃÎÄ¼ş
 if not exist "%CONFIG_FILE%" (
-    echo [é”™è¯¯] æ¨¡å—é…ç½®æ–‡ä»¶ä¸å­˜åœ¨: %CONFIG_FILE%
+    echo [´íÎó] Ä£¿éÅäÖÃÎÄ¼ş²»´æÔÚ: %CONFIG_FILE%
     pause
     exit /b 1
 )
 
-:: æ˜¾ç¤ºèœå•
+:: ÏÔÊ¾²Ëµ¥
 :menu
 cls
 echo ================================================================
-echo   pdf2zh æ¡Œé¢ç‰ˆ - æ¨¡å—ç®¡ç†å™¨
+echo   pdf2zh ×ÀÃæ°æ - Ä£¿é¹ÜÀíÆ÷
 echo ================================================================
 echo.
-echo å½“å‰å·²å®‰è£…æ¨¡å—:
+echo µ±Ç°ÒÑ°²×°Ä£¿é:
 if exist "core\runtime\python.exe" (
-    echo [âœ“] æ ¸å¿ƒæ¨¡å— - å·²å®‰è£…
+    echo [7½7] ºËĞÄÄ£¿é - ÒÑ°²×°
 ) else (
-    echo [âœ—] æ ¸å¿ƒæ¨¡å— - æœªå®‰è£…
+    echo [7¾1] ºËĞÄÄ£¿é - Î´°²×°
 )
 
 if exist "core\site-packages\pdf2zh" (
-    echo [âœ“] PDF2ZH åº“ - å·²å®‰è£…
+    echo [7½7] PDF2ZH ¿â - ÒÑ°²×°
 ) else (
-    echo [âœ—] PDF2ZH åº“ - æœªå®‰è£…
+    echo [7¾1] PDF2ZH ¿â - Î´°²×°
 )
 
 if exist "models\layout" (
-    echo [âœ“] AIæ¨¡å‹åŒ… - å·²å®‰è£…
+    echo [7½7] AIÄ£ĞÍ°ü - ÒÑ°²×°
 ) else (
-    echo [âœ—] AIæ¨¡å‹åŒ… - æœªå®‰è£…
+    echo [7¾1] AIÄ£ĞÍ°ü - Î´°²×°
 )
 
 if exist "plugins\translators_extended" (
-    echo [âœ“] æ‰©å±•ç¿»è¯‘æœåŠ¡ - å·²å®‰è£…
+    echo [7½7] À©Õ¹·­Òë·şÎñ - ÒÑ°²×°
 ) else (
-    echo [âœ—] æ‰©å±•ç¿»è¯‘æœåŠ¡ - æœªå®‰è£…
+    echo [7¾1] À©Õ¹·­Òë·şÎñ - Î´°²×°
 )
 
 echo.
-echo å¯ç”¨æ“ä½œ:
-echo   1. å®‰è£…æ ¸å¿ƒæ¨¡å—
-echo   2. å®‰è£…AIæ¨¡å‹åŒ…
-echo   3. å®‰è£…æ‰©å±•ç¿»è¯‘æœåŠ¡
-echo   4. å®‰è£…é«˜çº§åŠŸèƒ½åŒ…
-echo   5. æ£€æŸ¥æ›´æ–°
-echo   6. å¸è½½æ¨¡å—
-echo   0. é€€å‡º
+echo ¿ÉÓÃ²Ù×÷:
+echo   1. °²×°ºËĞÄÄ£¿é
+echo   2. °²×°AIÄ£ĞÍ°ü
+echo   3. °²×°À©Õ¹·­Òë·şÎñ
+echo   4. °²×°¸ß¼¶¹¦ÄÜ°ü
+echo   5. ¼ì²é¸üĞÂ
+echo   6. Ğ¶ÔØÄ£¿é
+echo   0. ÍË³ö
 echo.
 
-set /p choice="è¯·é€‰æ‹©æ“ä½œ (0-6): "
+set /p choice="ÇëÑ¡Ôñ²Ù×÷ (0-6): "
 
 if "%choice%"=="1" goto install_core
 if "%choice%"=="2" goto install_models
@@ -78,104 +77,104 @@ goto menu
 
 :install_core
 echo.
-echo [1/3] ä¸‹è½½æ ¸å¿ƒæ¨¡å—...
+echo [1/3] ÏÂÔØºËĞÄÄ£¿é...
 call :download_file "%BASE_URL%/%VERSION%/core_runtime.zip" "core_runtime.zip"
 if %errorlevel% neq 0 goto download_error
 
-echo [2/3] è§£å‹æ ¸å¿ƒæ¨¡å—...
+echo [2/3] ½âÑ¹ºËĞÄÄ£¿é...
 powershell -command "Expand-Archive -Path 'core_runtime.zip' -DestinationPath 'core' -Force"
 if %errorlevel% neq 0 goto extract_error
 
-echo [3/3] æ¸…ç†ä¸´æ—¶æ–‡ä»¶...
+echo [3/3] ÇåÀíÁÙÊ±ÎÄ¼ş...
 del "core_runtime.zip" 2>nul
 
-echo [âœ“] æ ¸å¿ƒæ¨¡å—å®‰è£…å®Œæˆ
+echo [7½7] ºËĞÄÄ£¿é°²×°Íê³É
 pause
 goto menu
 
 :install_models
 echo.
-echo [1/3] ä¸‹è½½AIæ¨¡å‹åŒ… (çº¦200MB)...
+echo [1/3] ÏÂÔØAIÄ£ĞÍ°ü (Ô¼200MB)...
 call :download_file "%BASE_URL%/%VERSION%/models.zip" "models.zip"
 if %errorlevel% neq 0 goto download_error
 
-echo [2/3] è§£å‹AIæ¨¡å‹åŒ…...
+echo [2/3] ½âÑ¹AIÄ£ĞÍ°ü...
 mkdir "models" 2>nul
 powershell -command "Expand-Archive -Path 'models.zip' -DestinationPath 'models' -Force"
 if %errorlevel% neq 0 goto extract_error
 
-echo [3/3] æ¸…ç†ä¸´æ—¶æ–‡ä»¶...
+echo [3/3] ÇåÀíÁÙÊ±ÎÄ¼ş...
 del "models.zip" 2>nul
 
-echo [âœ“] AIæ¨¡å‹åŒ…å®‰è£…å®Œæˆ
+echo [7½7] AIÄ£ĞÍ°ü°²×°Íê³É
 pause
 goto menu
 
 :install_translators
 echo.
-echo [1/3] ä¸‹è½½æ‰©å±•ç¿»è¯‘æœåŠ¡...
+echo [1/3] ÏÂÔØÀ©Õ¹·­Òë·şÎñ...
 call :download_file "%BASE_URL%/%VERSION%/translators_extended.zip" "translators_extended.zip"
 if %errorlevel% neq 0 goto download_error
 
-echo [2/3] è§£å‹æ‰©å±•ç¿»è¯‘æœåŠ¡...
+echo [2/3] ½âÑ¹À©Õ¹·­Òë·şÎñ...
 mkdir "plugins" 2>nul
 powershell -command "Expand-Archive -Path 'translators_extended.zip' -DestinationPath 'plugins' -Force"
 if %errorlevel% neq 0 goto extract_error
 
-echo [3/3] æ¸…ç†ä¸´æ—¶æ–‡ä»¶...
+echo [3/3] ÇåÀíÁÙÊ±ÎÄ¼ş...
 del "translators_extended.zip" 2>nul
 
-echo [âœ“] æ‰©å±•ç¿»è¯‘æœåŠ¡å®‰è£…å®Œæˆ
+echo [7½7] À©Õ¹·­Òë·şÎñ°²×°Íê³É
 pause
 goto menu
 
 :install_advanced
 echo.
-echo [1/3] ä¸‹è½½é«˜çº§åŠŸèƒ½åŒ…...
+echo [1/3] ÏÂÔØ¸ß¼¶¹¦ÄÜ°ü...
 call :download_file "%BASE_URL%/%VERSION%/advanced_features.zip" "advanced_features.zip"
 if %errorlevel% neq 0 goto download_error
 
-echo [2/3] è§£å‹é«˜çº§åŠŸèƒ½åŒ…...
+echo [2/3] ½âÑ¹¸ß¼¶¹¦ÄÜ°ü...
 powershell -command "Expand-Archive -Path 'advanced_features.zip' -DestinationPath 'plugins' -Force"
 if %errorlevel% neq 0 goto extract_error
 
-echo [3/3] æ¸…ç†ä¸´æ—¶æ–‡ä»¶...
+echo [3/3] ÇåÀíÁÙÊ±ÎÄ¼ş...
 del "advanced_features.zip" 2>nul
 
-echo [âœ“] é«˜çº§åŠŸèƒ½åŒ…å®‰è£…å®Œæˆ
+echo [7½7] ¸ß¼¶¹¦ÄÜ°ü°²×°Íê³É
 pause
 goto menu
 
 :check_updates
 echo.
-echo æ£€æŸ¥æ›´æ–°ä¸­...
-:: è¿™é‡Œå¯ä»¥æ·»åŠ ç‰ˆæœ¬æ£€æŸ¥é€»è¾‘
-echo [ä¿¡æ¯] å½“å‰ç‰ˆæœ¬: %VERSION%
-echo [ä¿¡æ¯] æš‚æ— å¯ç”¨æ›´æ–°
+echo ¼ì²é¸üĞÂÖĞ...
+:: ÕâÀï¿ÉÒÔÌí¼Ó°æ±¾¼ì²éÂß¼­
+echo [ĞÅÏ¢] µ±Ç°°æ±¾: %VERSION%
+echo [ĞÅÏ¢] ÔİÎŞ¿ÉÓÃ¸üĞÂ
 pause
 goto menu
 
 :uninstall
 echo.
-echo å¸è½½æ¨¡å—:
-echo   1. å¸è½½AIæ¨¡å‹åŒ…
-echo   2. å¸è½½æ‰©å±•ç¿»è¯‘æœåŠ¡
-echo   3. å¸è½½é«˜çº§åŠŸèƒ½åŒ…
-echo   0. è¿”å›ä¸»èœå•
+echo Ğ¶ÔØÄ£¿é:
+echo   1. Ğ¶ÔØAIÄ£ĞÍ°ü
+echo   2. Ğ¶ÔØÀ©Õ¹·­Òë·şÎñ
+echo   3. Ğ¶ÔØ¸ß¼¶¹¦ÄÜ°ü
+echo   0. ·µ»ØÖ÷²Ëµ¥
 echo.
-set /p uninstall_choice="è¯·é€‰æ‹©è¦å¸è½½çš„æ¨¡å—: "
+set /p uninstall_choice="ÇëÑ¡ÔñÒªĞ¶ÔØµÄÄ£¿é: "
 
 if "%uninstall_choice%"=="1" (
     rmdir /s /q "models" 2>nul
-    echo [âœ“] AIæ¨¡å‹åŒ…å·²å¸è½½
+    echo [7½7] AIÄ£ĞÍ°üÒÑĞ¶ÔØ
 )
 if "%uninstall_choice%"=="2" (
     rmdir /s /q "plugins\translators_extended" 2>nul
-    echo [âœ“] æ‰©å±•ç¿»è¯‘æœåŠ¡å·²å¸è½½
+    echo [7½7] À©Õ¹·­Òë·şÎñÒÑĞ¶ÔØ
 )
 if "%uninstall_choice%"=="3" (
     rmdir /s /q "plugins\advanced_features" 2>nul
-    echo [âœ“] é«˜çº§åŠŸèƒ½åŒ…å·²å¸è½½
+    echo [7½7] ¸ß¼¶¹¦ÄÜ°üÒÑĞ¶ÔØ
 )
 if "%uninstall_choice%"=="0" goto menu
 
@@ -183,30 +182,30 @@ pause
 goto menu
 
 :download_file
-echo æ­£åœ¨ä¸‹è½½: %~2
+echo ÕıÔÚÏÂÔØ: %~2
 powershell -command "
 try {
     $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest -Uri '%~1' -OutFile '%~2' -UseBasicParsing
-    Write-Host '[âœ“] ä¸‹è½½å®Œæˆ'
+    Write-Host '[7½7] ÏÂÔØÍê³É'
     exit 0
 } catch {
-    Write-Host '[âœ—] ä¸‹è½½å¤±è´¥: ' $_.Exception.Message
+    Write-Host '[7¾1] ÏÂÔØÊ§°Ü: ' $_.Exception.Message
     exit 1
 }
 "
 exit /b %errorlevel%
 
 :download_error
-echo [âœ—] ä¸‹è½½å¤±è´¥ï¼Œè¯·æ£€æŸ¥ç½‘ç»œè¿æ¥
+echo [7¾1] ÏÂÔØÊ§°Ü£¬Çë¼ì²éÍøÂçÁ¬½Ó
 pause
 goto menu
 
 :extract_error
-echo [âœ—] è§£å‹å¤±è´¥ï¼Œè¯·æ£€æŸ¥æ–‡ä»¶å®Œæ•´æ€§
+echo [7¾1] ½âÑ¹Ê§°Ü£¬Çë¼ì²éÎÄ¼şÍêÕûĞÔ
 pause
 goto menu
 
 :exit
-echo æ„Ÿè°¢ä½¿ç”¨ pdf2zh æ¡Œé¢ç‰ˆæ¨¡å—ç®¡ç†å™¨ï¼
+echo ¸ĞĞ»Ê¹ÓÃ pdf2zh ×ÀÃæ°æÄ£¿é¹ÜÀíÆ÷£¡
 exit /b 0

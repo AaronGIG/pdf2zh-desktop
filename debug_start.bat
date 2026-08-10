@@ -1,97 +1,95 @@
 @echo off
-chcp 65001>nul 2>&1
 setlocal enabledelayedexpansion
 
-:: pdf2zh æ¡Œé¢ç‰ˆæ™ºèƒ½å¯åŠ¨è„šæœ¬
-title pdf2zh æ¡Œé¢ç‰ˆ
+:: pdf2zh ×ÀÃæ°æÖÇÄÜÆô¶¯½Å±¾
+title pdf2zh ×ÀÃæ°æ
 
-:: è®¾ç½®é¢œè‰²å’Œç¼–ç 
-chcp 65001 >nul 2>&1
+:: ÉèÖÃÑÕÉ«ºÍ±àÂë
 color 0F
 
-:: æ˜¾ç¤ºå¯åŠ¨æ¨ªå¹…
+:: ÏÔÊ¾Æô¶¯ºá·ù
 echo.
 echo ================================================================
-echo   pdf2zh æ¡Œé¢ç‰ˆ v1.9.9
-echo   PDF æ–‡æ¡£ç¿»è¯‘å·¥å…·
+echo   pdf2zh ×ÀÃæ°æ v2.3.9
+echo   PDF ÎÄµµ·­Òë¹¤¾ß
 echo ================================================================
 echo.
 
-:: è®¾ç½®å·¥ä½œç›®å½•
+:: ÉèÖÃ¹¤×÷Ä¿Â¼
 cd /d "%~dp0"
 set "APP_DIR=%~dp0"
 
-:: æ£€æŸ¥ç³»ç»Ÿç¯å¢ƒ
+:: ¼ì²éÏµÍ³»·¾³
 call :check_system
 
-:: æ£€æŸ¥æ ¸å¿ƒæ¨¡å—
+:: ¼ì²éºËĞÄÄ£¿é
 call :check_core_modules
 
-:: è®¾ç½®ç¯å¢ƒå˜é‡
+:: ÉèÖÃ»·¾³±äÁ¿
 call :setup_environment
 
-:: å¯åŠ¨åº”ç”¨ç¨‹åº
+:: Æô¶¯Ó¦ÓÃ³ÌĞò
 call :start_application
 
 goto :eof
 
 :: ============================================================================
-:: å‡½æ•°å®šä¹‰
+:: º¯Êı¶¨Òå
 :: ============================================================================
 
 :check_system
-echo [æ£€æŸ¥] ç³»ç»Ÿç¯å¢ƒ...
+echo [¼ì²é] ÏµÍ³»·¾³...
 for /f "tokens=4-5 delims=. " %%i in ('ver') do set VERSION=%%i.%%j
-echo [âœ“] æ“ä½œç³»ç»Ÿ: Windows %VERSION%
+echo [7½7] ²Ù×÷ÏµÍ³: Windows %VERSION%
 
 if "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
-    echo [âœ“] ç³»ç»Ÿæ¶æ„: x64
+    echo [7½7] ÏµÍ³¼Ü¹¹: x64
 ) else (
-    echo [é”™è¯¯] ä¸æ”¯æŒçš„ç³»ç»Ÿæ¶æ„: %PROCESSOR_ARCHITECTURE%
+    echo [´íÎó] ²»Ö§³ÖµÄÏµÍ³¼Ü¹¹: %PROCESSOR_ARCHITECTURE%
     pause
     exit /b 1
 )
 goto :eof
 
 :check_core_modules
-echo [æ£€æŸ¥] æ ¸å¿ƒæ¨¡å—...
+echo [¼ì²é] ºËĞÄÄ£¿é...
 
 if not exist "core\runtime\python.exe" (
-    echo [é”™è¯¯] Python è¿è¡Œæ—¶æœªæ‰¾åˆ°
-    echo        è¯·è¿è¡Œ install.bat è¿›è¡Œå®‰è£…
+    echo [´íÎó] Python ÔËĞĞÊ±Î´ÕÒµ½
+    echo        ÇëÔËĞĞ install.bat ½øĞĞ°²×°
     pause
     exit /b 1
 )
-echo [âœ“] Python è¿è¡Œæ—¶
+echo [7½7] Python ÔËĞĞÊ±
 
 if not exist "core\site-packages\pdf2zh" (
-    echo [é”™è¯¯] pdf2zh åº“æœªæ‰¾åˆ°
-    echo        è¯·æ£€æŸ¥ core\site-packages ç›®å½•
+    echo [´íÎó] pdf2zh ¿âÎ´ÕÒµ½
+    echo        Çë¼ì²é core\site-packages Ä¿Â¼
     pause
     exit /b 1
 )
-echo [âœ“] pdf2zh åº“
+echo [7½7] pdf2zh ¿â
 
 if not exist "config\app.json" (
-    echo [è­¦å‘Š] åº”ç”¨é…ç½®æ–‡ä»¶ä¸å­˜åœ¨ï¼Œå°†ä½¿ç”¨é»˜è®¤é…ç½®
+    echo [¾¯¸æ] Ó¦ÓÃÅäÖÃÎÄ¼ş²»´æÔÚ£¬½«Ê¹ÓÃÄ¬ÈÏÅäÖÃ
     call :create_default_config
 ) else (
-    echo [âœ“] åº”ç”¨é…ç½®
+    echo [7½7] Ó¦ÓÃÅäÖÃ
 )
 
-:: AI å¸ƒå±€æ£€æµ‹æ¨¡å‹ç”± babeldoc ç®¡ç†ï¼Œé¦–æ¬¡ç¿»è¯‘æ—¶è‡ªåŠ¨ä¸‹è½½åˆ°ç”¨æˆ·ç¼“å­˜ç›®å½•
-:: æ£€æŸ¥ VC++ è¿è¡Œåº“æ˜¯å¦å·²å®‰è£…ï¼ˆAI å¸ƒå±€æ£€æµ‹çš„å‰ææ¡ä»¶ï¼‰
+:: AI ²¼¾Ö¼ì²âÄ£ĞÍÓÉ babeldoc ¹ÜÀí£¬Ê×´Î·­ÒëÊ±×Ô¶¯ÏÂÔØµ½ÓÃ»§»º´æÄ¿Â¼
+:: ¼ì²é VC++ ÔËĞĞ¿âÊÇ·ñÒÑ°²×°£¨AI ²¼¾Ö¼ì²âµÄÇ°ÌáÌõ¼ş£©
 reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" /v Version >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [âœ“] VC++ è¿è¡Œåº“ (AIå¸ƒå±€æ£€æµ‹å¯ç”¨)
+    echo [7½7] VC++ ÔËĞĞ¿â (AI²¼¾Ö¼ì²â¿ÉÓÃ)
 ) else (
-    echo [!] VC++ è¿è¡Œåº“æœªå®‰è£… (AIå¸ƒå±€æ£€æµ‹ä¸å¯ç”¨ï¼Œç¿»è¯‘åŠŸèƒ½ä¸å—å½±å“)
-    echo     è¿è¡Œ VC_redist.x64.exe æˆ– install.bat å®‰è£…
+    echo [!] VC++ ÔËĞĞ¿âÎ´°²×° (AI²¼¾Ö¼ì²â²»¿ÉÓÃ£¬·­Òë¹¦ÄÜ²»ÊÜÓ°Ïì)
+    echo     ÔËĞĞ VC_redist.x64.exe »ò install.bat °²×°
 )
 goto :eof
 
 :setup_environment
-echo [è®¾ç½®] è¿è¡Œç¯å¢ƒ...
+echo [ÉèÖÃ] ÔËĞĞ»·¾³...
 
 set "PYTHONDONTWRITEBYTECODE=1"
 set "PYTHONIOENCODING=utf-8"
@@ -103,11 +101,11 @@ if not exist "pdf2zh_files" mkdir "pdf2zh_files"
 if not exist "cache" mkdir "cache"
 if not exist "logs" mkdir "logs"
 
-echo [âœ“] ç¯å¢ƒå˜é‡å·²è®¾ç½®
+echo [7½7] »·¾³±äÁ¿ÒÑÉèÖÃ
 goto :eof
 
 :start_application
-echo [å¯åŠ¨] pdf2zh æ¡Œé¢ç‰ˆ...
+echo [Æô¶¯] pdf2zh ×ÀÃæ°æ...
 echo.
 
 set "LOG_FILE=logs\app_%date:~0,4%%date:~5,2%%date:~8,2%.log"
@@ -116,20 +114,20 @@ set "LOG_FILE=logs\app_%date:~0,4%%date:~5,2%%date:~8,2%.log"
 
 if %errorlevel% neq 0 (
     echo.
-    echo [é”™è¯¯] ç¨‹åºå¼‚å¸¸é€€å‡º (ä»£ç : %errorlevel%)
-    echo è¯·æŸ¥çœ‹æ—¥å¿—è·å–æ›´å¤šä¿¡æ¯
+    echo [´íÎó] ³ÌĞòÒì³£ÍË³ö (´úÂë: %errorlevel%)
+    echo Çë²é¿´ÈÕÖ¾»ñÈ¡¸ü¶àĞÅÏ¢
     echo.
     pause
 )
 goto :eof
 
 :create_default_config
-echo [åˆ›å»º] é»˜è®¤é…ç½®æ–‡ä»¶...
+echo [´´½¨] Ä¬ÈÏÅäÖÃÎÄ¼ş...
 mkdir "config" 2>nul
 (
 echo {
 echo   "app": {
-echo     "name": "pdf2zh æ¡Œé¢ç‰ˆ",
+echo     "name": "pdf2zh ×ÀÃæ°æ",
 echo     "version": "1.9.9"
 echo   },
 echo   "features": {

@@ -1,12 +1,11 @@
 @echo off
-chcp 65001>nul 2>&1
 setlocal enabledelayedexpansion
 
-:: pdf2zh æ¡Œé¢ç‰ˆé…ç½®ç®¡ç†å™¨
-title pdf2zh æ¡Œé¢ç‰ˆ - é…ç½®ç®¡ç†å™¨
+:: pdf2zh ×ÀÃæ°æÅäÖÃ¹ÜÀíÆ÷
+title pdf2zh ×ÀÃæ°æ - ÅäÖÃ¹ÜÀíÆ÷
 
 echo ================================================================
-echo   pdf2zh æ¡Œé¢ç‰ˆ - é…ç½®ç®¡ç†å™¨
+echo   pdf2zh ×ÀÃæ°æ - ÅäÖÃ¹ÜÀíÆ÷
 echo ================================================================
 echo.
 
@@ -18,41 +17,41 @@ set "MODULES_CONFIG=%CONFIG_DIR%\modules.json"
 :menu
 cls
 echo ================================================================
-echo   pdf2zh æ¡Œé¢ç‰ˆ - é…ç½®ç®¡ç†å™¨
+echo   pdf2zh ×ÀÃæ°æ - ÅäÖÃ¹ÜÀíÆ÷
 echo ================================================================
 echo.
-echo å½“å‰é…ç½®çŠ¶æ€:
+echo µ±Ç°ÅäÖÃ×´Ì¬:
 if exist "%APP_CONFIG%" (
-    echo [âœ“] åº”ç”¨é…ç½® - å·²å­˜åœ¨
+    echo [7½7] Ó¦ÓÃÅäÖÃ - ÒÑ´æÔÚ
 ) else (
-    echo [âœ—] åº”ç”¨é…ç½® - ä¸å­˜åœ¨
+    echo [7¾1] Ó¦ÓÃÅäÖÃ - ²»´æÔÚ
 )
 
 if exist "%USER_CONFIG%" (
-    echo [âœ“] ç”¨æˆ·é…ç½® - å·²å­˜åœ¨
+    echo [7½7] ÓÃ»§ÅäÖÃ - ÒÑ´æÔÚ
 ) else (
-    echo [âœ—] ç”¨æˆ·é…ç½® - ä¸å­˜åœ¨
+    echo [7¾1] ÓÃ»§ÅäÖÃ - ²»´æÔÚ
 )
 
 if exist "%MODULES_CONFIG%" (
-    echo [âœ“] æ¨¡å—é…ç½® - å·²å­˜åœ¨
+    echo [7½7] Ä£¿éÅäÖÃ - ÒÑ´æÔÚ
 ) else (
-    echo [âœ—] æ¨¡å—é…ç½® - ä¸å­˜åœ¨
+    echo [7¾1] Ä£¿éÅäÖÃ - ²»´æÔÚ
 )
 
 echo.
-echo å¯ç”¨æ“ä½œ:
-echo   1. åˆ›å»ºé»˜è®¤é…ç½®
-echo   2. é‡ç½®ç”¨æˆ·é…ç½®
-echo   3. å¤‡ä»½é…ç½®æ–‡ä»¶
-echo   4. æ¢å¤é…ç½®æ–‡ä»¶
-echo   5. ç¼–è¾‘é…ç½®æ–‡ä»¶
-echo   6. éªŒè¯é…ç½®æ–‡ä»¶
-echo   7. å¯¼å…¥/å¯¼å‡ºé…ç½®
-echo   0. é€€å‡º
+echo ¿ÉÓÃ²Ù×÷:
+echo   1. ´´½¨Ä¬ÈÏÅäÖÃ
+echo   2. ÖØÖÃÓÃ»§ÅäÖÃ
+echo   3. ±¸·ÝÅäÖÃÎÄ¼þ
+echo   4. »Ö¸´ÅäÖÃÎÄ¼þ
+echo   5. ±à¼­ÅäÖÃÎÄ¼þ
+echo   6. ÑéÖ¤ÅäÖÃÎÄ¼þ
+echo   7. µ¼Èë/µ¼³öÅäÖÃ
+echo   0. ÍË³ö
 echo.
 
-set /p choice="è¯·é€‰æ‹©æ“ä½œ (0-7): "
+set /p choice="ÇëÑ¡Ôñ²Ù×÷ (0-7): "
 
 if "%choice%"=="1" goto create_default
 if "%choice%"=="2" goto reset_user
@@ -66,15 +65,15 @@ goto menu
 
 :create_default
 echo.
-echo åˆ›å»ºé»˜è®¤é…ç½®æ–‡ä»¶...
+echo ´´½¨Ä¬ÈÏÅäÖÃÎÄ¼þ...
 mkdir "%CONFIG_DIR%" 2>nul
 
-:: åˆ›å»ºåº”ç”¨é…ç½®
-echo åˆ›å»ºåº”ç”¨é…ç½®æ–‡ä»¶...
+:: ´´½¨Ó¦ÓÃÅäÖÃ
+echo ´´½¨Ó¦ÓÃÅäÖÃÎÄ¼þ...
 (
 echo {
 echo   "app": {
-echo     "name": "pdf2zh æ¡Œé¢ç‰ˆ",
+echo     "name": "pdf2zh ×ÀÃæ°æ",
 echo     "version": "1.9.9",
 echo     "build": "slim",
 echo     "author": "pdf2zh Desktop Contributors"
@@ -108,8 +107,8 @@ echo   }
 echo }
 ) > "%APP_CONFIG%"
 
-:: åˆ›å»ºç”¨æˆ·é…ç½®
-echo åˆ›å»ºç”¨æˆ·é…ç½®æ–‡ä»¶...
+:: ´´½¨ÓÃ»§ÅäÖÃ
+echo ´´½¨ÓÃ»§ÅäÖÃÎÄ¼þ...
 (
 echo {
 echo   "ui": {
@@ -142,88 +141,88 @@ echo   }
 echo }
 ) > "%USER_CONFIG%"
 
-echo [âœ“] é»˜è®¤é…ç½®æ–‡ä»¶åˆ›å»ºå®Œæˆ
+echo [7½7] Ä¬ÈÏÅäÖÃÎÄ¼þ´´½¨Íê³É
 pause
 goto menu
 
 :reset_user
 echo.
-echo [è­¦å‘Š] æ­¤æ“ä½œå°†é‡ç½®æ‰€æœ‰ç”¨æˆ·é…ç½®
-choice /c YN /m "ç¡®å®šè¦é‡ç½®ç”¨æˆ·é…ç½®å—"
+echo [¾¯¸æ] ´Ë²Ù×÷½«ÖØÖÃËùÓÐÓÃ»§ÅäÖÃ
+choice /c YN /m "È·¶¨ÒªÖØÖÃÓÃ»§ÅäÖÃÂð"
 if %errorlevel% == 2 goto menu
 
 if exist "%USER_CONFIG%" (
     copy "%USER_CONFIG%" "%USER_CONFIG%.backup" >nul
-    echo [âœ“] å·²å¤‡ä»½åŽŸé…ç½®ä¸º: %USER_CONFIG%.backup
+    echo [7½7] ÒÑ±¸·ÝÔ­ÅäÖÃÎª: %USER_CONFIG%.backup
 )
 
 goto create_default
 
 :backup_config
 echo.
-echo å¤‡ä»½é…ç½®æ–‡ä»¶...
+echo ±¸·ÝÅäÖÃÎÄ¼þ...
 set "BACKUP_DIR=config_backup_%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
 set "BACKUP_DIR=%BACKUP_DIR: =0%"
 mkdir "%BACKUP_DIR%" 2>nul
 
 if exist "%CONFIG_DIR%" (
     xcopy "%CONFIG_DIR%\*" "%BACKUP_DIR%\" /y >nul
-    echo [âœ“] é…ç½®æ–‡ä»¶å·²å¤‡ä»½åˆ°: %BACKUP_DIR%
+    echo [7½7] ÅäÖÃÎÄ¼þÒÑ±¸·Ýµ½: %BACKUP_DIR%
 ) else (
-    echo [!] é…ç½®ç›®å½•ä¸å­˜åœ¨
+    echo [!] ÅäÖÃÄ¿Â¼²»´æÔÚ
 )
 pause
 goto menu
 
 :restore_config
 echo.
-echo å¯ç”¨çš„å¤‡ä»½:
+echo ¿ÉÓÃµÄ±¸·Ý:
 for /d %%d in (config_backup_*) do echo   - %%d
 echo.
-set /p backup_name="è¯·è¾“å…¥è¦æ¢å¤çš„å¤‡ä»½ç›®å½•å: "
+set /p backup_name="ÇëÊäÈëÒª»Ö¸´µÄ±¸·ÝÄ¿Â¼Ãû: "
 
 if exist "%backup_name%" (
-    echo [è­¦å‘Š] æ­¤æ“ä½œå°†è¦†ç›–å½“å‰é…ç½®
-    choice /c YN /m "ç¡®å®šè¦æ¢å¤é…ç½®å—"
+    echo [¾¯¸æ] ´Ë²Ù×÷½«¸²¸Çµ±Ç°ÅäÖÃ
+    choice /c YN /m "È·¶¨Òª»Ö¸´ÅäÖÃÂð"
     if !errorlevel! == 1 (
         xcopy "%backup_name%\*" "%CONFIG_DIR%\" /y >nul
-        echo [âœ“] é…ç½®å·²ä»Ž %backup_name% æ¢å¤
+        echo [7½7] ÅäÖÃÒÑ´Ó %backup_name% »Ö¸´
     )
 ) else (
-    echo [!] å¤‡ä»½ç›®å½•ä¸å­˜åœ¨: %backup_name%
+    echo [!] ±¸·ÝÄ¿Â¼²»´æÔÚ: %backup_name%
 )
 pause
 goto menu
 
 :edit_config
 echo.
-echo é€‰æ‹©è¦ç¼–è¾‘çš„é…ç½®æ–‡ä»¶:
-echo   1. åº”ç”¨é…ç½® (%APP_CONFIG%)
-echo   2. ç”¨æˆ·é…ç½® (%USER_CONFIG%)
-echo   3. æ¨¡å—é…ç½® (%MODULES_CONFIG%)
-echo   0. è¿”å›ž
+echo Ñ¡ÔñÒª±à¼­µÄÅäÖÃÎÄ¼þ:
+echo   1. Ó¦ÓÃÅäÖÃ (%APP_CONFIG%)
+echo   2. ÓÃ»§ÅäÖÃ (%USER_CONFIG%)
+echo   3. Ä£¿éÅäÖÃ (%MODULES_CONFIG%)
+echo   0. ·µ»Ø
 echo.
-set /p edit_choice="è¯·é€‰æ‹©: "
+set /p edit_choice="ÇëÑ¡Ôñ: "
 
 if "%edit_choice%"=="1" (
     if exist "%APP_CONFIG%" (
         notepad "%APP_CONFIG%"
     ) else (
-        echo [!] æ–‡ä»¶ä¸å­˜åœ¨: %APP_CONFIG%
+        echo [!] ÎÄ¼þ²»´æÔÚ: %APP_CONFIG%
     )
 )
 if "%edit_choice%"=="2" (
     if exist "%USER_CONFIG%" (
         notepad "%USER_CONFIG%"
     ) else (
-        echo [!] æ–‡ä»¶ä¸å­˜åœ¨: %USER_CONFIG%
+        echo [!] ÎÄ¼þ²»´æÔÚ: %USER_CONFIG%
     )
 )
 if "%edit_choice%"=="3" (
     if exist "%MODULES_CONFIG%" (
         notepad "%MODULES_CONFIG%"
     ) else (
-        echo [!] æ–‡ä»¶ä¸å­˜åœ¨: %MODULES_CONFIG%
+        echo [!] ÎÄ¼þ²»´æÔÚ: %MODULES_CONFIG%
     )
 )
 if "%edit_choice%"=="0" goto menu
@@ -233,22 +232,22 @@ goto menu
 
 :validate_config
 echo.
-echo éªŒè¯é…ç½®æ–‡ä»¶...
+echo ÑéÖ¤ÅäÖÃÎÄ¼þ...
 
-:: éªŒè¯JSONæ ¼å¼
+:: ÑéÖ¤JSON¸ñÊ½
 for %%f in ("%APP_CONFIG%" "%USER_CONFIG%" "%MODULES_CONFIG%") do (
     if exist "%%f" (
-        echo éªŒè¯: %%f
+        echo ÑéÖ¤: %%f
         powershell -command "
         try {
             $json = Get-Content '%%f' -Raw | ConvertFrom-Json
-            Write-Host '[âœ“] JSONæ ¼å¼æ­£ç¡®'
+            Write-Host '[7½7] JSON¸ñÊ½ÕýÈ·'
         } catch {
-            Write-Host '[âœ—] JSONæ ¼å¼é”™è¯¯: ' $_.Exception.Message
+            Write-Host '[7¾1] JSON¸ñÊ½´íÎó: ' $_.Exception.Message
         }
         "
     ) else (
-        echo [!] æ–‡ä»¶ä¸å­˜åœ¨: %%f
+        echo [!] ÎÄ¼þ²»´æÔÚ: %%f
     )
 )
 
@@ -257,35 +256,35 @@ goto menu
 
 :import_export
 echo.
-echo é…ç½®å¯¼å…¥/å¯¼å‡º:
-echo   1. å¯¼å‡ºé…ç½®åŒ…
-echo   2. å¯¼å…¥é…ç½®åŒ…
-echo   0. è¿”å›ž
+echo ÅäÖÃµ¼Èë/µ¼³ö:
+echo   1. µ¼³öÅäÖÃ°ü
+echo   2. µ¼ÈëÅäÖÃ°ü
+echo   0. ·µ»Ø
 echo.
-set /p ie_choice="è¯·é€‰æ‹©: "
+set /p ie_choice="ÇëÑ¡Ôñ: "
 
 if "%ie_choice%"=="1" (
     set "EXPORT_FILE=pdf2zh_config_%date:~0,4%%date:~5,2%%date:~8,2%.zip"
-    echo æ­£åœ¨å¯¼å‡ºé…ç½®åŒ…...
+    echo ÕýÔÚµ¼³öÅäÖÃ°ü...
     powershell -command "Compress-Archive -Path '%CONFIG_DIR%\*' -DestinationPath '%EXPORT_FILE%' -Force"
     if exist "%EXPORT_FILE%" (
-        echo [âœ“] é…ç½®åŒ…å·²å¯¼å‡º: %EXPORT_FILE%
+        echo [7½7] ÅäÖÃ°üÒÑµ¼³ö: %EXPORT_FILE%
     ) else (
-        echo [âœ—] å¯¼å‡ºå¤±è´¥
+        echo [7¾1] µ¼³öÊ§°Ü
     )
 )
 
 if "%ie_choice%"=="2" (
-    set /p import_file="è¯·è¾“å…¥é…ç½®åŒ…æ–‡ä»¶å: "
+    set /p import_file="ÇëÊäÈëÅäÖÃ°üÎÄ¼þÃû: "
     if exist "!import_file!" (
-        echo [è­¦å‘Š] æ­¤æ“ä½œå°†è¦†ç›–å½“å‰é…ç½®
-        choice /c YN /m "ç¡®å®šè¦å¯¼å…¥é…ç½®å—"
+        echo [¾¯¸æ] ´Ë²Ù×÷½«¸²¸Çµ±Ç°ÅäÖÃ
+        choice /c YN /m "È·¶¨Òªµ¼ÈëÅäÖÃÂð"
         if !errorlevel! == 1 (
             powershell -command "Expand-Archive -Path '!import_file!' -DestinationPath '%CONFIG_DIR%' -Force"
-            echo [âœ“] é…ç½®åŒ…å·²å¯¼å…¥
+            echo [7½7] ÅäÖÃ°üÒÑµ¼Èë
         )
     ) else (
-        echo [!] æ–‡ä»¶ä¸å­˜åœ¨: !import_file!
+        echo [!] ÎÄ¼þ²»´æÔÚ: !import_file!
     )
 )
 
@@ -293,5 +292,5 @@ pause
 goto menu
 
 :exit
-echo æ„Ÿè°¢ä½¿ç”¨ pdf2zh æ¡Œé¢ç‰ˆé…ç½®ç®¡ç†å™¨ï¼
+echo ¸ÐÐ»Ê¹ÓÃ pdf2zh ×ÀÃæ°æÅäÖÃ¹ÜÀíÆ÷£¡
 exit /b 0

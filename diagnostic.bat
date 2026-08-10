@@ -1,192 +1,191 @@
 @echo off
-chcp 65001>nul 2>&1
 setlocal enabledelayedexpansion
 
-:: pdf2zh 桌面版系统诊断工具
-title pdf2zh 桌面版 - 系统诊断
+:: pdf2zh �����ϵͳ��Ϲ���
+title pdf2zh ����� - ϵͳ���
 
 echo ================================================================
-echo   pdf2zh 桌面版 - 系统诊断工具
+echo   pdf2zh ����� - ϵͳ��Ϲ���
 echo ================================================================
 echo.
 
 set "REPORT_FILE=diagnostic_report_%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%.txt"
 set "REPORT_FILE=%REPORT_FILE: =0%"
 
-echo 正在生成诊断报告...
-echo 报告文件: %REPORT_FILE%
+echo ����������ϱ���...
+echo �����ļ�: %REPORT_FILE%
 echo.
 
-:: 开始生成报告
+:: ��ʼ���ɱ���
 (
 echo ================================================================
-echo   pdf2zh 桌面版 - 系统诊断报告
-echo   生成时间: %date% %time%
+echo   pdf2zh ����� - ϵͳ��ϱ���
+echo   ����ʱ��: %date% %time%
 echo ================================================================
 echo.
 
-echo [系统信息]
-echo 操作系统:
+echo [ϵͳ��Ϣ]
+echo ����ϵͳ:
 ver
 echo.
-echo 系统架构: %PROCESSOR_ARCHITECTURE%
-echo 处理器: %PROCESSOR_IDENTIFIER%
+echo ϵͳ�ܹ�: %PROCESSOR_ARCHITECTURE%
+echo ������: %PROCESSOR_IDENTIFIER%
 echo.
 
-echo [内存信息]
+echo [�ڴ���Ϣ]
 for /f %%p in ('powershell -command "[math]::Floor((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)"') do (
     set "MEMORY_GB=%%p"
-    echo 总内存: %%p GB
+    echo ���ڴ�: %%p GB
 )
 for /f %%p in ('powershell -command "[math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024/1024)"') do (
-    echo 可用内存: %%p GB
+    echo �����ڴ�: %%p GB
 )
 echo.
 
-echo [磁盘空间]
+echo [���̿ռ�]
 for /f "delims=" %%p in ('powershell -command "Get-CimInstance Win32_LogicalDisk -Filter 'Size GT 0' | ForEach-Object { '{0}  Total: {1:N1} GB  Free: {2:N1} GB' -f $_.DeviceID, ($_.Size/1GB), ($_.FreeSpace/1GB) }"') do (
     echo %%p
 )
 echo.
 
-echo [网络连接]
+echo [��������]
 ping -n 1 google.com >nul 2>&1
 if !errorlevel! == 0 (
-    echo 网络连接: 正常
+    echo ��������: ����
 ) else (
-    echo 网络连接: 异常
+    echo ��������: �쳣
 )
 echo.
 
-echo [Visual C++ 运行库]
+echo [Visual C++ ���п�]
 reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" >nul 2>&1
 if !errorlevel! == 0 (
-    echo VC++ Redistributable x64: 已安装
+    echo VC++ Redistributable x64: �Ѱ�װ
 ) else (
-    echo VC++ Redistributable x64: 未安装
+    echo VC++ Redistributable x64: δ��װ
 )
 echo.
 
-echo [Python 环境]
+echo [Python ����]
 if exist "core\runtime\python.exe" (
-    echo Python 运行时: 已安装
+    echo Python ����ʱ: �Ѱ�װ
     "core\runtime\python.exe" --version 2>nul
     if !errorlevel! == 0 (
-        echo Python 版本检查: 正常
+        echo Python �汾���: ����
     ) else (
-        echo Python 版本检查: 异常
+        echo Python �汾���: �쳣
     )
 ) else (
-    echo Python 运行时: 未安装
+    echo Python ����ʱ: δ��װ
 )
 echo.
 
-echo [核心模块]
+echo [����ģ��]
 if exist "core\site-packages\pdf2zh" (
-    echo pdf2zh 库: 已安装
+    echo pdf2zh ��: �Ѱ�װ
 ) else (
-    echo pdf2zh 库: 未安装
+    echo pdf2zh ��: δ��װ
 )
 
 if exist "core\site-packages\PyQt5" (
-    echo PyQt5 库: 已安装
+    echo PyQt5 ��: �Ѱ�װ
 ) else (
-    echo PyQt5 库: 未安装
+    echo PyQt5 ��: δ��װ
 )
 
 if exist "core\site-packages\requests" (
-    echo requests 库: 已安装
+    echo requests ��: �Ѱ�װ
 ) else (
-    echo requests 库: 未安装
+    echo requests ��: δ��װ
 )
 echo.
 
-echo [可选模块]
+echo [��ѡģ��]
 if exist "models\layout" (
-    echo AI模型包: 已安装
+    echo AIģ�Ͱ�: �Ѱ�װ
 ) else (
-    echo AI模型包: 未安装
+    echo AIģ�Ͱ�: δ��װ
 )
 
 if exist "plugins\translators_extended" (
-    echo 扩展翻译服务: 已安装
+    echo ��չ�������: �Ѱ�װ
 ) else (
-    echo 扩展翻译服务: 未安装
+    echo ��չ�������: δ��װ
 )
 echo.
 
-echo [配置文件]
+echo [�����ļ�]
 if exist "config\app.json" (
-    echo 应用配置: 存在
+    echo Ӧ������: ����
 ) else (
-    echo 应用配置: 不存在
+    echo Ӧ������: ������
 )
 
 if exist "config\user.json" (
-    echo 用户配置: 存在
+    echo �û�����: ����
 ) else (
-    echo 用户配置: 不存在
+    echo �û�����: ������
 )
 echo.
 
-echo [目录结构]
-echo 安装目录: %~dp0
+echo [Ŀ¼�ṹ]
+echo ��װĿ¼: %~dp0
 dir /b
 echo.
 
-echo [进程信息]
+echo [������Ϣ]
 tasklist | findstr python.exe
 tasklist | findstr pdf2zh
 echo.
 
-echo [最近错误日志]
+echo [���������־]
 if exist "logs" (
-    echo 日志目录: 存在
+    echo ��־Ŀ¼: ����
     for /f %%f in ('dir /b /o-d logs\*.log 2^>nul') do (
-        echo 最新日志: logs\%%f
-        echo --- 最后10行 ---
+        echo ������־: logs\%%f
+        echo --- ���10�� ---
         powershell -command "Get-Content 'logs\%%f' -Tail 10"
         goto :log_done
     )
     :log_done
 ) else (
-    echo 日志目录: 不存在
+    echo ��־Ŀ¼: ������
 )
 echo.
 
-echo [环境变量]
+echo [��������]
 echo PYTHONPATH: %PYTHONPATH%
 echo PATH: %PATH%
 echo.
 
 echo ================================================================
-echo   诊断完成
+echo   ������
 echo ================================================================
 ) > "%REPORT_FILE%"
 
-:: 显示诊断结果
-echo 诊断完成！
+:: ��ʾ��Ͻ��
+echo �����ɣ�
 echo.
-echo 诊断报告已保存到: %REPORT_FILE%
+echo ��ϱ����ѱ��浽: %REPORT_FILE%
 echo.
 
-:: 分析问题
-echo [问题分析]
+:: ��������
+echo [�������]
 set "ISSUES_FOUND=0"
 
 if not exist "core\runtime\python.exe" (
-    echo [!] 问题: Python 运行时未安装
+    echo [!] ����: Python ����ʱδ��װ
     set /a ISSUES_FOUND+=1
 )
 
 if not exist "core\site-packages\pdf2zh" (
-    echo [!] 问题: pdf2zh 库未安装
+    echo [!] ����: pdf2zh ��δ��װ
     set /a ISSUES_FOUND+=1
 )
 
 reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] 问题: VC++ 运行库未安装
+    echo [!] ����: VC++ ���п�δ��װ
     set /a ISSUES_FOUND+=1
 )
 
@@ -194,51 +193,51 @@ for /f %%p in ('powershell -command "[math]::Floor((Get-CimInstance Win32_Comput
     set "MEMORY_GB=%%p"
 )
 if %MEMORY_GB% LSS 4 (
-    echo [!] 问题: 系统内存不足 (%MEMORY_GB%GB^<4GB)
+    echo [!] ����: ϵͳ�ڴ治�� (%MEMORY_GB%GB^<4GB)
     set /a ISSUES_FOUND+=1
 )
 
 ping -n 1 google.com >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] 问题: 网络连接异常
+    echo [!] ����: ���������쳣
     set /a ISSUES_FOUND+=1
 )
 
 if %ISSUES_FOUND% == 0 (
-    echo [✓] 未发现明显问题
+    echo [�7�7] δ������������
 ) else (
-    echo [!] 发现 %ISSUES_FOUND% 个问题
+    echo [!] ���� %ISSUES_FOUND% ������
 )
 
 echo.
-echo [建议操作]
+echo [�������]
 if not exist "core\runtime\python.exe" (
-    echo - 运行 install.bat 安装核心组件
+    echo - ���� install.bat ��װ�������
 )
 if not exist "core\site-packages\pdf2zh" (
-    echo - 运行 module_manager.bat 安装 pdf2zh 库
+    echo - ���� module_manager.bat ��װ pdf2zh ��
 )
 reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo - 安装 Visual C++ Redistributable
+    echo - ��װ Visual C++ Redistributable
 )
 if %MEMORY_GB% LSS 4 (
-    echo - 考虑增加系统内存或关闭其他程序
+    echo - ��������ϵͳ�ڴ��ر���������
 )
 
 echo.
-choice /c YN /m "是否查看完整诊断报告"
+choice /c YN /m "�Ƿ�鿴������ϱ���"
 if %errorlevel% == 1 (
     notepad "%REPORT_FILE%"
 )
 
 echo.
-choice /c YN /m "是否将报告复制到剪贴板"
+choice /c YN /m "�Ƿ񽫱��渴�Ƶ�������"
 if %errorlevel% == 1 (
     type "%REPORT_FILE%" | clip
-    echo [✓] 报告已复制到剪贴板
+    echo [�7�7] �����Ѹ��Ƶ�������
 )
 
 echo.
-echo 感谢使用 pdf2zh 桌面版诊断工具！
+echo ��лʹ�� pdf2zh �������Ϲ��ߣ�
 pause
