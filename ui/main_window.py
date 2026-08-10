@@ -165,10 +165,31 @@ def _install_pdf2zh_color_fix():
             ot.do_translate = _new_do
             ot._p2z_mt_clean = True
 
+    def _patch_doclayout(mod):
+        # v2.3.8: 矮/小页面(如附录里嵌的小图表)版面检测算出来的 imgsz 可能远小于模型原生
+        # 训练尺寸(该 onnx 模型文件名标注 imgsz1024), 导致 YOLO 候选框不足 300 个, 触发
+        # ONNX 里写死的 TopK(k=300) 报错("k argument [300] should not be greater than
+        # specified axis dim value")。给 predict() 兜底锁下限, 不管调用方传多小都不会低于
+        # 1024; 正常/大页面(本来就 ≥1024)行为不变。imgsz 只影响内部推理分辨率, predict()
+        # 内部 scale_boxes() 会把输出框坐标换算回调用方传入的原始 image 尺寸, 不影响调用方
+        # 那边的点↔像素坐标映射。
+        cls = getattr(mod, "OnnxModel", None)
+        if not cls or getattr(cls, "_p2z_imgsz_floor_fixed", False):
+            return
+        _orig_predict = cls.predict
+
+        def _new_predict(self, image, imgsz=1024, **kwargs):
+            imgsz = max(1024, imgsz)
+            return _orig_predict(self, image, imgsz=imgsz, **kwargs)
+
+        cls.predict = _new_predict
+        cls._p2z_imgsz_floor_fixed = True
+
     _patchers = {
         "pdf2zh.pdfinterp": _patch_pdfinterp,
         "pdf2zh.converter": _patch_converter,
         "pdf2zh.translator": _patch_translator,
+        "pdf2zh.doclayout": _patch_doclayout,
     }
 
     class _Finder(MetaPathFinder):
@@ -237,7 +258,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.7"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.8"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
