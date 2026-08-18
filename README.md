@@ -162,7 +162,7 @@
 - **Windows**：解压后看到多个文件，**多种方式并存，按需选**——
   - 🟢 **推荐 / 最省心**：直接双击 **`pdf2zh.exe`**，不需要任何安装步骤，解压即用，首次使用和日常使用都是这一个
   - 🟢 **等价备选**：`pdf2zh.vbs`（无控制台窗口）/ `pdf2zh.bat`（保留控制台便于看输出），效果和 `pdf2zh.exe`完全一样，个人喜好选一个
-  - 🔵 **可选，不是必须**：想要桌面快捷方式 / 开始菜单 / 自动检查安装 VC++ 运行库，可以额外双击一次 **`install.bat`**（跑完就没用了，不影响其他启动方式）
+  - 🟡 **想要桌面图标 / 开始菜单，建议做一次**：双击 **`install.bat`**（顺带自动检查/安装 VC++ 运行库；跑完就没用了，不做也完全不影响用 `pdf2zh.exe` 正常使用，只是桌面上不会有图标）
   - 🟡 **遇到问题**：双击 `debug_start.bat`（看启动日志）或 `diagnostic.bat`（系统诊断）；改设置用 `config_manager.bat`
   - 🔴 **卸载**：双击 `uninstall.bat`
   - ⚠️ `install.bat`/`uninstall.bat`/`debug_start.bat`/`diagnostic.bat`/`config_manager.bat` 这几个是批处理脚本，v2.3.9 起已修复中文 Windows 上的编码乱码问题；`pdf2zh.exe`/`pdf2zh.vbs` 不受此类问题影响，追求最稳就选它们
