@@ -653,7 +653,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.13"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.14"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -6694,7 +6694,7 @@ def _parse_cli_args(argv):
       pdf2zh --format=dual file.pdf
     返回 dict: {file: str|None, format: str|None, auto: bool}
     """
-    result = {"file": None, "format": None, "auto": False, "silent": False}
+    result = {"file": None, "format": None, "auto": False, "silent": False, "tables": None}
     try:
         for arg in argv[1:]:
             if arg.startswith("--format="):
@@ -6705,6 +6705,10 @@ def _parse_cli_args(argv):
                 result["auto"] = True
             elif arg == "--silent":
                 result["silent"] = True
+            elif arg.startswith("--tables="):
+                # v2.3.14: 供自动化测试/脚本化调用勾选"翻译表格内容"并指定页码，
+                # 例: --tables=5 或 --tables=5,8-10；不传就是普通行为(不勾选)。
+                result["tables"] = arg.split("=", 1)[1].strip()
             elif arg.lower().endswith(".pdf") and os.path.isfile(arg):
                 result["file"] = arg
     except Exception:
@@ -6858,6 +6862,17 @@ def main():
                 # v2.3.13: 记录本次是否由 --auto/Zotero 唤起触发（无人值守），翻译完成后
                 # 弹出的持久提示（表格翻译结果等）要避免在这种场景下阻塞主线程等人来点掉。
                 tp._cli_auto = bool(payload.get("auto"))
+
+                # v2.3.14: --tables=<页码> 供自动化测试/脚本化调用勾选"翻译表格内容"，
+                # 之前这个开关只能在 GUI 里手动点，没法从命令行触达，没法做真正的
+                # 端到端自动化回归——这也是为什么之前几个版本的"已验证"实际上只验证了
+                # 用 --auto 能跑通的部分（table 相关 UI 状态从来没被真正走过一遍）。
+                tables_arg = payload.get("tables")
+                if tables_arg is not None and hasattr(tp, "translate_tables_check"):
+                    tp.translate_tables_check.setChecked(True)
+                    if tables_arg and hasattr(tp, "table_pages_edit"):
+                        tp.table_pages_edit.setText(tables_arg)
+                    _dbg_write(f"  set translate_tables_check=True, table_pages={tables_arg!r}")
 
                 if payload.get("auto"):
                     _dbg_write(f"  scheduling _start() in 800ms")

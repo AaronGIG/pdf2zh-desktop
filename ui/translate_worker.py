@@ -9,12 +9,14 @@ import fitz  # PyMuPDF
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
-def _table_cell_fit_fontsize(rect, text, max_fontsize=12, min_fontsize=6):
+def _table_cell_fit_fontsize(w, h, text, max_fontsize=12, min_fontsize=6):
     """基于单元格面积估算最佳字号，让 insert_textbox 自动换行贴近原版排版密度。
     和 core/site-packages/pdf2zh/high_level.py 的 _fit_fontsize 逻辑一致——之前 Mac
     端只按格子高度算字号（不管译文有多长），中文比英文原文平均更长，经常挤成
-    密密麻麻好几行换行，看起来比原版乱很多。"""
-    w, h = rect.width - 2, rect.height - 2
+    密密麻麻好几行换行，看起来比原版乱很多。
+    v2.3.14: 参数从 rect 改成显式 w/h——竖排/旋转的单元格用 insert_textbox 的
+    rotate= 参数插入时，文字实际的"流动宽度"对应的是 rect 的高，不是宽，
+    调用方需要按旋转角度自己决定传谁当 w、谁当 h。"""
     if w <= 0 or h <= 0:
         return min_fontsize
     cjk = sum(1 for c in text if ord(c) > 0x2fff)
@@ -35,15 +37,74 @@ def _table_cell_should_translate(text: str) -> bool:
     """判断表格单元格文字是否需要翻译（跳过纯数字/日期/编号/单字符），
     和 core/site-packages/pdf2zh/high_level.py 里 Win 端的 _should_translate 逻辑一致。
     没有这层过滤时纯数字单元格（如 "893"）会被送进翻译服务，偶尔被曲解成
-    "第893章"这类无意义结果。"""
+    "第893章"这类无意义结果。
+    v2.3.14: 学术表格里统计区间/置信区间常见写法（如 "87.2 (81.8–91.2)"）用的是
+    半字线 – 而不是普通连字符 -，加上括号，原来的正则接不住，被当成"需要翻译"
+    送进 Google 翻译——数字部分翻译器不会真的翻，但经常会顺手把换行/空格重新
+    排版一下（比如去掉数字和括号之间的换行），导致 translated != 原文本，
+    又触发白底覆盖+重新插入，新插入的文字用了不同的自动换行方式，和相邻单元格
+    的内容挤在一起变成乱码堆。把这类"纯统计数值+区间符号"也一并识别成不需要
+    翻译，从根上避免这次没意义的覆盖重排。"""
     if not text or not text.strip():
         return False
     t = text.strip()
     if len(t) <= 1:
         return False
-    if re.match(r'^[+\-]?[\d.,\s%/:\-]+$', t):
+    if re.match(r'^[+\-–—±()\[\]~\d.,\s%/:\-]+$', t):
         return False
     return True
+
+
+def _table_cell_rotation_and_size(page, rect):
+    """判断表格单元格里的文字排版方向 + 原始字号，一次 get_text 扫描顺带都拿到。
+    返回 (rotate, ref_size) 或 (None, None)（拿不到可靠方向/字号，或同一格里混了
+    不同方向时——大概率是 find_tables 格子边界不准，交给调用方跳过不处理）。
+    ref_size 用原文里出现过的最大字号，插入译文时以它封顶——之前每个格子完全
+    独立按译文长度反推字号，同一张表里长短不一的译文算出来的字号差异很大，
+    看起来东一块大字西一块小字，比原表格乱很多；原表格本身字号通常是统一的，
+    直接拿原字号当上限更接近原版观感。
+    v2.3.14 (issue #28 后续): 论文里常见整张表格转 90° 排版（不只是列标题旋转，
+    数据单元格本身也是转向的——之前只验证过标题行旋转，误以为数据格是水平的）。
+    这类表格如果不加区分地把提取到的文字横排插入回去，会跟原有竖排内容方向不一致、
+    版式全乱。这里用 PyMuPDF 提取到的文字行方向向量 dir 判断朝向，再插入时按同样
+    角度旋转译文，保持和原表格一致的排版方向，而不是简单跳过整张表不翻译。
+    dir≈(±1,0) 水平；dir≈(0,-1)（PyMuPDF 图像坐标系，文字从下往上走）对应
+    insert_textbox 的 rotate=90；dir≈(0,1) 对应 rotate=270。
+    v2.3.14 修正：第一版按"整句顺序读出来对不对"判断，结果和 270 判反了——
+    对中文这种每个字本身方向对称的文字，顺序读得通不代表每个字"正立"方向对，
+    实测拿原表格里未改动的英文原文字符(如"Model"/"IDx-DR")逐字对比朝向才发现
+    刚好反了，插入译文单个字都是倒着立的，和原表格其他没被覆盖的旋转内容缺一撞就
+    出现"有的顺时针有的逆时针"的观感。
+    """
+    d = page.get_text("dict", clip=rect)
+    dirs = set()
+    max_size = 0
+    for blk in d.get("blocks", []):
+        for ln in blk.get("lines", []):
+            dx, dy = ln.get("dir", (1.0, 0.0))
+            if abs(dx) >= abs(dy):
+                dirs.add(180 if dx < 0 else 0)
+            else:
+                dirs.add(90 if dy < 0 else 270)
+            for sp in ln.get("spans", []):
+                max_size = max(max_size, sp.get("size", 0))
+    if len(dirs) != 1 or max_size <= 0:
+        return None, None  # 没有文字，或者同一格里混了不止一种方向(大概率是 find_tables 格子边界不准)，不处理
+    return dirs.pop(), max_size
+
+
+def _table_cell_texts_equivalent(a: str, b: str) -> bool:
+    """判断两段单元格文字是否"实质等价"（忽略空白/换行/破折号变体差异）。
+    v2.3.14: 翻译服务经常对数字/符号为主的文本做无意义的格式重排（换行变空格、
+    半字线变连字符等），如果只用严格字符串相等判断"是否需要重新插入"，会把这类
+    格式抖动误判成"有实质变化"，导致没必要的白底覆盖+插入，反而和相邻单元格内容
+    叠在一起。"""
+    def _norm(s):
+        s = re.sub(r'\s+', '', s.strip())  # 判等用途，直接去掉全部空白差异（不只是压缩）
+        for dash in ('–', '—', '‐', '‑'):
+            s = s.replace(dash, '-')
+        return s
+    return _norm(a) == _norm(b)
 
 
 # ─── 语言 / 服务映射 ─────────────────────────────────────────
@@ -962,21 +1023,30 @@ class TranslateWorker(QThread):
                         text = page.get_textbox(rect).strip()
                         if not _table_cell_should_translate(text):
                             continue
+                        rot, ref_size = _table_cell_rotation_and_size(page, rect)
+                        if rot is None:
+                            continue  # 方向不明或一格里混了多种方向(find_tables 边界不准)，跳过更安全
                         # 翻译单元格文字
                         try:
                             translated = translator.translate(text)
-                            if translated and translated.strip() and translated.strip() != text:
-                                # 白底覆盖 + 写入译文
+                            if translated and translated.strip() and not _table_cell_texts_equivalent(translated, text):
+                                # 白底覆盖 + 写入译文（按原方向旋转插入，保持和周围表格一致的排版方向）
                                 shape = page.new_shape()
                                 shape.draw_rect(rect)
                                 shape.finish(color=None, fill=(1, 1, 1))
                                 shape.commit()
                                 translated_text = translated.strip()
-                                font_size = _table_cell_fit_fontsize(rect, translated_text, max_fontsize=12)
+                                # v2.3.14: 旋转 90/270 插入时，文字实际沿着 rect 的高在走，
+                                # 而不是宽——算字号要把 w/h 对调，否则窄长的竖排格子会按
+                                # "又宽又矮"估出偏大的字号，插入时严重溢出到相邻格子。
+                                fit_w, fit_h = (rect.width, rect.height) if rot in (0, 180) else (rect.height, rect.width)
+                                # 用原文字号封顶，避免同一张表里长短不一的译文算出差异很大的字号
+                                max_fs = min(12, max(ref_size, 6))
+                                font_size = _table_cell_fit_fontsize(fit_w - 2, fit_h - 2, translated_text, max_fontsize=max_fs)
                                 rc = page.insert_textbox(
                                     rect, translated_text,
                                     fontsize=font_size, fontname="china-s",
-                                    color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT,
+                                    color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT, rotate=rot,
                                 )
                                 if rc < 0 and font_size > 6:
                                     # 仍然放不下（估算和实际渲染有偏差），最小字号兜底重试一次
@@ -987,7 +1057,7 @@ class TranslateWorker(QThread):
                                     page.insert_textbox(
                                         rect, translated_text,
                                         fontsize=6, fontname="china-s",
-                                        color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT,
+                                        color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT, rotate=rot,
                                     )
                                 result["cells_translated"] += 1
                         except Exception as e:
