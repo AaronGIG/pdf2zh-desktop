@@ -60,15 +60,410 @@ def _install_pdf2zh_color_fix():
         tc = getattr(mod, "TranslateConverter", None)
         if not tc or getattr(tc, "_p2z_color_fixed", False):
             return
-        _orig = tc.receive_layout
 
-        def _wrapped(self, ltpage):
-            ops = _orig(self, ltpage)
-            if isinstance(ops, str) and ops:
-                return "0 g 0 G " + ops
+        # v2.3.10 (issue #28): receive_layout 整个方法太长, 没法像 doclayout 的
+        # predict() 那样简单 wrap 后调用原函数——bug 在方法内部的字符分组逻辑里,
+        # 只能整体替换。这里是 core/site-packages/pdf2zh/converter.py 里
+        # receive_layout 的完整镜像(含 v2.3.3 的红色兜底修复 + v2.3.10 的竖排表格
+        # 断段修复), 冻结包里旧版本字节码一旦被这个替换掉, 原本靠 wrap 补的
+        # "0 g 0 G " 前缀也已经内建在下面的 color_reset 里, 不用再单独 wrap 加。
+        #
+        # v2.3.10 根因(issue #28, 竖排表格翻译后文字被拆散乱序堆叠):
+        # 整张旋转表格常被版面检测模型识别成同一个 cls 区域, 导致表格里相距很远、
+        # 互不相关的多个旋转单词全部被当成"同一个公式"持续累积进 vstk。还原时每个
+        # 公式字符的坐标只相对"本组第一个字符"计算偏移, 再叠加同一个段落锚点,
+        # 原本相隔很远的旋转单词就会被挤到几乎同一个位置。修复：公式字符累积时,
+        # 额外检查与上一个字符的间距, 超过阈值(字号 3 倍)就强制断开成新的公式/段落。
+        import re as _re
+        import unicodedata as _unicodedata
+        import concurrent.futures as _concurrent_futures
+        import numpy as _np
+        import logging as _logging
+        from pdfminer.layout import LTChar as _LTChar, LTFigure as _LTFigure, LTLine as _LTLine
+        from pdfminer.pdffont import PDFCIDFont as _PDFCIDFont
+        from tenacity import retry as _retry, wait_fixed as _wait_fixed
+
+        Paragraph = mod.Paragraph
+        OpType = mod.OpType
+        log = mod.log
+
+        def _new_receive_layout(self, ltpage):
+            # 段落
+            sstk: list = []            # 段落文字栈
+            pstk: list = []            # 段落属性栈
+            vbkt: int = 0              # 段落公式括号计数
+            # 公式组
+            vstk: list = []            # 公式符号组
+            vlstk: list = []           # 公式线条组
+            vfix: float = 0            # 公式纵向偏移
+            # 公式组栈
+            var: list = []             # 公式符号组栈
+            varl: list = []            # 公式线条组栈
+            varf: list = []            # 公式纵向偏移栈
+            vlen: list = []            # 公式宽度栈
+            # 全局
+            lstk: list = []            # 全局线条栈
+            xt = None                  # 上一个字符
+            xt_cls: int = -1           # 上一个字符所属段落，保证无论第一个字符属于哪个类别都可以触发新段落
+            vmax: float = ltpage.width / 4  # 行内公式最大宽度
+
+            def vflag(font, char):    # 匹配公式（和角标）字体
+                if isinstance(font, bytes):
+                    try:
+                        font = font.decode('utf-8')
+                    except UnicodeDecodeError:
+                        font = ""
+                font = font.split("+")[-1]
+                if _re.match(r"\(cid:", char):
+                    return True
+                if self.vfont:
+                    if _re.match(self.vfont, font):
+                        return True
+                else:
+                    if _re.match(
+                        r"(CM[^R]|MS[A-Z]M|XY|MT|BL|RM|EU|LA|RS|LINE|LCIRCLE|TeX-|rsfs|txsy|wasy|stmary|.*Mono|.*Code|.*Ital|.*Sym|.*Math)",
+                        font,
+                    ):
+                        return True
+                if self.vchar:
+                    if _re.match(self.vchar, char):
+                        return True
+                else:
+                    if (
+                        char
+                        and char != " "
+                        and (
+                            _unicodedata.category(char[0])
+                            in ["Lm", "Mn", "Sk", "Sm", "Zl", "Zp", "Zs"]
+                            or ord(char[0]) in range(0x370, 0x400)
+                        )
+                    ):
+                        return True
+                return False
+
+            ############################################################
+            # A. 原文档解析
+            for child in ltpage:
+                if isinstance(child, _LTChar):
+                    cur_v = False
+                    layout = self.layout[ltpage.pageid]
+                    h, w = layout.shape
+                    cx, cy = _np.clip(int(child.x0), 0, w - 1), _np.clip(int(child.y0), 0, h - 1)
+                    cls = layout[cy, cx]
+                    if child.get_text() == "•":
+                        cls = 0
+                    if (
+                        cls == 0
+                        or (cls == xt_cls and len(sstk[-1].strip()) > 1 and child.size < pstk[-1].size * 0.79)
+                        or vflag(child.fontname, child.get_text())
+                        or (child.matrix[0] == 0 and child.matrix[3] == 0)
+                    ):
+                        cur_v = True
+                    if not cur_v:
+                        if vstk and child.get_text() == "(":
+                            cur_v = True
+                            vbkt += 1
+                        if vbkt and child.get_text() == ")":
+                            cur_v = True
+                            vbkt -= 1
+                    # v2.3.10 fix (issue #28): 见上方 patcher 说明
+                    far_v = (
+                        bool(vstk)
+                        and cur_v
+                        and xt is not None
+                        and max(abs(child.x0 - xt.x0), abs(child.y0 - xt.y0)) > max(child.size, xt.size, 1) * 3
+                    )
+                    if (
+                        not cur_v
+                        or cls != xt_cls
+                        or far_v
+                        or (sstk[-1] != "" and abs(child.x0 - xt.x0) > vmax)
+                    ):
+                        if vstk:
+                            if (
+                                not cur_v
+                                and cls == xt_cls
+                                and child.x0 > max([vch.x0 for vch in vstk])
+                            ):
+                                vfix = vstk[0].y0 - child.y0
+                            if sstk[-1] == "":
+                                xt_cls = -1
+                            sstk[-1] += f"{{v{len(var)}}}"
+                            var.append(vstk)
+                            varl.append(vlstk)
+                            varf.append(vfix)
+                            vstk = []
+                            vlstk = []
+                            vfix = 0
+                    if not vstk:
+                        if cls == xt_cls and not far_v:
+                            if child.x0 > xt.x1 + 1:
+                                sstk[-1] += " "
+                            elif child.x1 < xt.x0:
+                                sstk[-1] += " "
+                                pstk[-1].brk = True
+                        else:
+                            sstk.append("")
+                            pstk.append(Paragraph(child.y0, child.x0, child.x0, child.x0, child.y0, child.y1, child.size, False))
+                    if not cur_v:
+                        if (
+                            child.size > pstk[-1].size
+                            or len(sstk[-1].strip()) == 1
+                        ) and child.get_text() != " ":
+                            pstk[-1].y -= child.size - pstk[-1].size
+                            pstk[-1].size = child.size
+                        sstk[-1] += child.get_text()
+                    else:
+                        if (
+                            not vstk
+                            and cls == xt_cls
+                            and child.x0 > xt.x0
+                        ):
+                            vfix = child.y0 - xt.y0
+                        vstk.append(child)
+                    pstk[-1].x0 = min(pstk[-1].x0, child.x0)
+                    pstk[-1].x1 = max(pstk[-1].x1, child.x1)
+                    pstk[-1].y0 = min(pstk[-1].y0, child.y0)
+                    pstk[-1].y1 = max(pstk[-1].y1, child.y1)
+                    xt = child
+                    xt_cls = cls
+                elif isinstance(child, _LTFigure):
+                    pass
+                elif isinstance(child, _LTLine):
+                    layout = self.layout[ltpage.pageid]
+                    h, w = layout.shape
+                    cx, cy = _np.clip(int(child.x0), 0, w - 1), _np.clip(int(child.y0), 0, h - 1)
+                    cls = layout[cy, cx]
+                    if vstk and cls == xt_cls:
+                        vlstk.append(child)
+                    else:
+                        lstk.append(child)
+                else:
+                    pass
+            if vstk:
+                sstk[-1] += f"{{v{len(var)}}}"
+                var.append(vstk)
+                varl.append(vlstk)
+                varf.append(vfix)
+            log.debug("\n==========[VSTACK]==========\n")
+            for id, v in enumerate(var):
+                l = max([vch.x1 for vch in v]) - v[0].x0
+                log.debug(f'< {l:.1f} {v[0].x0:.1f} {v[0].y0:.1f} {v[0].cid} {v[0].fontname} {len(varl[id])} > v{id} = {"".join([ch.get_text() for ch in v])}')
+                vlen.append(l)
+
+            ############################################################
+            # B. 段落翻译
+            log.debug("\n==========[SSTACK]==========\n")
+
+            @_retry(wait=_wait_fixed(1))
+            def worker(s):
+                if not s.strip() or _re.match(r"^\{v\d+\}$", s):
+                    return s
+                try:
+                    new = self.translator.translate(s)
+                    return new
+                except BaseException as e:
+                    if log.isEnabledFor(_logging.DEBUG):
+                        log.exception(e)
+                    else:
+                        log.exception(e, exc_info=False)
+                    raise e
+            with _concurrent_futures.ThreadPoolExecutor(
+                max_workers=self.thread
+            ) as executor:
+                news = list(executor.map(worker, sstk))
+
+            ############################################################
+            # C. 新文档排版
+            def raw_string(fcur, cstk):
+                if fcur == self.noto_name:
+                    return "".join(["%04x" % self.noto.has_glyph(ord(c)) for c in cstk])
+                elif isinstance(self.fontmap[fcur], _PDFCIDFont):
+                    return "".join(["%04x" % ord(c) for c in cstk])
+                else:
+                    return "".join(["%02x" % ord(c) for c in cstk])
+
+            LANG_LINEHEIGHT_MAP = {
+                "zh-cn": 1.4, "zh-tw": 1.4, "zh-hans": 1.4, "zh-hant": 1.4, "zh": 1.4,
+                "ja": 1.1, "ko": 1.2, "en": 1.2, "ar": 1.0, "ru": 0.8, "uk": 0.8, "ta": 0.8
+            }
+            default_line_height = LANG_LINEHEIGHT_MAP.get(self.translator.lang_out.lower(), 1.1)
+            _x, _y = 0, 0
+            ops_list = []
+
+            def gen_op_txt(font, size, x, y, rtxt):
+                return f"/{font} {size:f} Tf 1 0 0 1 {x:f} {y:f} Tm [<{rtxt}>] TJ "
+
+            def gen_op_txt_rot(font, size, a, b, c, d, x, y, rtxt):
+                # v2.3.10 (issue #28): 见 core/site-packages/pdf2zh/converter.py 同名函数注释
+                return f"/{font} {size:f} Tf {a:f} {b:f} {c:f} {d:f} {x:f} {y:f} Tm [<{rtxt}>] TJ "
+
+            def gen_op_line(x, y, xlen, ylen, linewidth):
+                return f"ET q 1 0 0 1 {x:f} {y:f} cm [] 0 d 0 J {linewidth:f} w 0 0 m {xlen:f} {ylen:f} l S Q BT "
+
+            for id, new in enumerate(news):
+                x = pstk[id].x
+                y = pstk[id].y
+                x0 = pstk[id].x0
+                x1 = pstk[id].x1
+                height = pstk[id].y1 - pstk[id].y0
+                size = pstk[id].size
+                brk = pstk[id].brk
+                cstk = ""
+                fcur = None
+                lidx = 0
+                tx = x
+                fcur_ = fcur
+                ptr = 0
+                log.debug(f"< {y} {x} {x0} {x1} {size} {brk} > {sstk[id]} | {new}")
+
+                ops_vals = []
+
+                while ptr < len(new):
+                    vy_regex = _re.match(
+                        r"\{\s*v([\d\s]+)\}", new[ptr:], _re.IGNORECASE
+                    )
+                    mod_ = 0
+                    if vy_regex:
+                        ptr += len(vy_regex.group(0))
+                        try:
+                            vid = int(vy_regex.group(1).replace(" ", ""))
+                            adv = vlen[vid]
+                        except Exception:
+                            continue
+                        if var[vid][-1].get_text() and _unicodedata.category(var[vid][-1].get_text()[0]) in ["Lm", "Mn", "Sk"]:
+                            mod_ = var[vid][-1].width
+                    else:
+                        ch = new[ptr]
+                        fcur_ = None
+                        try:
+                            if fcur_ is None and self.fontmap["tiro"].to_unichr(ord(ch)) == ch:
+                                fcur_ = "tiro"
+                        except Exception:
+                            pass
+                        if fcur_ is None:
+                            fcur_ = self.noto_name
+                        if fcur_ == self.noto_name:
+                            if self.noto is not None:
+                                adv = self.noto.char_lengths(ch, size)[0]
+                            else:
+                                adv = 0.5 * size
+                        else:
+                            adv = self.fontmap[fcur_].char_width(ord(ch)) * size
+                        ptr += 1
+                    if (
+                        fcur_ != fcur
+                        or vy_regex
+                        or x + adv > x1 + 0.1 * size
+                    ):
+                        if cstk:
+                            ops_vals.append({
+                                "type": OpType.TEXT,
+                                "font": fcur,
+                                "size": size,
+                                "x": tx,
+                                "dy": 0,
+                                "rtxt": raw_string(fcur, cstk),
+                                "lidx": lidx
+                            })
+                            cstk = ""
+                    if brk and x + adv > x1 + 0.1 * size:
+                        x = x0
+                        lidx += 1
+                    if vy_regex:
+                        fix = 0
+                        if fcur is not None:
+                            fix = varf[vid]
+                        for vch in var[vid]:
+                            vc = chr(vch.cid)
+                            vrot = None
+                            if vch.matrix[0] == 0 and vch.matrix[3] == 0 and vch.size:
+                                vrot = (
+                                    vch.matrix[0] / vch.size, vch.matrix[1] / vch.size,
+                                    vch.matrix[2] / vch.size, vch.matrix[3] / vch.size,
+                                )
+                            ops_vals.append({
+                                "type": OpType.TEXT,
+                                "font": self.fontid[vch.font],
+                                "size": vch.size,
+                                "x": x + vch.x0 - var[vid][0].x0,
+                                "dy": fix + vch.y0 - var[vid][0].y0,
+                                "rtxt": raw_string(self.fontid[vch.font], vc),
+                                "lidx": lidx,
+                                "rot": vrot,
+                            })
+                            if log.isEnabledFor(_logging.DEBUG):
+                                lstk.append(_LTLine(0.1, (_x, _y), (x + vch.x0 - var[vid][0].x0, fix + y + vch.y0 - var[vid][0].y0)))
+                                _x, _y = x + vch.x0 - var[vid][0].x0, fix + y + vch.y0 - var[vid][0].y0
+                        for l in varl[vid]:
+                            if l.linewidth < 5:
+                                ops_vals.append({
+                                    "type": OpType.LINE,
+                                    "x": l.pts[0][0] + x - var[vid][0].x0,
+                                    "dy": l.pts[0][1] + fix - var[vid][0].y0,
+                                    "linewidth": l.linewidth,
+                                    "xlen": l.pts[1][0] - l.pts[0][0],
+                                    "ylen": l.pts[1][1] - l.pts[0][1],
+                                    "lidx": lidx
+                                })
+                    else:
+                        if not cstk:
+                            tx = x
+                            if x == x0 and ch == " ":
+                                adv = 0
+                            else:
+                                cstk += ch
+                        else:
+                            cstk += ch
+                    adv -= mod_
+                    fcur = fcur_
+                    x += adv
+                    if log.isEnabledFor(_logging.DEBUG):
+                        lstk.append(_LTLine(0.1, (_x, _y), (x, y)))
+                        _x, _y = x, y
+                if cstk:
+                    ops_vals.append({
+                        "type": OpType.TEXT,
+                        "font": fcur,
+                        "size": size,
+                        "x": tx,
+                        "dy": 0,
+                        "rtxt": raw_string(fcur, cstk),
+                        "lidx": lidx
+                    })
+
+                line_height = default_line_height
+
+                while (lidx + 1) * size * line_height > height and line_height >= 1:
+                    line_height -= 0.05
+
+                for vals in ops_vals:
+                    if vals["type"] == OpType.TEXT:
+                        vrot = vals.get("rot")
+                        if vrot:
+                            ops_list.append(gen_op_txt_rot(vals["font"], vals["size"], vrot[0], vrot[1], vrot[2], vrot[3], vals["x"], vals["dy"] + y - vals["lidx"] * size * line_height, vals["rtxt"]))
+                        else:
+                            ops_list.append(gen_op_txt(vals["font"], vals["size"], vals["x"], vals["dy"] + y - vals["lidx"] * size * line_height, vals["rtxt"]))
+                    elif vals["type"] == OpType.LINE:
+                        ops_list.append(gen_op_line(vals["x"], vals["dy"] + y - vals["lidx"] * size * line_height, vals["xlen"], vals["ylen"], vals["linewidth"]))
+
+            for l in lstk:
+                if l.linewidth < 5:
+                    ops_list.append(gen_op_line(l.pts[0][0], l.pts[0][1], l.pts[1][0] - l.pts[0][0], l.pts[1][1] - l.pts[0][1], l.linewidth))
+
+            color_reset = "0 g 0 G "
+            if self.scan_mode:
+                white_bg = ""
+                for p in pstk:
+                    rx, ry = p.x0 - 2, p.y0 - 2
+                    rw, rh = p.x1 - p.x0 + 4, p.y1 - p.y0 + 4
+                    white_bg += f"q 1 1 1 rg {rx:.2f} {ry:.2f} {rw:.2f} {rh:.2f} re f Q "
+                ops = f"{white_bg}{color_reset}BT {''.join(ops_list)}ET "
+            else:
+                ops = f"{color_reset}BT {''.join(ops_list)}ET "
             return ops
 
-        tc.receive_layout = _wrapped
+        tc.receive_layout = _new_receive_layout
         tc._p2z_color_fixed = True
 
     def _patch_translator(mod):
@@ -258,7 +653,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.9"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.10"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
