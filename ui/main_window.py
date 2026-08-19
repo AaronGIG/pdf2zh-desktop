@@ -653,7 +653,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.12"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.13"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -4006,6 +4006,41 @@ class TranslatePage(QWidget):
         })
         self.translation_done.emit(output_files)
 
+        # v2.3.13: 表格翻译结果持久提示——之前不管成功失败都只往状态栏文字发一条
+        # transient 的消息，很快被"翻译完成"覆盖掉，用户基本看不到；这是 v2.3.11
+        # 那个"勾了却悄无声息失败"问题真正的根子。现在不管哪种失败原因，都用一个
+        # 不会自动消失的弹窗告诉用户具体发生了什么。
+        ttr = output_files.get("table_translate_result")
+        if ttr is not None:
+            if ttr.get("error"):
+                title, text = "表格翻译未完全生效", (
+                    f"正文翻译已完成，但表格翻译遇到问题：\n\n{ttr['error']}\n\n"
+                    f"（已检测到 {ttr.get('tables_found', 0)} 个表格，"
+                    f"成功翻译 {ttr.get('cells_translated', 0)} 个单元格）"
+                )
+            elif ttr.get("tables_found", 0) == 0:
+                title, text = "未检测到表格", (
+                    "正文翻译已完成，但在指定页码范围内没有检测到可识别的表格。\n"
+                    "如果该页的表格确实存在但没有清晰的框线/网格，PDF 表格识别可能无法定位它。"
+                )
+            elif ttr.get("cells_translated", 0) == 0:
+                title, text = "表格未翻译", (
+                    f"正文翻译已完成，检测到 {ttr['tables_found']} 个表格，"
+                    f"但没有单元格被翻译（可能都是纯数字/日期，或译文和原文相同）。"
+                )
+            else:
+                title, text = None, None
+            if title:
+                # v2.3.13: --auto/Zotero 无人值守唤起时不能弹阻塞式对话框(没人来点掉,
+                # 会一直卡住主线程)。这种场景改成写进调试日志, 不丢失但不阻塞。
+                if getattr(self, "_cli_auto", False):
+                    try:
+                        _dbg_write(f"table_translate_result 提示(auto模式未弹窗): {title} | {text}")
+                    except Exception:
+                        pass
+                else:
+                    (QMessageBox.warning if ttr.get("error") else QMessageBox.information)(self, title, text)
+
         # Zotero 回写：按此文件自身的来源路径，把译文复制回原位
         self._zotero_writeback(fp, output_files)
 
@@ -6819,6 +6854,10 @@ def main():
                 if fmt:
                     tp._cli_format = fmt
                     _dbg_write(f"  set _cli_format={fmt}")
+
+                # v2.3.13: 记录本次是否由 --auto/Zotero 唤起触发（无人值守），翻译完成后
+                # 弹出的持久提示（表格翻译结果等）要避免在这种场景下阻塞主线程等人来点掉。
+                tp._cli_auto = bool(payload.get("auto"))
 
                 if payload.get("auto"):
                     _dbg_write(f"  scheduling _start() in 800ms")

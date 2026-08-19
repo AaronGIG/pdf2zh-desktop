@@ -741,11 +741,20 @@ class TranslateWorker(QThread):
             mono_path, dual_path = result_list[0]
 
             # ── 表格翻译后处理 ──
+            table_translate_result = None
             if self.translate_tables:
                 self.status.emit("正在翻译表格内容…")
                 for pdf_path in [mono_path, dual_path]:
                     if pdf_path and os.path.exists(pdf_path):
-                        self._translate_tables_postprocess(pdf_path)
+                        r = self._translate_tables_postprocess(pdf_path)
+                        # mono/dual 各跑一次，取"更有信息量"的结果（累计翻译数，取最后一次报错）
+                        if table_translate_result is None:
+                            table_translate_result = r
+                        else:
+                            table_translate_result["tables_found"] += r.get("tables_found", 0)
+                            table_translate_result["cells_translated"] += r.get("cells_translated", 0)
+                            if r.get("error"):
+                                table_translate_result["error"] = r["error"]
 
             # ── 生成 Side-by-Side（可选：output_formats 控制是否生成）──
             base = os.path.splitext(mono_path)[0]
@@ -781,6 +790,7 @@ class TranslateWorker(QThread):
                 "mono": mono_path,
                 "dual": dual_path,
                 "side_by_side": sbs_path,
+                "table_translate_result": table_translate_result,
             })
 
         except KeyError as e:
@@ -908,12 +918,24 @@ class TranslateWorker(QThread):
         raise RuntimeError(f"未识别的翻译服务: {self.service}")
 
     def _translate_tables_postprocess(self, pdf_path):
-        """提取表格文字，翻译后写回（独立管线，不影响正文排版）"""
+        """提取表格文字，翻译后写回（独立管线，不影响正文排版）。
+        v2.3.13: 之前不管成功还是失败都只往 self.status（transient 的进度条文案，
+        马上会被"翻译完成"等后续状态覆盖掉）发一条消息，用户基本看不到。这里
+        改成返回一个诊断结果 dict（表格数/翻译成功数/最后一次报错），交给调用方
+        （run() -> finished 信号）带出去，在主界面用持久提示展示，而不是转瞬即逝
+        的状态栏文字——这正是 v2.3.11 那个"勾了但悄无声息失败"问题的同款根因，
+        这次把"看不见"这一层也一起堵上，不管以后是什么新原因导致翻译失败，
+        用户都能看到具体报错，而不是又一次"什么都没发生"。
+        返回: {"tables_found": int, "cells_translated": int, "error": str|None}
+        """
+        result = {"tables_found": 0, "cells_translated": 0, "error": None}
         try:
             translator = self._get_table_translator()
         except Exception as e:
+            result["error"] = str(e)
             self.status.emit(f"表格翻译跳过（{e}）")
-            return
+            return result
+        last_cell_error = None
         try:
             doc = fitz.open(pdf_path)
             # v2.3.11: 表格后处理原来永远扫全篇，不管主翻译有没有限定页码范围
@@ -931,6 +953,7 @@ class TranslateWorker(QThread):
                 tables = page.find_tables()
                 if not tables or not tables.tables:
                     continue
+                result["tables_found"] += len(tables.tables)
                 for table in tables.tables:
                     for cell in table.cells:
                         if cell is None:
@@ -966,13 +989,18 @@ class TranslateWorker(QThread):
                                         fontsize=6, fontname="china-s",
                                         color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT,
                                     )
-                        except Exception:
-                            pass  # 单个单元格失败不影响其他
+                                result["cells_translated"] += 1
+                        except Exception as e:
+                            last_cell_error = str(e)  # 单个单元格失败不影响其他，但记下最后一次报错
                 self.status.emit(f"表格翻译… {page_num+1}/{doc.page_count}")
             doc.saveIncr()
             doc.close()
-        except Exception:
-            pass
+        except Exception as e:
+            result["error"] = str(e)
+            return result
+        if result["cells_translated"] == 0 and last_cell_error:
+            result["error"] = last_cell_error
+        return result
 
     def cancel(self):
         self.cancelled = True
