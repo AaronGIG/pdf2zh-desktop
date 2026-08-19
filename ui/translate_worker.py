@@ -9,6 +9,43 @@ import fitz  # PyMuPDF
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
+def _table_cell_fit_fontsize(rect, text, max_fontsize=12, min_fontsize=6):
+    """基于单元格面积估算最佳字号，让 insert_textbox 自动换行贴近原版排版密度。
+    和 core/site-packages/pdf2zh/high_level.py 的 _fit_fontsize 逻辑一致——之前 Mac
+    端只按格子高度算字号（不管译文有多长），中文比英文原文平均更长，经常挤成
+    密密麻麻好几行换行，看起来比原版乱很多。"""
+    w, h = rect.width - 2, rect.height - 2
+    if w <= 0 or h <= 0:
+        return min_fontsize
+    cjk = sum(1 for c in text if ord(c) > 0x2fff)
+    latin = len(text) - cjk
+    for size in [max_fontsize, 12, 11, 10, 9, 8, 7, min_fontsize]:
+        char_w_cjk = size * 1.0
+        char_w_latin = size * 0.52
+        line_height = size * 1.3
+        text_total_w = cjk * char_w_cjk + latin * char_w_latin
+        lines = max(1, text_total_w / w)
+        needed_h = lines * line_height
+        if needed_h <= h + size * 0.5:
+            return size
+    return min_fontsize
+
+
+def _table_cell_should_translate(text: str) -> bool:
+    """判断表格单元格文字是否需要翻译（跳过纯数字/日期/编号/单字符），
+    和 core/site-packages/pdf2zh/high_level.py 里 Win 端的 _should_translate 逻辑一致。
+    没有这层过滤时纯数字单元格（如 "893"）会被送进翻译服务，偶尔被曲解成
+    "第893章"这类无意义结果。"""
+    if not text or not text.strip():
+        return False
+    t = text.strip()
+    if len(t) <= 1:
+        return False
+    if re.match(r'^[+\-]?[\d.,\s%/:\-]+$', t):
+        return False
+    return True
+
+
 # ─── 语言 / 服务映射 ─────────────────────────────────────────
 
 LANG_MAP = {
@@ -831,12 +868,59 @@ class TranslateWorker(QThread):
 
     # ── 表格翻译后处理 ──
 
+    def _get_table_translator(self):
+        """构造和正文翻译同一个服务的翻译器实例。
+        v2.3.11 修复：这里原来固定调用 ui/ai_client.py 的 chat_completion，
+        那是一套独立的"AI 助手"配置（在设置里单独填 DeepSeek/OpenAI 等 key），
+        和用户在主界面选的翻译服务（哪怕选的是完全不需要 key 的 Google/Bing）
+        是两码事。用户只配了正文用的翻译服务、没额外配 AI 助手 key 时，
+        chat_completion 每个单元格都会抛 RuntimeError，又被下面的
+        `except: pass` 悄悄吞掉——界面上看起来就是"勾了表格翻译但表格纹丝不动，
+        也不报错"。改成直接复用正文那个服务/model/envs 构造同一个 translator
+        实例，和正文用的是同一套翻译能力，不再依赖额外配置。
+        """
+        import pdf2zh.translator as _t
+        # 用 getattr 逐个取，不用一次性 from...import：不同版本 pdf2zh 打包进来的
+        # translator 类集合不完全一样（比如老版本类名是 GorkTranslator 不是
+        # GrokTranslator、没有 QwenMtTranslator），整体 import 一个都不存在就
+        # 全部失败；这里缺哪个就跳过哪个，用 .name 属性匹配用户选的服务标识符
+        # （和类名拼写无关）。
+        candidate_names = [
+            "GoogleTranslator", "BingTranslator", "DeepLTranslator", "DeepLXTranslator",
+            "OllamaTranslator", "XinferenceTranslator", "AzureOpenAITranslator",
+            "OpenAITranslator", "ZhipuTranslator", "ModelScopeTranslator",
+            "SiliconTranslator", "GeminiTranslator", "AzureTranslator",
+            "TencentTranslator", "DifyTranslator", "AnythingLLMTranslator",
+            "ArgosTranslator", "GrokTranslator", "GorkTranslator", "GroqTranslator",
+            "DeepseekTranslator", "OpenAIlikedTranslator", "QwenMtTranslator",
+        ]
+        param = (self.service or "").split(":", 1)
+        service_name = param[0]
+        service_model = param[1] if len(param) > 1 else None
+        for cls_name in candidate_names:
+            translator_cls = getattr(_t, cls_name, None)
+            if translator_cls is None:
+                continue
+            if service_name == getattr(translator_cls, "name", None):
+                return translator_cls(self.lang_in, self.lang_out, service_model,
+                                       envs=self.envs or {}, ignore_cache=False)
+        raise RuntimeError(f"未识别的翻译服务: {self.service}")
+
     def _translate_tables_postprocess(self, pdf_path):
         """提取表格文字，翻译后写回（独立管线，不影响正文排版）"""
         try:
+            translator = self._get_table_translator()
+        except Exception as e:
+            self.status.emit(f"表格翻译跳过（{e}）")
+            return
+        try:
             doc = fitz.open(pdf_path)
-            from ui.ai_client import chat_completion
-            for page_num in range(doc.page_count):
+            # v2.3.11: 表格后处理原来永远扫全篇，不管主翻译有没有限定页码范围
+            # （self.pages，比如"只翻译第 5 页"测试/复现时）。改成同步遵守同一个
+            # 页码限制，语义上和正文翻译保持一致，也顺带给了"哪几页要做表格翻译"
+            # 的手动控制手段。
+            page_range = range(doc.page_count) if not self.pages else [p for p in self.pages if 0 <= p < doc.page_count]
+            for page_num in page_range:
                 if self.cancelled:
                     break
                 page = doc[page_num]
@@ -849,26 +933,35 @@ class TranslateWorker(QThread):
                             continue
                         rect = fitz.Rect(cell)
                         text = page.get_textbox(rect).strip()
-                        if not text or len(text) < 2:
+                        if not _table_cell_should_translate(text):
                             continue
                         # 翻译单元格文字
                         try:
-                            translated = chat_completion([
-                                {"role": "system", "content": f"Translate to {self.lang_out}. Output ONLY the translation, nothing else."},
-                                {"role": "user", "content": text}
-                            ])
-                            if translated and translated.strip():
+                            translated = translator.translate(text)
+                            if translated and translated.strip() and translated.strip() != text:
                                 # 白底覆盖 + 写入译文
                                 shape = page.new_shape()
                                 shape.draw_rect(rect)
                                 shape.finish(color=None, fill=(1, 1, 1))
                                 shape.commit()
-                                font_size = max(min((rect.height * 0.7), 12), 5)
-                                page.insert_textbox(
-                                    rect, translated.strip(),
+                                translated_text = translated.strip()
+                                font_size = _table_cell_fit_fontsize(rect, translated_text, max_fontsize=12)
+                                rc = page.insert_textbox(
+                                    rect, translated_text,
                                     fontsize=font_size, fontname="china-s",
                                     color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT,
                                 )
+                                if rc < 0 and font_size > 6:
+                                    # 仍然放不下（估算和实际渲染有偏差），最小字号兜底重试一次
+                                    shape = page.new_shape()
+                                    shape.draw_rect(rect)
+                                    shape.finish(color=None, fill=(1, 1, 1))
+                                    shape.commit()
+                                    page.insert_textbox(
+                                        rect, translated_text,
+                                        fontsize=6, fontname="china-s",
+                                        color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT,
+                                    )
                         except Exception:
                             pass  # 单个单元格失败不影响其他
                 self.status.emit(f"表格翻译… {page_num+1}/{doc.page_count}")
