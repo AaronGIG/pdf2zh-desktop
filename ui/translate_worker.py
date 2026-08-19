@@ -548,7 +548,7 @@ class TranslateWorker(QThread):
                  pages=None, thread_count=8, chunk_enabled=False,
                  chunk_size=50, chunk_delay=10, envs=None,
                  skip_subset_fonts=False, ignore_cache=False,
-                 scan_mode=False, translate_tables=False, ocr_mode=False,
+                 scan_mode=False, translate_tables=False, table_pages=None, ocr_mode=False,
                  parent=None):
         super().__init__(parent)
         self.file_path = file_path
@@ -566,6 +566,7 @@ class TranslateWorker(QThread):
         self.ignore_cache = ignore_cache
         self.scan_mode = scan_mode
         self.translate_tables = translate_tables
+        self.table_pages = table_pages
         self.ocr_mode = ocr_mode
         self.cancelled = False
         self._cancel_event = None
@@ -916,10 +917,13 @@ class TranslateWorker(QThread):
         try:
             doc = fitz.open(pdf_path)
             # v2.3.11: 表格后处理原来永远扫全篇，不管主翻译有没有限定页码范围
-            # （self.pages，比如"只翻译第 5 页"测试/复现时）。改成同步遵守同一个
-            # 页码限制，语义上和正文翻译保持一致，也顺带给了"哪几页要做表格翻译"
-            # 的手动控制手段。
-            page_range = range(doc.page_count) if not self.pages else [p for p in self.pages if 0 <= p < doc.page_count]
+            # （self.pages）。改成同步遵守同一个页码限制。
+            # v2.3.12: 支持表格翻译单独指定页码（self.table_pages）——常见需求是
+            # "正文整篇正常翻译，只想对某几页的表格做单元格翻译"，这时主翻译的
+            # self.pages 是 None（全篇），但用户只想让表格翻译跑在指定的几页上。
+            # 优先级：table_pages（表格专用页码）> pages（主翻译页码范围）> 全篇。
+            effective_pages = self.table_pages if self.table_pages else self.pages
+            page_range = range(doc.page_count) if not effective_pages else [p for p in effective_pages if 0 <= p < doc.page_count]
             for page_num in page_range:
                 if self.cancelled:
                     break

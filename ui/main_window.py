@@ -653,7 +653,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.11"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.12"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -3527,7 +3527,16 @@ class TranslatePage(QWidget):
         r5.addWidget(self.scan_mode_check)
         self.translate_tables_check = QCheckBox("翻译表格内容")
         self.translate_tables_check.setToolTip("按单元格翻译表格，适合专利、检测报告等表格密集型文件。")
+        self.translate_tables_check.toggled.connect(self._on_translate_tables_toggled)
         r5.addWidget(self.translate_tables_check)
+        # v2.3.12: 表格翻译单独指定页码，和上面主翻译的页码范围解耦——
+        # 常见需求是"正文整篇正常翻译，但只想对某几页的表格做单元格翻译"。
+        # 留空则跟随主翻译的页码范围（v2.3.11 的行为）。
+        self.table_pages_edit = QLineEdit()
+        self.table_pages_edit.setPlaceholderText("表格翻译页码(留空=跟随上方页码范围), 例: 5, 8")
+        self.table_pages_edit.setFixedWidth(240)
+        self.table_pages_edit.setVisible(False)
+        r5.addWidget(self.table_pages_edit)
         self.ocr_mode_check = QCheckBox("OCR 识别")
         self.ocr_mode_check.setToolTip("对纯图片扫描件先进行 OCR 文字识别再翻译。\n需要额外处理时间，普通 PDF 请勿勾选。")
         r5.addWidget(self.ocr_mode_check)
@@ -3610,6 +3619,9 @@ class TranslatePage(QWidget):
 
     def _on_page_changed(self, text):
         self.custom_page.setVisible(text == "自定义")
+
+    def _on_translate_tables_toggled(self, checked):
+        self.table_pages_edit.setVisible(checked)
 
     def _on_chunk_toggled(self, checked):
         for w in [self.chunk_size_label, self.chunk_size_spin, self.chunk_size_unit,
@@ -3772,6 +3784,11 @@ class TranslatePage(QWidget):
             return parse_page_range(txt) if txt else None
         return PAGE_PRESETS.get(preset)
 
+    def _get_table_pages(self):
+        """表格翻译单独的页码范围；留空则返回 None，让 worker 回退到主翻译的页码范围。"""
+        txt = self.table_pages_edit.text().strip()
+        return parse_page_range(txt) if txt else None
+
     def _save_langs_now(self):
         """修 #24：切换源/目标语言时立即持久化到 config.json，独立于 _save_config
         （只写 lang_in / lang_out 两个字段，避免读取尚未初始化的其他控件）"""
@@ -3891,6 +3908,7 @@ class TranslatePage(QWidget):
             envs=envs,
             scan_mode=self.scan_mode_check.isChecked(),
             translate_tables=self.translate_tables_check.isChecked(),
+            table_pages=self._get_table_pages(),
             ocr_mode=self.ocr_mode_check.isChecked(),
         )
         # v2.3.0: 传递 output_formats 到 worker（如果单文件模式被激活）
