@@ -91,6 +91,19 @@ a = Analysis(
         'tkinter', '_tkinter',
         'IPython', 'jupyter',
         'pytest', 'setuptools', 'pip', 'wheel',
+        # v2.3.15: 本机 site-packages 混进的开发环境残留（本地打包会被
+        # PyInstaller 依赖扫描顺带打进去，把 app 从 282MB 撑到 791MB）。
+        # 排除前逐个 grep 确认过引用情况——sklearn/h5py 全仓库零引用；
+        # psycopg2 只在 peewee.py 里被 try/except ImportError 包着按需导入，
+        # 排除后优雅降级。onnx 最初也在这个列表里，但 pdf2zh/doclayout.py 和
+        # babeldoc/docvision/doclayout.py（版面检测，每次翻译都要走）里
+        # `import onnx` 外层虽然也包了 try/except，却会重新 raise 而不是
+        # 静默跳过——排掉 onnx 后这个 import 直接报错，把 TranslateWorker
+        # 所在的 QThread 直接干死，PyQt5 默认不会把子线程里的未捕获异常
+        # 冒泡到主线程，界面上完全看不出来，表现得跟卡死一模一样（构建
+        # 后拿真实文档端到端测过才发现，没有报错、没有崩溃日志，翻译
+        # 进度永远停在最开始）。onnx 是真实运行时依赖，不能排除。
+        'sklearn', 'scikit-learn', 'h5py', 'psycopg2',
     ],
     noarchive=False,
     optimize=0,
