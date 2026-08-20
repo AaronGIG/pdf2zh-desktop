@@ -653,7 +653,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.14"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.15"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -3894,6 +3894,17 @@ class TranslatePage(QWidget):
         self.prog_bar.setValue(0); self.prog_pct.setText("0%")
 
         envs = build_service_envs(self.svc_combo.currentText())
+        # v2.3.15 诊断: 真实点击"开始翻译"那一刻, 表格翻译勾选框/页码框到底是什么状态
+        try:
+            _dbg_write(
+                f"_translate_next: translate_tables_check.isChecked()={self.translate_tables_check.isChecked()!r} "
+                f"table_pages_edit.text()={self.table_pages_edit.text()!r} "
+                f"_get_table_pages()={self._get_table_pages()!r} "
+                f"_get_pages()={self._get_pages()!r} "
+                f"page_combo={self.page_combo.currentText()!r}"
+            )
+        except Exception as _e:
+            _dbg_write(f"_translate_next: 诊断日志本身报错 {_e!r}")
         self.worker = TranslateWorker(
             file_path=fp,
             output_dir=self._output_dir,

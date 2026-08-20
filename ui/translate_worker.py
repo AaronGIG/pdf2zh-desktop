@@ -9,30 +9,6 @@ import fitz  # PyMuPDF
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
-def _table_cell_fit_fontsize(w, h, text, max_fontsize=12, min_fontsize=6):
-    """基于单元格面积估算最佳字号，让 insert_textbox 自动换行贴近原版排版密度。
-    和 core/site-packages/pdf2zh/high_level.py 的 _fit_fontsize 逻辑一致——之前 Mac
-    端只按格子高度算字号（不管译文有多长），中文比英文原文平均更长，经常挤成
-    密密麻麻好几行换行，看起来比原版乱很多。
-    v2.3.14: 参数从 rect 改成显式 w/h——竖排/旋转的单元格用 insert_textbox 的
-    rotate= 参数插入时，文字实际的"流动宽度"对应的是 rect 的高，不是宽，
-    调用方需要按旋转角度自己决定传谁当 w、谁当 h。"""
-    if w <= 0 or h <= 0:
-        return min_fontsize
-    cjk = sum(1 for c in text if ord(c) > 0x2fff)
-    latin = len(text) - cjk
-    for size in [max_fontsize, 12, 11, 10, 9, 8, 7, min_fontsize]:
-        char_w_cjk = size * 1.0
-        char_w_latin = size * 0.52
-        line_height = size * 1.3
-        text_total_w = cjk * char_w_cjk + latin * char_w_latin
-        lines = max(1, text_total_w / w)
-        needed_h = lines * line_height
-        if needed_h <= h + size * 0.5:
-            return size
-    return min_fontsize
-
-
 def _table_cell_should_translate(text: str) -> bool:
     """判断表格单元格文字是否需要翻译（跳过纯数字/日期/编号/单字符），
     和 core/site-packages/pdf2zh/high_level.py 里 Win 端的 _should_translate 逻辑一致。
@@ -91,6 +67,63 @@ def _table_cell_rotation_and_size(page, rect):
     if len(dirs) != 1 or max_size <= 0:
         return None, None  # 没有文字，或者同一格里混了不止一种方向(大概率是 find_tables 格子边界不准)，不处理
     return dirs.pop(), max_size
+
+
+# v2.3.15: 部分学术 PDF 里的数学符号（≥、°等）用专门的嵌入子集字体单独排版，
+# 但那个字体自带的 ToUnicode 映射表是错的——PyMuPDF/pdfminer 按它提取出来的
+# 字符跟视觉上看到的完全对不上（比如"≥"被映射成"$"）。这是源 PDF 本身的字体
+# 缺陷（"45°"提取出来是"�"也是同一类问题），没法在提取阶段"猜对"原字符，
+# 但可以用一个可靠信号识别"这个字符大概率是错的"：真的用来打印美元金额的字体
+# 通常也会用来排正文里其他文字/数字，而这种坏映射字体整份文档里从头到尾只
+# 出现过这一个字符——同一个 embedded 子集字体如果只产出"$"，几乎不可能是
+# 巧合，只会是"这个字体只内嵌了一个字形，凑巧被错误映射成了$"。命中这个特征
+# 才做替换，不会误伤表格里真实的美元金额（那些走的是正文同一套字体）。
+_SUSPECT_SYMBOL_FONT_MAP = {"$": "≥"}
+
+
+def _detect_symbol_font_substitutions(doc):
+    """扫一遍全文档的字体使用情况，找出"整份文档里只产出一种可疑符号字符"的
+    嵌入字体，返回 {font_name: 应该替换成的正确字符}。只在命中这个强特征时才
+    建议替换，避免误伤同名字体下混排的正常文字/真实美元金额。"""
+    font_chars = {}
+    for page in doc:
+        d = page.get_text("dict")
+        for blk in d.get("blocks", []):
+            for ln in blk.get("lines", []):
+                for sp in ln.get("spans", []):
+                    font = sp.get("font", "")
+                    txt = sp.get("text", "")
+                    if not font or not txt:
+                        continue
+                    font_chars.setdefault(font, set()).update(txt.strip())
+    subs = {}
+    for font, chars in font_chars.items():
+        if len(chars) == 1:
+            only_char = next(iter(chars))
+            if only_char in _SUSPECT_SYMBOL_FONT_MAP:
+                subs[font] = _SUSPECT_SYMBOL_FONT_MAP[only_char]
+    return subs
+
+
+def _apply_symbol_font_fix(page, rect, text, symbol_subs):
+    """如果这个格子的原文里混了命中 _detect_symbol_font_substitutions 的可疑字体，
+    把提取出来的文字里对应的错误字符替换成真实字符，再拿去翻译——不然"ETDRS
+    level ≥35"会被错误提取成"ETDRS level $35"，翻译引擎会把"$35"当成"35美元"
+    翻，读起来莫名其妙，但内容本身并没有真的跟别的格子拼接/丢字。"""
+    if not symbol_subs:
+        return text
+    d = page.get_text("dict", clip=rect)
+    hit = set()
+    for blk in d.get("blocks", []):
+        for ln in blk.get("lines", []):
+            for sp in ln.get("spans", []):
+                font = sp.get("font", "")
+                if font in symbol_subs:
+                    hit.add(font)
+    for font in hit:
+        wrong_char = next(c for c, right in _SUSPECT_SYMBOL_FONT_MAP.items() if symbol_subs[font] == right)
+        text = text.replace(wrong_char, symbol_subs[font])
+    return text
 
 
 def _table_cell_texts_equivalent(a: str, b: str) -> bool:
@@ -805,9 +838,9 @@ class TranslateWorker(QThread):
             table_translate_result = None
             if self.translate_tables:
                 self.status.emit("正在翻译表格内容…")
-                for pdf_path in [mono_path, dual_path]:
+                for pdf_path, is_dual in [(mono_path, False), (dual_path, True)]:
                     if pdf_path and os.path.exists(pdf_path):
-                        r = self._translate_tables_postprocess(pdf_path)
+                        r = self._translate_tables_postprocess(pdf_path, dual=is_dual)
                         # mono/dual 各跑一次，取"更有信息量"的结果（累计翻译数，取最后一次报错）
                         if table_translate_result is None:
                             table_translate_result = r
@@ -978,8 +1011,18 @@ class TranslateWorker(QThread):
                                        envs=self.envs or {}, ignore_cache=False)
         raise RuntimeError(f"未识别的翻译服务: {self.service}")
 
-    def _translate_tables_postprocess(self, pdf_path):
+    def _translate_tables_postprocess(self, pdf_path, dual=False):
         """提取表格文字，翻译后写回（独立管线，不影响正文排版）。
+        v2.3.15: dual/side_by_side 输出的根因 bug——dual.pdf 不是原始页码 1:1，
+        而是"偶数页=原文、奇数页=译文"隔行排列（比如原始第 5 页对应 dual 的
+        index 8=原文、9=译文，总页数是原文档的 2 倍）。之前这里直接把
+        self.table_pages/self.pages 里的 0-indexed 原始页号当成 dual 文件自己的
+        页索引来用，"第 5 页"在 26 页的 dual 文件里被当成 index 4——那其实是
+        原始第 3 页的原文那一侧，完全翻错了页，而且还是原文侧（不该动）。
+        导致 mono.pdf 表格翻译明明成功了，用户实际打开的是根据 dual 生成的
+        left-right (side by side) 版本，看到的却是两边都没翻译的原文表格。
+        dual=True 时把 self.table_pages/self.pages 里的原始页号换算成 dual 文件
+        自己的页索引，且只处理译文那一侧（偶数原文侧不动，保持纯参考对照）。
         v2.3.13: 之前不管成功还是失败都只往 self.status（transient 的进度条文案，
         马上会被"翻译完成"等后续状态覆盖掉）发一条消息，用户基本看不到。这里
         改成返回一个诊断结果 dict（表格数/翻译成功数/最后一次报错），交给调用方
@@ -999,6 +1042,7 @@ class TranslateWorker(QThread):
         last_cell_error = None
         try:
             doc = fitz.open(pdf_path)
+            symbol_subs = _detect_symbol_font_substitutions(doc)
             # v2.3.11: 表格后处理原来永远扫全篇，不管主翻译有没有限定页码范围
             # （self.pages）。改成同步遵守同一个页码限制。
             # v2.3.12: 支持表格翻译单独指定页码（self.table_pages）——常见需求是
@@ -1006,7 +1050,15 @@ class TranslateWorker(QThread):
             # self.pages 是 None（全篇），但用户只想让表格翻译跑在指定的几页上。
             # 优先级：table_pages（表格专用页码）> pages（主翻译页码范围）> 全篇。
             effective_pages = self.table_pages if self.table_pages else self.pages
-            page_range = range(doc.page_count) if not effective_pages else [p for p in effective_pages if 0 <= p < doc.page_count]
+            if dual:
+                if effective_pages:
+                    # 原始页号 p（0-indexed）-> dual 文件里译文那一侧的 index：2p+1
+                    page_range = [2 * p + 1 for p in effective_pages if 0 <= 2 * p + 1 < doc.page_count]
+                else:
+                    # 没限定页码：处理 dual 里所有译文侧（奇数 index），原文侧不动
+                    page_range = [i for i in range(doc.page_count) if i % 2 == 1]
+            else:
+                page_range = range(doc.page_count) if not effective_pages else [p for p in effective_pages if 0 <= p < doc.page_count]
             for page_num in page_range:
                 if self.cancelled:
                     break
@@ -1016,11 +1068,29 @@ class TranslateWorker(QThread):
                     continue
                 result["tables_found"] += len(tables.tables)
                 for table in tables.tables:
+                    # v2.3.15: 之前每个格子各自独立算字号（哪怕有原文字号封顶），
+                    # 短译文和长译文在同一张表里还是会分别选到差异很大的字号，
+                    # 看起来东一块大字西一块小字，比原表格乱很多。原表格本身
+                    # 通常整张表统一字号——这里先扫一遍表里各格子的原始字号，
+                    # 取众数当作"这张表的标准字号"，所有格子都先按这个统一字号
+                    # 尝试插入，某个格子译文实在太长放不下时才单独往下降级，
+                    # 不会反过来影响其他格子。
+                    size_votes = {}
+                    for cell in table.cells:
+                        if cell is None:
+                            continue
+                        _, sz = _table_cell_rotation_and_size(page, fitz.Rect(cell))
+                        if sz:
+                            key = round(sz)
+                            size_votes[key] = size_votes.get(key, 0) + 1
+                    table_ref_size = max(size_votes, key=size_votes.get) if size_votes else 8
+
                     for cell in table.cells:
                         if cell is None:
                             continue
                         rect = fitz.Rect(cell)
                         text = page.get_textbox(rect).strip()
+                        text = _apply_symbol_font_fix(page, rect, text, symbol_subs)
                         if not _table_cell_should_translate(text):
                             continue
                         rot, ref_size = _table_cell_rotation_and_size(page, rect)
@@ -1036,35 +1106,48 @@ class TranslateWorker(QThread):
                                 shape.finish(color=None, fill=(1, 1, 1))
                                 shape.commit()
                                 translated_text = translated.strip()
-                                # v2.3.14: 旋转 90/270 插入时，文字实际沿着 rect 的高在走，
-                                # 而不是宽——算字号要把 w/h 对调，否则窄长的竖排格子会按
-                                # "又宽又矮"估出偏大的字号，插入时严重溢出到相邻格子。
-                                fit_w, fit_h = (rect.width, rect.height) if rot in (0, 180) else (rect.height, rect.width)
-                                # 用原文字号封顶，避免同一张表里长短不一的译文算出差异很大的字号
-                                max_fs = min(12, max(ref_size, 6))
-                                font_size = _table_cell_fit_fontsize(fit_w - 2, fit_h - 2, translated_text, max_fontsize=max_fs)
-                                rc = page.insert_textbox(
-                                    rect, translated_text,
-                                    fontsize=font_size, fontname="china-s",
-                                    color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT, rotate=rot,
-                                )
-                                if rc < 0 and font_size > 6:
-                                    # 仍然放不下（估算和实际渲染有偏差），最小字号兜底重试一次
-                                    shape = page.new_shape()
-                                    shape.draw_rect(rect)
-                                    shape.finish(color=None, fill=(1, 1, 1))
-                                    shape.commit()
-                                    page.insert_textbox(
-                                        rect, translated_text,
-                                        fontsize=6, fontname="china-s",
-                                        color=(0, 0, 0), align=fitz.TEXT_ALIGN_LEFT, rotate=rot,
-                                    )
+                                # v2.3.15: 改用 insert_htmlbox 代替 insert_textbox，一次性解决三个问题：
+                                # 1) 之前手写的 _table_cell_fit_fontsize 只是按经验系数粗略估算文字能不能
+                                #    放下，和 PyMuPDF 实际排版结果有偏差，同一张表里长短不一的译文算出的
+                                #    字号仍然此起彼伏；htmlbox 的 scale_low=0 让 PyMuPDF 自己用真实字体
+                                #    度量算需不需要缩小，缩多少，不再靠猜。
+                                # 2) 之前纯英文缩写/数字整段用中文字体（china-s）会被拉出很宽的字间距，
+                                #    整段用拉丁字体（helv）遇到中文字符又渲染成问号；htmlbox 按字符自动
+                                #    做西文/中文的字体回退，同一段文字里中英文各自用合适的字体，不用再
+                                #    手工判断整段该用哪个字体。
+                                # 3) rotate= 参数经过和 insert_textbox 同款校准（用原表格里未改动的英文
+                                #    原文逐字核对朝向），旋转方向一致。
+                                css = f"* {{font-family: sans-serif; font-size: {min(12, max(table_ref_size, 6)):.1f}px; color: black; text-align: left;}}"
+                                escaped = (translated_text.replace("&", "&amp;").replace("<", "&lt;")
+                                           .replace(">", "&gt;"))
+                                page.insert_htmlbox(rect, escaped, css=css, rotate=rot, scale_low=0)
                                 result["cells_translated"] += 1
                         except Exception as e:
                             last_cell_error = str(e)  # 单个单元格失败不影响其他，但记下最后一次报错
                 self.status.emit(f"表格翻译… {page_num+1}/{doc.page_count}")
-            doc.saveIncr()
-            doc.close()
+            # v2.3.15b: insert_htmlbox 每次调用都会给中文内容独立内嵌一份完整
+            # CJK 字体子集（不会跨调用复用/去重），166 个单元格 = 166 份几乎
+            # 重复的字体数据，saveIncr() 又是增量追加、不做垃圾回收，实测
+            # mono/dual 从 5.85MB 膨胀到 313MB/319MB。改成完整重写 + garbage=4
+            # （回收阶段会合并内容完全相同的重复对象，含重复字体子集）+
+            # deflate=True，隔离测试同样的膨胀样本从 72MB 压到 1.75MB（41倍），
+            # 不用改动已经校准过方向/字体渲染的逐格插入逻辑本身。
+            # saveIncr() 只能原地增量写回原文件，做不了垃圾回收，所以这里改成
+            # 存到临时文件再替换回 pdf_path。
+            import tempfile as _tempfile
+            tmp_fd, tmp_path = _tempfile.mkstemp(suffix=".pdf")
+            os.close(tmp_fd)
+            try:
+                doc.save(tmp_path, garbage=4, deflate=True)
+                doc.close()
+                doc = None
+                os.replace(tmp_path, pdf_path)
+            except Exception:
+                if doc:
+                    doc.close()
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                raise
         except Exception as e:
             result["error"] = str(e)
             return result
