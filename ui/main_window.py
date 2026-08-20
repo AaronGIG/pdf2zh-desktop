@@ -653,7 +653,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.15"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.16"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -2420,6 +2420,7 @@ class PreviewPage(QWidget):
         self.doc = None
         self.current_page = 0
         self.zoom = 1.5
+        self.rotation = 0  # 0/90/180/270，右键菜单"旋转"用
         self.output_files = {}
         self.current_mode = "side_by_side"  # 默认 Side by Side
         self.setFocusPolicy(Qt.StrongFocus)  # 接收键盘事件
@@ -2641,6 +2642,14 @@ class PreviewPage(QWidget):
         else:
             self.render_page()
 
+    def _rotate(self, delta):
+        """顺时针(90)/逆时针(-90)旋转当前预览，右键菜单用；只影响显示，不改 PDF 本身"""
+        self.rotation = (self.rotation + delta) % 360
+        if self._continuous:
+            self._render_continuous()
+        else:
+            self.render_page()
+
     def _reset_fit(self):
         """还原到当前适配模式的最佳贴合"""
         if self.doc:
@@ -2712,6 +2721,7 @@ class PreviewPage(QWidget):
                 self._loaded_path = path
                 self.doc = fitz.open(path)
                 self.current_page = 0
+                self.rotation = 0  # 换新文件重置旋转，避免带着上一份文件的旋转状态
                 self._last_thumb_vp_w = -1  # 强制首次重建缩略图
                 self._last_fit_zoom = -1   # 强制首次渲染
             self.empty.setVisible(False)
@@ -2941,7 +2951,7 @@ class PreviewPage(QWidget):
             dpr = label.devicePixelRatioF() if hasattr(label, 'devicePixelRatioF') else 1.0
             rz = self.zoom * dpr
             page = self.doc[page_idx]
-            pix = page.get_pixmap(matrix=fitz.Matrix(rz, rz))
+            pix = page.get_pixmap(matrix=fitz.Matrix(rz, rz).prerotate(self.rotation))
             img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
             pm = QPixmap.fromImage(img)
             pm.setDevicePixelRatio(dpr)
@@ -2955,18 +2965,22 @@ class PreviewPage(QWidget):
         orig_press = label.mousePressEvent
         orig_move = label.mouseMoveEvent
         orig_release = label.mouseReleaseEvent
+        # 高亮的鼠标坐标换算只按 zoom 缩放（/ self.zoom），没考虑旋转；
+        # 旋转后屏幕坐标到 PDF 坐标的映射会整体错位，与其算错位置，
+        # 旋转时直接不进高亮分支，退回普通点击（旋转只用于核对排版方向，
+        # 不是常态编辑场景）
         def _press(e):
-            if getattr(self, '_highlight_mode', False):
+            if getattr(self, '_highlight_mode', False) and self.rotation == 0:
                 self._hl_mouse_press(e, page_idx, label)
             else:
                 orig_press(e)
         def _move(e):
-            if getattr(self, '_highlight_mode', False):
+            if getattr(self, '_highlight_mode', False) and self.rotation == 0:
                 self._hl_mouse_move(e, label)
             else:
                 orig_move(e)
         def _release(e):
-            if getattr(self, '_highlight_mode', False):
+            if getattr(self, '_highlight_mode', False) and self.rotation == 0:
                 self._hl_mouse_release(e, page_idx, label)
             else:
                 orig_release(e)
@@ -3151,7 +3165,7 @@ class PreviewPage(QWidget):
         # Retina: 渲染 2x 分辨率再缩回，保证清晰
         dpr = QApplication.instance().devicePixelRatio() if QApplication.instance() else 2.0
         render_zoom = self.zoom * dpr
-        mat = fitz.Matrix(render_zoom, render_zoom)
+        mat = fitz.Matrix(render_zoom, render_zoom).prerotate(self.rotation)
         pix = pg.get_pixmap(matrix=mat, alpha=False)
         img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
         qpix = QPixmap.fromImage(img)
@@ -3213,6 +3227,9 @@ class PreviewPage(QWidget):
         menu.addAction("缩小", lambda: self._apply_zoom(max(self.zoom - 0.1, 0.3)))
         menu.addAction("适合宽度", self._switch_to_fit_width)
         menu.addAction("适合页面", self._switch_to_fit_page)
+        menu.addSeparator()
+        menu.addAction("顺时针旋转", lambda: self._rotate(90))
+        menu.addAction("逆时针旋转", lambda: self._rotate(-90))
         menu.addSeparator()
         lp = getattr(self, '_loaded_path', None)
         if lp and os.path.exists(lp):
@@ -3326,7 +3343,7 @@ class PreviewPage(QWidget):
                 return
             pg = self.doc[idx]
             render_zoom = self.zoom * dpr
-            mat = fitz.Matrix(render_zoom, render_zoom)
+            mat = fitz.Matrix(render_zoom, render_zoom).prerotate(self.rotation)
             pix = pg.get_pixmap(matrix=mat, alpha=False)
             img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
             qpix = QPixmap.fromImage(img)
