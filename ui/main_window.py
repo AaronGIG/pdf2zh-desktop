@@ -649,11 +649,12 @@ from ui.config_manager import UserConfigManager, HistoryManager
 from ui.translate_worker import (
     TranslateWorker, LANG_MAP, SERVICE_MAP, PAGE_PRESETS,
     OUTPUT_MODES, parse_page_range, detect_zotero_source,
-    get_zotero_item_key, zotero_auto_link, zotero_plugin_installed,
+    get_zotero_item_key, get_zotero_item_key_ex, find_zotero_key_by_path,
+    zotero_auto_link, zotero_plugin_installed,
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.17"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.18"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -3710,10 +3711,12 @@ class TranslatePage(QWidget):
             self._fcount_label.setText("")
 
     def _check_zotero_source(self):
+        # v2.3.18: 链接文件型附件不在 storage 下，detect_zotero_source 判不出来，
+        # 补一层按路径查库的兜底，否则提示条不显示、用户以为不会回写。
         has_zotero = False
         for i in range(self.flist.count()):
             p = self.flist.item(i).data(Qt.UserRole)
-            if detect_zotero_source(p):
+            if detect_zotero_source(p) or find_zotero_key_by_path(p):
                 has_zotero = True
                 break
         self._zotero_hint.setVisible(has_zotero)
@@ -4109,9 +4112,13 @@ class TranslatePage(QWidget):
         import shutil
         _dbg_write(f"_zotero_writeback file_path={file_path!r} output_files={output_files}")
         zotero_dir = detect_zotero_source(file_path)
-        _dbg_write(f"  detect_zotero_source → {zotero_dir!r}")
-        if not zotero_dir:
-            _dbg_write("  ✗ not from Zotero storage, skip writeback")
+        # v2.3.18: 链接文件型附件(ZotFile/Attanger/"链接到文件"/附件基目录)不在 Zotero/storage/ 下，
+        # zotero_dir 会是 None，但仍可能是 Zotero 条目——去库里按路径反查 key。既不在 storage
+        # 下、库里也查不到，才是真的非 Zotero 文件。
+        item_key = get_zotero_item_key_ex(file_path)
+        _dbg_write(f"  detect_zotero_source → {zotero_dir!r} item_key(ex) → {item_key!r}")
+        if not zotero_dir and not item_key:
+            _dbg_write("  ✗ not from Zotero (path+db both miss), skip writeback")
             return
         cfg = UserConfigManager.load()
         # v2.3.4: 右键唤起指定了格式时, 回写格式跟随右键选择(而非 config 勾选)
@@ -4123,7 +4130,6 @@ class TranslatePage(QWidget):
         else:
             modes = cfg.get("zotero_output_modes", ["side_by_side"])
         keep_copy = cfg.get("zotero_keep_copy", True)
-        item_key = get_zotero_item_key(file_path)
         _dbg_write(f"  modes={modes} item_key={item_key!r}")
         for mode in modes:
             src = output_files.get(mode)
@@ -4167,7 +4173,11 @@ class TranslatePage(QWidget):
                     except OSError:
                         pass
             else:
-                # 兜底: 关联失败(插件没响应/未装)时落一份到原文献文件夹方便手动找到; 绝不删 src
+                # 兜底: 关联失败(插件没响应/未装)时落一份到原文献 storage 文件夹方便手动找到; 绝不删 src
+                # 链接文件型附件没有 storage 文件夹(zotero_dir=None), 无处可落, 保留本地 src 即可
+                if not zotero_dir:
+                    _dbg_write(f"    ⚠ linked-file attachment, link failed, keep local src (no storage dir)")
+                    continue
                 dst = os.path.join(zotero_dir, os.path.basename(src))
                 if os.path.abspath(src) != os.path.abspath(dst):
                     try:
@@ -4186,7 +4196,8 @@ class TranslatePage(QWidget):
         total = len(self._batch_results)
         ok = sum(1 for _, r in self._batch_results if r is not None)
         failed = total - ok
-        has_zotero = any(detect_zotero_source(fp) for fp, _ in self._batch_results)
+        has_zotero = any(detect_zotero_source(fp) or find_zotero_key_by_path(fp)
+                         for fp, _ in self._batch_results)
 
         # 收集失败的文件用于重试
         self._failed_files = [fp for fp, r in self._batch_results if r is None]

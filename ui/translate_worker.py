@@ -207,6 +207,91 @@ def get_zotero_item_key(file_path: str):
     return m.group(1) if m else None
 
 
+def _zotero_profile_dir():
+    """定位 Zotero profile 目录（含 prefs.js），用于读取附件基目录设置。"""
+    import glob, platform
+    roots = []
+    if platform.system() == "Darwin":
+        roots.append(os.path.expanduser("~/Library/Application Support/Zotero/Profiles"))
+    roots.append(os.path.expanduser("~/Zotero/Profiles"))
+    for r in roots:
+        hits = glob.glob(os.path.join(r, "*.default*"))
+        if hits:
+            return hits[0]
+    return None
+
+
+def _zotero_base_attachment_path():
+    """读取 Zotero「链接附件基目录」(extensions.zotero.baseAttachmentPath)，
+    没设则返回 None。ZotFile/Attanger/自定义基目录用户会用到。"""
+    prof = _zotero_profile_dir()
+    if not prof:
+        return None
+    prefs = os.path.join(prof, "prefs.js")
+    if not os.path.isfile(prefs):
+        return None
+    try:
+        with open(prefs, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if "baseAttachmentPath" in line:
+                    m = re.search(r'"extensions\.zotero\.baseAttachmentPath"\s*,\s*"([^"]+)"', line)
+                    if m:
+                        return m.group(1).replace("\\\\", "\\")
+    except Exception:
+        pass
+    return None
+
+
+def _norm_zpath(p):
+    import unicodedata
+    return unicodedata.normalize("NFC", os.path.normcase(os.path.abspath(p)))
+
+
+def _resolve_zotero_attachment_fullpath(path_val, key, data_dir, base_path):
+    """itemAttachments.path → 磁盘完整路径（storage: / attachments:基目录 / 绝对 / data_dir 相对）"""
+    if not path_val:
+        return None
+    if path_val.startswith("storage:"):
+        return os.path.join(data_dir, "storage", key, path_val[len("storage:"):]) if data_dir else None
+    if path_val.startswith("attachments:"):
+        return os.path.join(base_path, path_val[len("attachments:"):]) if base_path else None
+    if os.path.isabs(path_val):
+        return path_val
+    return os.path.join(data_dir, path_val) if data_dir else None
+
+
+def find_zotero_key_by_path(file_path: str):
+    """路径不在 Zotero/storage/ 下（链接文件型附件）时，去库里按解析后的完整路径反查 item key。"""
+    import sqlite3
+    data_dir = _find_zotero_data_dir()
+    if not data_dir:
+        return None
+    db_path = os.path.join(data_dir, "zotero.sqlite")
+    if not os.path.isfile(db_path):
+        return None
+    base_path = _zotero_base_attachment_path()
+    target = _norm_zpath(file_path)
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT ia.path, i.key FROM itemAttachments ia JOIN items i ON i.itemID = ia.itemID WHERE ia.contentType = 'application/pdf'")
+            for path_val, key in cur.fetchall():
+                full = _resolve_zotero_attachment_fullpath(path_val, key, data_dir, base_path)
+                if full and _norm_zpath(full) == target:
+                    return key
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return None
+
+
+def get_zotero_item_key_ex(file_path: str):
+    """先按路径抠（存储型附件，快），抠不到再去库里按路径反查（链接型附件）。"""
+    return get_zotero_item_key(file_path) or find_zotero_key_by_path(file_path)
+
+
 def _local_opener():
     """v2.3.2: 到 127.0.0.1 / localhost 的请求必须绕过系统 HTTP 代理
     (clash/v2ray/学术代理 等会把 loopback 请求转到外网返回 502 Bad Gateway)
