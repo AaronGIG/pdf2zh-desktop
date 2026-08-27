@@ -653,7 +653,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.16"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.17"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -3856,8 +3856,9 @@ class TranslatePage(QWidget):
                         "但 Zotero 插件（pdf2zh Connector）没响应，翻译完不会自动加到 Zotero 库里。\n\n"
                         "可能原因：\n"
                         "  1. Zotero 没打开 → 请打开 Zotero 后重试\n"
-                        "  2. 插件没装 → 下载 pdf2zh-connector-v1.0.7.xpi 手动装到 Zotero\n"
-                        "  3. 插件启动失败 → 到 Zotero「附加组件」检查有没有错误\n\n"
+                        "  2. 插件没装 → 到「设置」页一键安装，或去 GitHub Release 下载最新 xpi 手动装\n"
+                        "  3. 插件被 Zotero 判定版本不兼容而自动禁用（常见于 Zotero 升级大版本后）→\n"
+                        "     去 Zotero「工具→附加组件」看 pdf2zh Connector 是否被禁用，装最新版 xpi 覆盖即可\n\n"
                         "是否仍要继续翻译？（结果会保存在默认目录，不同步到 Zotero）",
                         QMessageBox.Yes | QMessageBox.No,
                         QMessageBox.No,
