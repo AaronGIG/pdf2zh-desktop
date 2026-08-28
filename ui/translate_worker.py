@@ -188,22 +188,28 @@ OUTPUT_MODES = {
 }
 
 
-def detect_zotero_source(file_path: str):
-    """检测文件是否来自 Zotero storage，返回 Zotero 子文件夹路径或 None
+# v2.3.19: 之前正则把 Zotero 数据目录名写死成 "Zotero"（[Zz]otero/storage/），
+# 但数据目录名用户可以随便改（设置里能选），比如 E:\Zotero文档\storage、
+# D:\我的文献\storage、zotero-data\storage 等。改了名就匹配失败 → 判成非
+# Zotero 文件 → 存储型附件也不回写。Zotero storage 的真正特征是
+# "storage/<8位大小写字母数字 key>/"，父目录叫什么无所谓——只认这个特征，
+# 不再写死父目录名。（万一误命中非 Zotero 的同构路径，后续 auto-link 会因
+# 查不到条目而无害失败，不会写坏东西。）
+_ZOTERO_STORAGE_RE = re.compile(r'[/\\]storage[/\\]([A-Za-z0-9]{8})[/\\]')
 
-    匹配模式：
-      .../Zotero/storage/XXXXXXXX/...
-      .../zotero/storage/XXXXXXXX/...  (大小写不敏感)
-    """
-    m = re.search(r'[/\\][Zz]otero[/\\]storage[/\\][A-Za-z0-9]{8}[/\\]', file_path)
+
+def detect_zotero_source(file_path: str):
+    """检测文件是否来自 Zotero storage，返回 storage 子文件夹路径或 None。
+    匹配 .../<任意数据目录名>/storage/XXXXXXXX/...（父目录名不限）。"""
+    m = _ZOTERO_STORAGE_RE.search(file_path)
     if m:
         return file_path[:m.end()]
     return None
 
 
 def get_zotero_item_key(file_path: str):
-    """从 Zotero 路径提取 8 位 item key，如 'KSII2GGN'"""
-    m = re.search(r'[/\\][Zz]otero[/\\]storage[/\\]([A-Za-z0-9]{8})[/\\]', file_path)
+    """从 Zotero 路径提取 8 位 item key，如 'KSII2GGN'（父目录名不限）。"""
+    m = _ZOTERO_STORAGE_RE.search(file_path)
     return m.group(1) if m else None
 
 
@@ -356,8 +362,26 @@ def zotero_plugin_installed():
 
 
 def _find_zotero_data_dir():
-    """定位 Zotero 数据目录（含 zotero.sqlite）"""
+    """定位 Zotero 数据目录（含 zotero.sqlite）。
+    v2.3.19: 权威优先——先认 prefs.js 里 Zotero 自己配置的活动数据目录
+    (extensions.zotero.dataDir)，处理"用户把数据目录搬到别处、默认位置还残留旧库"
+    的情况；prefs 没有或无效才回退到默认位置。"""
     import platform
+    prof = _zotero_profile_dir()
+    if prof:
+        prefs = os.path.join(prof, "prefs.js")
+        if os.path.isfile(prefs):
+            try:
+                with open(prefs, "r", encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        if "extensions.zotero.dataDir" in line and "user_pref" in line:
+                            m = re.search(r'"extensions\.zotero\.dataDir"\s*,\s*"([^"]+)"', line)
+                            if m:
+                                d = m.group(1).replace("\\\\", "\\")
+                                if os.path.isfile(os.path.join(d, "zotero.sqlite")):
+                                    return d
+            except Exception:
+                pass
     candidates = [os.path.expanduser("~/Zotero")]
     if platform.system() == "Darwin":
         candidates.append(os.path.expanduser(
