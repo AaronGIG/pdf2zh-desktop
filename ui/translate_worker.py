@@ -1048,7 +1048,17 @@ class TranslateWorker(QThread):
             doc = fitz.open(file_path)
             modified = False
 
-            for page_num in range(doc.page_count):
+            # v2.3.21: 只 OCR 用户选的页码范围（self.pages，0-indexed）。之前写死
+            # range(doc.page_count) 无视页码选择——选了"仅首页"也把整本几十页全 OCR
+            # 一遍（每页约 10 秒，纯属白等），且和后面翻译实际只处理选中页对不上。
+            # self.pages=None 表示"全部页面"。
+            if self.pages:
+                ocr_pages = [p for p in self.pages if 0 <= p < doc.page_count]
+            else:
+                ocr_pages = list(range(doc.page_count))
+            total_ocr = len(ocr_pages)
+
+            for idx, page_num in enumerate(ocr_pages):
                 if self.cancelled:
                     break
                 page = doc[page_num]
@@ -1063,6 +1073,9 @@ class TranslateWorker(QThread):
 
                 scale_x = page.rect.width / pix.width
                 scale_y = page.rect.height / pix.height
+                # 先收集本页所有识别行 + 各自框高，算一个"整页统一字号"
+                page_lines = []
+                heights = []
                 for line in result:
                     box, text, confidence = line
                     if confidence < 0.5:
@@ -1071,22 +1084,31 @@ class TranslateWorker(QThread):
                     y0 = min(p[1] for p in box) * scale_y
                     x1 = max(p[0] for p in box) * scale_x
                     y1 = max(p[1] for p in box) * scale_y
-                    font_size = max((y1 - y0) * 0.8, 4)
-                    # v2.3.20: 之前用 insert_textbox 加隐藏文字层——但 OCR 识别框往往
-                    # 比按框高算出的字号能容纳的宽度还窄，insert_textbox 一旦判定文字
-                    # 放不下整框就把这一行「整条丢弃」，实测 111 行插进去 get_text()
-                    # 抽出来 0 个字符 → pdf2zh 拿不到任何可翻译文字 → 扫描件原样输出、
-                    # 完全没翻译（这正是「勾了 OCR、识别也跑了、结果没翻译」的最终根因，
-                    # 排在「引擎没打包」「临时文件被删」之后的第三层）。改用 insert_text
-                    # 定点插入：以识别框左下角为基线落字，不受框宽约束、不会丢行，实测
-                    # 同样 render_mode=3 隐藏下 get_text() 能抽到 6600+ 字符，pdf2zh 正常翻译。
+                    page_lines.append((x0, y1, text))
+                    heights.append(y1 - y0)
+                if not page_lines:
+                    self.status.emit(f"OCR 识别中… {idx+1}/{total_ocr}")
+                    continue
+                # v2.3.21: 整页用统一字号（取各行框高中位数×0.8）。之前每行按各自
+                # 识别框高度单独算字号，OCR 框高天然参差 → 字号忽大忽小。而 pdf2zh
+                # 核心有条规则：某字符字号 < 相邻正文字号的 79% 就当下标/公式处理、
+                # 直接保留原文不翻译（converter.py 约247行）。字号参差很容易踩这条，
+                # 导致一部分正文行被误判成公式、留成没翻的英文——这正是扫描件译文里
+                # 「中英交错、残留英文」的一大来源。统一字号后同页字符尺寸一致，不再
+                # 无意中触发下标判定，pdf2zh 能把整页正文当同级文字连续翻译。
+                heights.sort()
+                med_h = heights[len(heights) // 2]
+                uni_font = max(med_h * 0.8, 4)
+                for x0, y1, text in page_lines:
+                    # insert_text 定点插入（不受框宽约束、不丢行）；render_mode=3 隐藏，
+                    # 视觉上仍是干净扫描图，只在底层留一份可被 pdf2zh 提取翻译的文字层。
                     page.insert_text(
-                        (x0, y1), text, fontsize=font_size,
+                        (x0, y1), text, fontsize=uni_font,
                         fontname="helv", color=(0, 0, 0),
-                        render_mode=3,  # 3 = invisible（视觉上仍是干净扫描图，只留可提取文字层）
+                        render_mode=3,
                     )
                     modified = True
-                self.status.emit(f"OCR 识别中… {page_num+1}/{doc.page_count}")
+                self.status.emit(f"OCR 识别中… {idx+1}/{total_ocr}")
 
             if modified:
                 # v2.3.20: 之前用 tempfile.NamedTemporaryFile 写到系统 /var/folders/T，
