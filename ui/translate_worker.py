@@ -831,6 +831,7 @@ class TranslateWorker(QThread):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        actual_file = self.file_path  # 提前初始化：OCR 分支会提前 return，finally 里仍会引用它
         try:
             self.status.emit("正在加载 AI 布局模型…")
             # 优先用打包内的模型文件
@@ -850,13 +851,40 @@ class TranslateWorker(QThread):
             total_pages = len(doc)
             doc.close()
 
-            # 预处理链
-            actual_file = self.file_path
-
-            # OCR 预处理：纯图片扫描件 → 添加不可见文字层
+            # v2.3.21: 扫描件走独立管线（OCR→分栏→合段→整段翻译→白底渲染），
+            # 不经过 pdf2zh 版面模型——彻底避开扫描件译文里"部分正文漏翻成英文、原
+            # 扫描图透出、中英糊叠"的问题。直接产出 mono/dual/side_by_side 后返回。
             if self.ocr_mode:
                 self.status.emit("正在 OCR 识别…")
-                actual_file = self._ocr_preprocess(actual_file)
+                mono_path, dual_path = self._ocr_standalone_translate()
+                if self.cancelled:
+                    self.error.emit("已取消"); return
+                output_formats = getattr(self, "output_formats", None) or ["mono", "dual", "side_by_side"]
+                base = os.path.splitext(mono_path)[0]
+                if base.endswith("-mono"):
+                    base = base[:-5]
+                sbs_path = ""
+                if "side_by_side" in output_formats and dual_path and os.path.exists(dual_path):
+                    sbs_path = base + "-side_by_side.pdf"
+                    self.status.emit("正在生成左右并排版…")
+                    try:
+                        create_side_by_side_pdf(mono_path, dual_path, sbs_path)
+                    except Exception as e:
+                        sbs_path = ""; self.status.emit(f"并排版生成失败: {e}")
+                try:
+                    if "mono" not in output_formats and mono_path and os.path.exists(mono_path):
+                        os.remove(mono_path); mono_path = ""
+                    if "dual" not in output_formats and dual_path and os.path.exists(dual_path):
+                        os.remove(dual_path); dual_path = ""
+                except Exception:
+                    pass
+                self.status.emit("翻译完成")
+                self.finished.emit({"mono": mono_path, "dual": dual_path,
+                                    "side_by_side": sbs_path, "table_translate_result": None})
+                return
+
+            # 预处理链
+            actual_file = self.file_path
 
             # 翻译参数基础模板（pdf2zh 1.8.9 兼容）
             base_param = dict(
@@ -963,6 +991,9 @@ class TranslateWorker(QThread):
                             table_translate_result["cells_translated"] += r.get("cells_translated", 0)
                             if r.get("error"):
                                 table_translate_result["error"] = r["error"]
+
+            # 注：ocr_mode 扫描件已在前面走独立管线并 return，不会到这里；此处只处理
+            # 普通(数字版)PDF 的常规流程。
 
             # ── 生成 Side-by-Side（可选：output_formats 控制是否生成）──
             base = os.path.splitext(mono_path)[0]
@@ -1138,6 +1169,187 @@ class TranslateWorker(QThread):
                 try: doc.close()
                 except Exception: pass
         return file_path
+
+    def _ocr_strip_images(self, pdf_path, translated_side_only=False):
+        """v2.3.21: OCR 模式专用后处理——把翻译输出里的原扫描底图去掉，只留译好的
+        中文矢量文字。扫描件原文是整页一张图，pdf2zh 只在翻译到的区域打白补丁盖住，
+        它没翻到的区域(被版面模型误判成图/公式)原图英文就露出来，和中文糊叠成一团
+        ——这是扫描件译文观感差的最大来源，根子在核心版面模型、外壳改不了。换个思路:
+        译文本身是矢量文字(不是图)，直接把底层那张扫描图删掉，露出来的英文栅格随之
+        消失，页面变成干净白底中文。实测残留英文肉眼几乎消失。
+        translated_side_only=True 用于 dual: 只删译文侧(奇数页)的底图，偶数原文页
+        保留扫描图作参考对照。代价:扫描件里的插图/表格也会被一起删掉(纯文字扫描件
+        可接受;这也是为什么只在用户明确勾了 OCR 的扫描件流程里做)。"""
+        try:
+            if self.pages:
+                ocr_orig_pages = set(p for p in self.pages)
+            else:
+                ocr_orig_pages = None  # None 表示全部页
+            doc = fitz.open(pdf_path)
+            for pno in range(doc.page_count):
+                if translated_side_only:
+                    if pno % 2 == 0:
+                        continue  # dual 偶数=原文侧，保留底图
+                    orig_page = (pno - 1) // 2
+                    if ocr_orig_pages is not None and orig_page not in ocr_orig_pages:
+                        continue
+                else:
+                    if ocr_orig_pages is not None and pno not in ocr_orig_pages:
+                        continue
+                page = doc[pno]
+                for im in page.get_images(full=True):
+                    try:
+                        page.delete_image(im[0])
+                    except Exception:
+                        pass
+            import tempfile as _tf
+            fd, tmp = _tf.mkstemp(suffix=".pdf", dir=os.path.dirname(pdf_path))
+            os.close(fd)
+            doc.save(tmp, garbage=3, deflate=True)  # garbage 顺带把删掉的大图数据真正回收，文件反而更小
+            doc.close()
+            os.replace(tmp, pdf_path)
+        except Exception as e:
+            self.status.emit(f"清理扫描底图失败(不影响译文): {e}")
+
+    # ── 扫描件独立翻译管线（v2.3.21）──
+    # 扫描件不走 pdf2zh 的版面模型：pdf2zh 会把扫描页的部分正文误判成图/公式而漏翻、
+    # 且保留整张原扫描图导致英文透出来，中英糊叠、观感很差（外壳改不动，根子在核心
+    # 版面模型）。这里自己搭一条管线：OCR→分栏→合段→整段翻译→白底渲染。全文都翻、
+    # 白底、无原图英文，扫描件译文因此几乎全中文（人名/引文年份由翻译服务正常保留）。
+
+    @staticmethod
+    def _ocr_detect_columns(lines, page_width):
+        """按各行水平中心分布判断 1 栏 / 2 栏。返回 [(x_lo, x_hi), ...] 栏区间。"""
+        if not lines:
+            return [(0, page_width)]
+        mid = page_width / 2
+        left = [l for l in lines if l["cx"] < mid]
+        right = [l for l in lines if l["cx"] >= mid]
+        # 两侧都有足够多的行才算双栏（避免居中标题被误判成两栏）
+        if left and right and len(right) > len(lines) * 0.2 and len(left) > len(lines) * 0.2:
+            split = (max(l["x1"] for l in left) + min(l["x0"] for l in right)) / 2
+            return [(0, split), (split, page_width)]
+        return [(0, page_width)]
+
+    @staticmethod
+    def _ocr_group_paragraphs(col_lines):
+        """栏内按 y 排序，竖直间距明显变大或缩进跳变 → 分段。返回段落（行列表）列表。"""
+        col_lines = sorted(col_lines, key=lambda l: l["y0"])
+        if not col_lines:
+            return []
+        heights = sorted(l["y1"] - l["y0"] for l in col_lines)
+        med_h = heights[len(heights) // 2] or 1
+        paras, cur = [], [col_lines[0]]
+        for prev, ln in zip(col_lines, col_lines[1:]):
+            gap = ln["y0"] - prev["y1"]
+            indent = abs(ln["x0"] - prev["x0"])
+            if gap > med_h * 1.0 or indent > med_h * 2:
+                paras.append(cur); cur = [ln]
+            else:
+                cur.append(ln)
+        paras.append(cur)
+        return paras
+
+    def _ocr_standalone_translate(self):
+        """扫描件独立翻译管线。产出 (mono_path, dual_path)。
+        mono = 纯译文白底页；dual = [原扫描页, 译文页, ...] 交替（供并排版/对照）。"""
+        from rapidocr_onnxruntime import RapidOCR
+        translator = self._get_table_translator()
+        ocr = RapidOCR()
+        src = fitz.open(self.file_path)
+        if self.pages:
+            page_indices = [p for p in self.pages if 0 <= p < src.page_count]
+        else:
+            page_indices = list(range(src.page_count))
+        total = len(page_indices)
+
+        mono = fitz.open()
+        dual = fitz.open()
+        try:
+            for i, pno in enumerate(page_indices):
+                if self.cancelled:
+                    break
+                page = src[pno]
+                pw, ph = page.rect.width, page.rect.height
+                pix = page.get_pixmap(dpi=300)
+                result, _ = ocr(pix.tobytes("png"))
+                sx, sy = pw / pix.width, ph / pix.height
+                lines = []
+                for box, text, conf in (result or []):
+                    if conf < 0.5 or not text.strip():
+                        continue
+                    x0 = min(p[0] for p in box) * sx
+                    y0 = min(p[1] for p in box) * sy
+                    x1 = max(p[0] for p in box) * sx
+                    y1 = max(p[1] for p in box) * sy
+                    lines.append({"x0": x0, "y0": y0, "x1": x1, "y1": y1,
+                                  "cx": (x0 + x1) / 2, "text": text})
+
+                # 分栏 + 组段 + 记录每段包围盒和参考字号
+                paras = []
+                for (clo, chi) in self._ocr_detect_columns(lines, pw):
+                    col_lines = [l for l in lines if clo <= l["cx"] < chi]
+                    for grp in self._ocr_group_paragraphs(col_lines):
+                        txt = " ".join(g["text"] for g in grp)
+                        bx0 = min(g["x0"] for g in grp); by0 = min(g["y0"] for g in grp)
+                        bx1 = max(g["x1"] for g in grp); by1 = max(g["y1"] for g in grp)
+                        hs = sorted(g["y1"] - g["y0"] for g in grp)
+                        line_h = hs[len(hs) // 2] or 10
+                        paras.append({"rect": fitz.Rect(bx0, by0, bx1, by1),
+                                      "text": txt, "line_h": line_h})
+
+                # 整段翻译
+                for p in paras:
+                    try:
+                        zh = translator.translate(p["text"])
+                    except Exception:
+                        zh = None
+                    p["zh"] = (zh or p["text"]).strip()
+
+                # 渲染:mono(白底译文) + dual(原扫描页 + 译文页)
+                mp = mono.new_page(width=pw, height=ph)
+                for p in paras:
+                    self._ocr_render_para(mp, p, ph)
+                dual.insert_pdf(src, from_page=pno, to_page=pno)  # 原扫描页
+                dp = dual.new_page(width=pw, height=ph)           # 译文页
+                for p in paras:
+                    self._ocr_render_para(dp, p, ph)
+
+                self.progress.emit(i + 1, total)
+                self.status.emit(f"扫描件翻译… {i+1}/{total}")
+
+            base = os.path.splitext(os.path.basename(self.file_path))[0]
+            os.makedirs(self.output_dir, exist_ok=True)
+            mono_path = os.path.join(self.output_dir, f"{base}-mono.pdf")
+            dual_path = os.path.join(self.output_dir, f"{base}-dual.pdf")
+            # garbage=4:insert_htmlbox 每次会独立内嵌一份中文字体子集，不回收的话几十段
+            # 能把文件撑到几十 MB；garbage=4 合并重复字体子集，实测 34MB→1.8MB。
+            mono.save(mono_path, garbage=4, deflate=True)
+            dual.save(dual_path, garbage=4, deflate=True)
+            return mono_path, dual_path
+        finally:
+            src.close(); mono.close(); dual.close()
+
+    @staticmethod
+    def _ocr_render_para(page, para, page_h):
+        """把一段译文渲染进它的包围盒。用 insert_htmlbox + scale_low=0 自动缩放到不
+        溢出（中文比英文紧凑，通常同框放得下，放不下就自动缩小，避免压到下一段）。"""
+        zh = (para.get("zh") or "").strip()
+        if not zh:
+            return
+        r = para["rect"]
+        fs = max(min(para["line_h"] * 0.72, 14), 6)
+        css = f"* {{font-family: sans-serif; font-size: {fs:.1f}px; color: black; line-height: 1.15;}}"
+        esc = zh.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        # 给一点下方余量（译文偶尔比原文行多），但不超过页面底
+        box = fitz.Rect(r.x0, r.y0, r.x1, min(r.y1 + para["line_h"] * 1.5, page_h))
+        try:
+            page.insert_htmlbox(box, esc, css=css, scale_low=0)
+        except Exception:
+            try:
+                page.insert_textbox(r, zh, fontsize=8, fontname="china-s")
+            except Exception:
+                pass
 
     # ── 表格翻译后处理 ──
 
