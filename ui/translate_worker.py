@@ -771,6 +771,7 @@ class TranslateWorker(QThread):
         self.translate_tables = translate_tables
         self.table_pages = table_pages
         self.ocr_mode = ocr_mode
+        self._ocr_tmp_path = None  # OCR 预处理产出的临时文件，翻译结束后清理
         self.cancelled = False
         self._cancel_event = None
 
@@ -868,7 +869,11 @@ class TranslateWorker(QThread):
                 model=model,
                 cancellation_event=self._cancel_event,
                 envs=self.envs or {},
-                scan_mode=self.scan_mode,
+                # v2.3.20: OCR 模式必须同时开 scan_mode。扫描件的原文是图片、去不掉，
+                # 普通模式(scan_mode=False)把译文直接叠加上去 → 中文和原英文图糊成一团。
+                # pdf2zh 的 scan_mode 会在每个译文块下先铺白底矩形(converter.py 约531行)，
+                # 正好把对应区域的原图盖白，中文落在干净背景上，扫描件才有可读性。
+                scan_mode=self.scan_mode or self.ocr_mode,
             )
 
             def on_progress(p):
@@ -1005,6 +1010,17 @@ class TranslateWorker(QThread):
             msg = str(e) or tb.strip().split('\n')[-1]
             self.error.emit(msg)
         finally:
+            # 清理 OCR 预处理临时目录（output_dir/.pdf2zh_ocr_tmp/，含 OCR 文件 + pdf2zh 可能留下的中间产物）
+            if self._ocr_tmp_path:
+                try:
+                    import shutil as _shutil
+                    _tmp_dir = os.path.dirname(self._ocr_tmp_path)
+                    if os.path.basename(_tmp_dir) == ".pdf2zh_ocr_tmp" and os.path.isdir(_tmp_dir):
+                        _shutil.rmtree(_tmp_dir, ignore_errors=True)
+                    elif os.path.exists(self._ocr_tmp_path):
+                        os.remove(self._ocr_tmp_path)
+                except Exception:
+                    pass
             try:
                 loop.close()
             except Exception:
@@ -1056,22 +1072,43 @@ class TranslateWorker(QThread):
                     x1 = max(p[0] for p in box) * scale_x
                     y1 = max(p[1] for p in box) * scale_y
                     font_size = max((y1 - y0) * 0.8, 4)
-                    rc = fitz.Rect(x0, y0, x1, y1)
-                    page.insert_textbox(
-                        rc, text, fontsize=font_size,
+                    # v2.3.20: 之前用 insert_textbox 加隐藏文字层——但 OCR 识别框往往
+                    # 比按框高算出的字号能容纳的宽度还窄，insert_textbox 一旦判定文字
+                    # 放不下整框就把这一行「整条丢弃」，实测 111 行插进去 get_text()
+                    # 抽出来 0 个字符 → pdf2zh 拿不到任何可翻译文字 → 扫描件原样输出、
+                    # 完全没翻译（这正是「勾了 OCR、识别也跑了、结果没翻译」的最终根因，
+                    # 排在「引擎没打包」「临时文件被删」之后的第三层）。改用 insert_text
+                    # 定点插入：以识别框左下角为基线落字，不受框宽约束、不会丢行，实测
+                    # 同样 render_mode=3 隐藏下 get_text() 能抽到 6600+ 字符，pdf2zh 正常翻译。
+                    page.insert_text(
+                        (x0, y1), text, fontsize=font_size,
                         fontname="helv", color=(0, 0, 0),
-                        render_mode=3,  # 3 = invisible
+                        render_mode=3,  # 3 = invisible（视觉上仍是干净扫描图，只留可提取文字层）
                     )
                     modified = True
                 self.status.emit(f"OCR 识别中… {page_num+1}/{doc.page_count}")
 
             if modified:
-                import tempfile
-                tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
-                doc.save(tmp.name)
+                # v2.3.20: 之前用 tempfile.NamedTemporaryFile 写到系统 /var/folders/T，
+                # 开了分块翻译时 translate() 会被调用两趟（先分块、后 pages=None 合成），
+                # 系统临时目录里的 OCR 文件在两趟之间被清掉，第二趟 check_files 报
+                # 「The following files do not exist」→ 整个翻译失败，用户看到的就是
+                # 「勾了 OCR、也识别了，但最后没翻译出来」。改成写到 output_dir 下的稳定
+                # 子目录，跨两趟 translate 都在；跑完由 run() 统一清理。
+                # 关键：临时文件保留“原始文件名”（只是放进 .pdf2zh_ocr_tmp 子目录），
+                # 这样 pdf2zh 按输入 basename 命名的输出仍是干净的 scan_test-mono.pdf，
+                # 不会带上临时前缀。
+                tmp_dir = os.path.join(self.output_dir, ".pdf2zh_ocr_tmp")
+                os.makedirs(tmp_dir, exist_ok=True)
+                ocr_out = os.path.join(tmp_dir, os.path.basename(file_path))
+                doc.save(ocr_out)
                 doc.close()
                 doc = None
-                return tmp.name
+                if os.path.exists(ocr_out) and os.path.getsize(ocr_out) > 0:
+                    self._ocr_tmp_path = ocr_out
+                    self.status.emit("OCR 完成，开始翻译…")
+                    return ocr_out
+                self.status.emit("OCR 保存失败，用原文件翻译")
         except Exception as e:
             self.status.emit(f"OCR 失败: {e}")
         finally:

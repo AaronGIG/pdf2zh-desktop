@@ -654,7 +654,7 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.19"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.20"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -6734,7 +6734,7 @@ def _parse_cli_args(argv):
       pdf2zh --format=dual file.pdf
     返回 dict: {file: str|None, format: str|None, auto: bool}
     """
-    result = {"file": None, "format": None, "auto": False, "silent": False, "tables": None}
+    result = {"file": None, "format": None, "auto": False, "silent": False, "tables": None, "ocr": False}
     try:
         for arg in argv[1:]:
             if arg.startswith("--format="):
@@ -6749,6 +6749,10 @@ def _parse_cli_args(argv):
                 # v2.3.14: 供自动化测试/脚本化调用勾选"翻译表格内容"并指定页码，
                 # 例: --tables=5 或 --tables=5,8-10；不传就是普通行为(不勾选)。
                 result["tables"] = arg.split("=", 1)[1].strip()
+            elif arg == "--ocr":
+                # v2.3.20: 供自动化测试勾选"OCR 识别"（扫描件预处理），验证 rapidocr
+                # 打包是否到位、扫描件能否加上文字层后正常翻译。
+                result["ocr"] = True
             elif arg.lower().endswith(".pdf") and os.path.isfile(arg):
                 result["file"] = arg
     except Exception:
@@ -6913,6 +6917,11 @@ def main():
                     if tables_arg and hasattr(tp, "table_pages_edit"):
                         tp.table_pages_edit.setText(tables_arg)
                     _dbg_write(f"  set translate_tables_check=True, table_pages={tables_arg!r}")
+
+                # v2.3.20: --ocr 勾选"OCR 识别"，供扫描件预处理的自动化验证
+                if payload.get("ocr") and hasattr(tp, "ocr_mode_check"):
+                    tp.ocr_mode_check.setChecked(True)
+                    _dbg_write("  set ocr_mode_check=True")
 
                 if payload.get("auto"):
                     _dbg_write(f"  scheduling _start() in 800ms")

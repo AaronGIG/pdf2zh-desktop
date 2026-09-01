@@ -16,9 +16,17 @@ peewee_datas, peewee_binaries, peewee_hiddenimports = collect_all('peewee')
 tenacity_datas, tenacity_binaries, tenacity_hiddenimports = collect_all('tenacity')
 
 # requests 的核心依赖（collect_all('requests') 可能不会递归收集）
+# v2.3.20: rapidocr_onnxruntime 之前只在 hiddenimports 里挂了个名字，但它只装在
+# 仓库 core/site-packages 下、系统 python 没有，构建时 PyInstaller 解析不到就静默
+# 跳过 → 打出来的 app 里 0 个 rapidocr 文件 → 勾了「OCR 识别」时 _ocr_preprocess
+# 里 import rapidocr 直接 ImportError、走「OCR 模块未安装，跳过」→ 纯扫描件没加上
+# 文字层就丢给翻译 → 什么都翻不出来（用户看到的「OCR 出结果但没翻译」）。
+# 用 collect_all 连它自带的 3 个 .onnx 模型 + config.yaml 一起收进来；pyclipper、
+# shapely 是 rapidocr 的 C 扩展依赖（检测框/多边形），也一并收。
 _extra_collect = []
 for pkg in ['urllib3', 'idna', 'certifi', 'charset_normalizer', 'tqdm',
-            'pdfminer', 'openai', 'numpy']:
+            'pdfminer', 'openai', 'numpy',
+            'rapidocr_onnxruntime', 'pyclipper', 'shapely']:
     try:
         d, b, h = collect_all(pkg)
         _extra_collect.append((d, b, h))
@@ -148,8 +156,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'pdf2zh',
         'CFBundleDisplayName': 'pdf2zh-desktop',
-        'CFBundleVersion': '2.3.19',
-        'CFBundleShortVersionString': '2.3.19',
+        'CFBundleVersion': '2.3.20',
+        'CFBundleShortVersionString': '2.3.20',
         'LSMinimumSystemVersion': '13.0',
         'NSHighResolutionCapable': True,
         'LSApplicationCategoryType': 'public.app-category.productivity',
