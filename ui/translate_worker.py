@@ -1290,6 +1290,7 @@ class TranslateWorker(QThread):
         else:
             page_indices = list(range(src.page_count))
         total = len(page_indices)
+        font_bytes = self._ocr_font_bytes()  # 思源宋体/GoNoto，和普通翻译同款好看字体
 
         mono = fitz.open()
         dual = fitz.open()
@@ -1313,7 +1314,7 @@ class TranslateWorker(QThread):
                     lines.append({"x0": x0, "y0": y0, "x1": x1, "y1": y1,
                                   "cx": (x0 + x1) / 2, "text": text})
 
-                # 白槽分栏 → 每个文本流(整宽/左/右)内缩进分段 → 记录每段包围盒和参考字号
+                # 白槽分栏 → 每个文本流(整宽/左/右)内缩进分段 → 记录每段包围盒/参考字号/所属流
                 paras = []
                 flows = self._ocr_classify_flows(lines, pw)
                 for flow_key in ("full", "L", "R"):
@@ -1324,7 +1325,7 @@ class TranslateWorker(QThread):
                         hs = sorted(g["y1"] - g["y0"] for g in grp)
                         line_h = hs[len(hs) // 2] or 10
                         paras.append({"rect": fitz.Rect(bx0, by0, bx1, by1),
-                                      "text": txt, "line_h": line_h})
+                                      "text": txt, "line_h": line_h, "flow": flow_key})
 
                 # 整段翻译
                 for p in paras:
@@ -1336,12 +1337,10 @@ class TranslateWorker(QThread):
 
                 # 渲染:mono(白底译文) + dual(原扫描页 + 译文页)
                 mp = mono.new_page(width=pw, height=ph)
-                for p in paras:
-                    self._ocr_render_para(mp, p, ph)
+                self._ocr_render_page(mp, paras, ph, font_bytes)
                 dual.insert_pdf(src, from_page=pno, to_page=pno)  # 原扫描页
                 dp = dual.new_page(width=pw, height=ph)           # 译文页
-                for p in paras:
-                    self._ocr_render_para(dp, p, ph)
+                self._ocr_render_page(dp, paras, ph, font_bytes)
 
                 self.progress.emit(i + 1, total)
                 self.status.emit(f"扫描件翻译… {i+1}/{total}")
@@ -1358,39 +1357,73 @@ class TranslateWorker(QThread):
         finally:
             src.close(); mono.close(); dual.close()
 
-    @staticmethod
-    def _ocr_render_para(page, para, page_h):
-        """把一段译文渲染进它在原文里的包围盒，并"拉伸行距填满"该框。
-        v2.3.22: 之前只把译文按小字号锚在段落框顶部、放不下才缩——中文比英文紧凑，
-        每段只占原框上面一小截，下面空一大块 → 段间大空隙、整页版式和原文对不上
-        (用户反馈"换行错了")。这里改成:字号取原文行高级别(保持和原版同等字号密度)，
-        再按"填满原段落框高度"反推行距倍数，让每段译文竖向占满它原来的位置。这样各
-        段落停在原来的位置、页面整体版式贴合原扫描页。"""
-        import math
-        zh = (para.get("zh") or "").strip()
-        if not zh:
-            return
-        r = para["rect"]
-        W = r.width or 1
-        H = r.height or para["line_h"]
-        fs = max(min(para["line_h"] * 0.85, 13), 7)
-        # 估算译文会折成几行：CJK 字≈1 个字号宽，其余(字母/数字/空格)≈0.55
-        disp_w = sum(1.0 if "一" <= c <= "鿿" else 0.55 for c in zh)
-        chars_per_line = max(W / fs, 1)
-        n_lines = max(math.ceil(disp_w / chars_per_line), 1)
-        # 撑满原框高度的行距倍数（封顶 2.3 倍，避免极短段被拉得过散）
-        line_ratio = max(min((H / n_lines) / fs, 2.3), 1.0)
-        css = (f"* {{font-family: sans-serif; font-size: {fs:.1f}px; color: black; "
-               f"line-height: {line_ratio:.2f};}}")
-        esc = zh.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        box = fitz.Rect(r.x0, r.y0, r.x1, min(r.y1 + para["line_h"] * 0.6, page_h))
+    def _ocr_font_bytes(self):
+        """取译文渲染用的字体(和普通 pdf2zh 翻译同款好看字体，而非 fitz 默认的
+        瘦扁 sans-serif)。zh 用打包内的思源宋体(离线也在)；其它语言用 pdf2zh 的
+        download_remote_fonts(会缓存)。都拿不到返回 None，渲染时退回 sans-serif。"""
+        lang = (self.lang_out or "zh").lower()
         try:
-            page.insert_htmlbox(box, esc, css=css, scale_low=0)
+            import sys
+            base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(__file__)))
+            bundled = os.path.join(base, "assets", "SourceHanSerifCN-Regular.ttf")
+            if lang.startswith("zh") and os.path.exists(bundled):
+                with open(bundled, "rb") as f:
+                    return f.read()
         except Exception:
+            pass
+        try:
+            from pdf2zh.high_level import download_remote_fonts
+            p = download_remote_fonts(lang)
+            if p and os.path.exists(p):
+                with open(p, "rb") as f:
+                    return f.read()
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _ocr_render_page(page, paras, page_h, font_bytes):
+        """整页渲染译文（v2.3.22b）：统一字号 + 统一行距 + 思源宋体 + 锚定原位置，
+        每段框裁剪到"同栏下一段顶部"防止长译文压到下一段。
+        之前(v2.3.22)按每段"填满原框"反推行距，导致同样大小的段落译出来字号、行距
+        各不相同(用户反馈"字体和行距不同")；且用的是 fitz 默认 sans-serif(不好看)。
+        这版:整页正文用同一个字号(取各段行高中位数)、同一个行距(1.35)，字体换成和
+        普通翻译一致的思源宋体；锚定原位置保留版式，靠裁剪到下一段避免重叠。"""
+        vis = [p for p in paras if (p.get("zh") or "").strip()]
+        if not vis:
+            return
+        body_h = sorted(p["line_h"] for p in vis if p["line_h"] < 16)
+        uni_h = body_h[len(body_h) // 2] if body_h else 10
+        fs = max(uni_h * 0.95, 7.5)
+        arc = None
+        fam = "sans-serif"
+        face = ""
+        if font_bytes:
             try:
-                page.insert_textbox(r, zh, fontsize=8, fontname="china-s")
+                arc = fitz.Archive()
+                arc.add(font_bytes, "han.ttf")
+                fam = "han"
+                face = "@font-face{font-family:han;src:url(han.ttf);}"
             except Exception:
-                pass
+                arc = None; fam = "sans-serif"; face = ""
+        for flow_key in ("full", "L", "R"):
+            fp = sorted([p for p in vis if p.get("flow") == flow_key], key=lambda p: p["rect"].y0)
+            for i, p in enumerate(fp):
+                r = p["rect"]
+                pfs = fs * 1.4 if p["line_h"] >= 16 else fs   # 标题类稍大
+                next_top = fp[i + 1]["rect"].y0 - 2 if i + 1 < len(fp) else page_h
+                bottom = min(max(next_top, r.y0 + pfs * 1.2), page_h)
+                css = (f"{face}* {{font-family:{fam};font-size:{pfs:.1f}px;"
+                       f"line-height:1.35;color:black;}}")
+                esc = p["zh"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                box = fitz.Rect(r.x0, r.y0, r.x1, bottom)
+                try:
+                    if arc is not None:
+                        page.insert_htmlbox(box, esc, css=css, archive=arc, scale_low=0)
+                    else:
+                        page.insert_htmlbox(box, esc, css=css, scale_low=0)
+                except Exception:
+                    pass
 
     # ── 表格翻译后处理 ──
 
