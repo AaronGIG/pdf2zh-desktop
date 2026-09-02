@@ -1218,32 +1218,60 @@ class TranslateWorker(QThread):
     # 白底、无原图英文，扫描件译文因此几乎全中文（人名/引文年份由翻译服务正常保留）。
 
     @staticmethod
-    def _ocr_detect_columns(lines, page_width):
-        """按各行水平中心分布判断 1 栏 / 2 栏。返回 [(x_lo, x_hi), ...] 栏区间。"""
+    def _ocr_classify_flows(lines, page_width):
+        """v2.3.22: 按“栏间白槽”把行分到 整宽 / 左栏 / 右栏 三个文本流。
+        之前只按行中心 cx 跟页面中线比，遇到"单栏摘要 + 双栏正文 + 脚注"混排的
+        标题页会把栏分错、把跨栏整宽行(标题/摘要)硬塞进某一栏。改成:先统计每个
+        横向位置被多少行覆盖，在页面中段找覆盖最低的竖直白槽——真正的栏间缝；有
+        清晰白槽才算双栏。跨白槽的行(标题/摘要/脚注分隔)归"整宽流"，其余按在白槽
+        哪侧归左/右栏。返回 {"full":[...], "L":[...], "R":[...]}（无双栏时全在 full）。"""
+        flows = {"full": [], "L": [], "R": []}
         if not lines:
-            return [(0, page_width)]
-        mid = page_width / 2
-        left = [l for l in lines if l["cx"] < mid]
-        right = [l for l in lines if l["cx"] >= mid]
-        # 两侧都有足够多的行才算双栏（避免居中标题被误判成两栏）
-        if left and right and len(right) > len(lines) * 0.2 and len(left) > len(lines) * 0.2:
-            split = (max(l["x1"] for l in left) + min(l["x0"] for l in right)) / 2
-            return [(0, split), (split, page_width)]
-        return [(0, page_width)]
+            return flows
+        BIN = 4
+        nb = int(page_width // BIN) + 1
+        cov = [0] * nb
+        for l in lines:
+            for b in range(int(l["x0"] // BIN), int(l["x1"] // BIN) + 1):
+                if 0 <= b < nb:
+                    cov[b] += 1
+        lo, hi = int(0.35 * page_width // BIN), int(0.65 * page_width // BIN)
+        if hi <= lo:
+            flows["full"] = list(lines); return flows
+        gut_b = min(range(lo, hi), key=lambda b: cov[b])
+        gutter = gut_b * BIN
+        mid_cov = sorted(cov[int(0.1 * nb):int(0.9 * nb)] or [0])
+        med = mid_cov[len(mid_cov) // 2] if mid_cov else 0
+        two_col = med > 0 and cov[gut_b] < med * 0.35
+        if not two_col:
+            flows["full"] = list(lines); return flows
+        for l in lines:
+            if l["x0"] < gutter - 10 and l["x1"] > gutter + 10:
+                flows["full"].append(l)
+            elif l["cx"] < gutter:
+                flows["L"].append(l)
+            else:
+                flows["R"].append(l)
+        return flows
 
     @staticmethod
-    def _ocr_group_paragraphs(col_lines):
-        """栏内按 y 排序，竖直间距明显变大或缩进跳变 → 分段。返回段落（行列表）列表。"""
-        col_lines = sorted(col_lines, key=lambda l: l["y0"])
-        if not col_lines:
+    def _ocr_group_paragraphs(flow_lines):
+        """流内按缩进 + 竖直间距分段。学术论文段落分界主要靠"首行缩进"(首行 x0
+        比该栏左边距大一点)，其次靠段间空隙。之前只看 gap/相邻行 x0 跳变，抓不到
+        小缩进、又会被两端对齐里最后一行变短误伤。改成:以该栏最常见 x0 为左边距，
+        某行 x0 明显大于左边距(缩进)或与上一行间距明显变大 → 新段起。"""
+        fl = sorted(flow_lines, key=lambda l: l["y0"])
+        if not fl:
             return []
-        heights = sorted(l["y1"] - l["y0"] for l in col_lines)
-        med_h = heights[len(heights) // 2] or 1
-        paras, cur = [], [col_lines[0]]
-        for prev, ln in zip(col_lines, col_lines[1:]):
-            gap = ln["y0"] - prev["y1"]
-            indent = abs(ln["x0"] - prev["x0"])
-            if gap > med_h * 1.0 or indent > med_h * 2:
+        heights = sorted(l["y1"] - l["y0"] for l in fl)
+        med_h = heights[len(heights) // 2] or 10
+        from collections import Counter
+        margin = Counter(round(l["x0"] / 3) * 3 for l in fl).most_common(1)[0][0]
+        paras, cur = [], [fl[0]]
+        for prev, ln in zip(fl, fl[1:]):
+            indented = ln["x0"] > margin + med_h * 0.25
+            big_gap = (ln["y0"] - prev["y1"]) > med_h * 0.7
+            if indented or big_gap:
                 paras.append(cur); cur = [ln]
             else:
                 cur.append(ln)
@@ -1285,11 +1313,11 @@ class TranslateWorker(QThread):
                     lines.append({"x0": x0, "y0": y0, "x1": x1, "y1": y1,
                                   "cx": (x0 + x1) / 2, "text": text})
 
-                # 分栏 + 组段 + 记录每段包围盒和参考字号
+                # 白槽分栏 → 每个文本流(整宽/左/右)内缩进分段 → 记录每段包围盒和参考字号
                 paras = []
-                for (clo, chi) in self._ocr_detect_columns(lines, pw):
-                    col_lines = [l for l in lines if clo <= l["cx"] < chi]
-                    for grp in self._ocr_group_paragraphs(col_lines):
+                flows = self._ocr_classify_flows(lines, pw)
+                for flow_key in ("full", "L", "R"):
+                    for grp in self._ocr_group_paragraphs(flows[flow_key]):
                         txt = " ".join(g["text"] for g in grp)
                         bx0 = min(g["x0"] for g in grp); by0 = min(g["y0"] for g in grp)
                         bx1 = max(g["x1"] for g in grp); by1 = max(g["y1"] for g in grp)
@@ -1332,17 +1360,30 @@ class TranslateWorker(QThread):
 
     @staticmethod
     def _ocr_render_para(page, para, page_h):
-        """把一段译文渲染进它的包围盒。用 insert_htmlbox + scale_low=0 自动缩放到不
-        溢出（中文比英文紧凑，通常同框放得下，放不下就自动缩小，避免压到下一段）。"""
+        """把一段译文渲染进它在原文里的包围盒，并"拉伸行距填满"该框。
+        v2.3.22: 之前只把译文按小字号锚在段落框顶部、放不下才缩——中文比英文紧凑，
+        每段只占原框上面一小截，下面空一大块 → 段间大空隙、整页版式和原文对不上
+        (用户反馈"换行错了")。这里改成:字号取原文行高级别(保持和原版同等字号密度)，
+        再按"填满原段落框高度"反推行距倍数，让每段译文竖向占满它原来的位置。这样各
+        段落停在原来的位置、页面整体版式贴合原扫描页。"""
+        import math
         zh = (para.get("zh") or "").strip()
         if not zh:
             return
         r = para["rect"]
-        fs = max(min(para["line_h"] * 0.72, 14), 6)
-        css = f"* {{font-family: sans-serif; font-size: {fs:.1f}px; color: black; line-height: 1.15;}}"
+        W = r.width or 1
+        H = r.height or para["line_h"]
+        fs = max(min(para["line_h"] * 0.85, 13), 7)
+        # 估算译文会折成几行：CJK 字≈1 个字号宽，其余(字母/数字/空格)≈0.55
+        disp_w = sum(1.0 if "一" <= c <= "鿿" else 0.55 for c in zh)
+        chars_per_line = max(W / fs, 1)
+        n_lines = max(math.ceil(disp_w / chars_per_line), 1)
+        # 撑满原框高度的行距倍数（封顶 2.3 倍，避免极短段被拉得过散）
+        line_ratio = max(min((H / n_lines) / fs, 2.3), 1.0)
+        css = (f"* {{font-family: sans-serif; font-size: {fs:.1f}px; color: black; "
+               f"line-height: {line_ratio:.2f};}}")
         esc = zh.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        # 给一点下方余量（译文偶尔比原文行多），但不超过页面底
-        box = fitz.Rect(r.x0, r.y0, r.x1, min(r.y1 + para["line_h"] * 1.5, page_h))
+        box = fitz.Rect(r.x0, r.y0, r.x1, min(r.y1 + para["line_h"] * 0.6, page_h))
         try:
             page.insert_htmlbox(box, esc, css=css, scale_low=0)
         except Exception:
