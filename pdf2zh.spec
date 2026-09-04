@@ -59,7 +59,7 @@ a = Analysis(
         'PyQt5', 'PyQt5.QtWidgets', 'PyQt5.QtCore', 'PyQt5.QtGui',
         'PyQt5.QtNetwork', 'PyQt5.sip',
         # pdf2zh 核心
-        'pdf2zh', 'pdf2zh.translate', 'pdf2zh.doclayout',
+        'pdf2zh', 'pdf2zh.translate', 'pdf2zh.doclayout', 'pdf2zh.ocr_pipeline',
         'pdf2zh.converter', 'pdf2zh.pdfinterp', 'pdf2zh.pdffont',
         # 翻译服务后端
         'requests', 'openai', 'deepl',
@@ -156,8 +156,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'pdf2zh',
         'CFBundleDisplayName': 'pdf2zh-desktop',
-        'CFBundleVersion': '2.3.24',
-        'CFBundleShortVersionString': '2.3.24',
+        'CFBundleVersion': '2.3.25',
+        'CFBundleShortVersionString': '2.3.25',
         'LSMinimumSystemVersion': '13.0',
         'NSHighResolutionCapable': True,
         'LSApplicationCategoryType': 'public.app-category.productivity',
