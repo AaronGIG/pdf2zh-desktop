@@ -856,7 +856,7 @@ class TranslateWorker(QThread):
             # 扫描图透出、中英糊叠"的问题。直接产出 mono/dual/side_by_side 后返回。
             if self.ocr_mode:
                 self.status.emit("正在 OCR 识别…")
-                mono_path, dual_path = self._ocr_standalone_translate()
+                mono_path, dual_path = self._ocr_standalone_translate(layout_model=model)
                 if self.cancelled:
                     self.error.emit("已取消"); return
                 output_formats = getattr(self, "output_formats", None) or ["mono", "dual", "side_by_side"]
@@ -1278,9 +1278,62 @@ class TranslateWorker(QThread):
         paras.append(cur)
         return paras
 
-    def _ocr_standalone_translate(self):
+    # 区域类型：保留原样(不翻、直接贴原扫描图)的类别 —— 表格和插图/公式重排会毁掉
+    # 结构(表格被当成流式段落切碎、数字表头全错位)，保原图至少排版完整可读。
+    _OCR_KEEP_CLASSES = {"table", "figure", "isolate_formula"}
+    # 需要翻译的文本类区域
+    _OCR_TEXT_CLASSES = {"title", "plain text", "abandon", "figure_caption",
+                         "table_caption", "table_footnote", "formula_caption"}
+
+    @staticmethod
+    def _ocr_layout_regions(layout_model, pix, pw, ph):
+        """v2.3.24: 借用正常管线的版面模型(doclayout)给扫描页分区，返回
+        [{'cls':类别, 'rect':PDF坐标框, 'conf':置信度}]。之前 OCR 管线完全没有
+        "区域类型"概念，把整页(含表格/插图/旋转内容)一律当流式正文重排，表格被
+        切成段落、数字表头全错位。有了分区就能按类型分流:表格/插图保原图，文本
+        才翻译；而且模型给出的 plain text 框本身就是按栏切好的，比手写白槽/缩进
+        启发式可靠。"""
+        try:
+            import numpy as np, cv2
+            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+            if pix.n == 4:
+                img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+            elif pix.n == 1:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            res = layout_model.predict(img, imgsz=1024)[0]
+            sx, sy = pw / pix.width, ph / pix.height
+            out = []
+            for b in res.boxes:
+                cls = res.names[int(b.cls)]
+                x0, y0, x1, y1 = [float(v) for v in b.xyxy]
+                out.append({"cls": cls, "conf": float(b.conf),
+                            "rect": fitz.Rect(x0 * sx, y0 * sy, x1 * sx, y1 * sy)})
+            return out
+        except Exception:
+            return []
+
+    @staticmethod
+    def _ocr_merge_keep_regions(regions):
+        """把要保原图的区域(表格/插图/公式)按重叠合并，避免同一张表被拆成多块
+        分别贴导致接缝。低置信度的表格框也保留——宁可多保一块原图，也不要让
+        表格被当正文重排搅烂。"""
+        keeps = [r["rect"] for r in regions if r["cls"] in TranslateWorker._OCR_KEEP_CLASSES]
+        merged = []
+        for r in sorted(keeps, key=lambda r: (r.y0, r.x0)):
+            hit = None
+            for m in merged:
+                if m.intersects(r):
+                    hit = m; break
+            if hit is not None:
+                hit |= r  # 并集
+            else:
+                merged.append(+r)
+        return merged
+
+    def _ocr_standalone_translate(self, layout_model=None):
         """扫描件独立翻译管线。产出 (mono_path, dual_path)。
-        mono = 纯译文白底页；dual = [原扫描页, 译文页, ...] 交替（供并排版/对照）。"""
+        mono = 纯译文白底页；dual = [原扫描页, 译文页, ...] 交替（供并排版/对照）。
+        v2.3.24: 接入正常管线的版面模型做区域分流——表格/插图保原图，文本才翻译。"""
         from rapidocr_onnxruntime import RapidOCR
         translator = self._get_table_translator()
         ocr = RapidOCR()
@@ -1298,50 +1351,12 @@ class TranslateWorker(QThread):
             for i, pno in enumerate(page_indices):
                 if self.cancelled:
                     break
-                page = src[pno]
-                pw, ph = page.rect.width, page.rect.height
-                pix = page.get_pixmap(dpi=300)
-                result, _ = ocr(pix.tobytes("png"))
-                sx, sy = pw / pix.width, ph / pix.height
-                lines = []
-                for box, text, conf in (result or []):
-                    if conf < 0.5 or not text.strip():
-                        continue
-                    x0 = min(p[0] for p in box) * sx
-                    y0 = min(p[1] for p in box) * sy
-                    x1 = max(p[0] for p in box) * sx
-                    y1 = max(p[1] for p in box) * sy
-                    lines.append({"x0": x0, "y0": y0, "x1": x1, "y1": y1,
-                                  "cx": (x0 + x1) / 2, "text": text})
-
-                # 白槽分栏 → 每个文本流(整宽/左/右)内缩进分段 → 记录每段包围盒/参考字号/所属流
-                paras = []
-                flows = self._ocr_classify_flows(lines, pw)
-                for flow_key in ("full", "L", "R"):
-                    for grp in self._ocr_group_paragraphs(flows[flow_key]):
-                        txt = " ".join(g["text"] for g in grp)
-                        bx0 = min(g["x0"] for g in grp); by0 = min(g["y0"] for g in grp)
-                        bx1 = max(g["x1"] for g in grp); by1 = max(g["y1"] for g in grp)
-                        hs = sorted(g["y1"] - g["y0"] for g in grp)
-                        line_h = hs[len(hs) // 2] or 10
-                        paras.append({"rect": fitz.Rect(bx0, by0, bx1, by1),
-                                      "text": txt, "line_h": line_h, "flow": flow_key})
-
-                # 整段翻译
-                for p in paras:
-                    try:
-                        zh = translator.translate(p["text"])
-                    except Exception:
-                        zh = None
-                    p["zh"] = (zh or p["text"]).strip()
-
-                # 渲染:mono(白底译文) + dual(原扫描页 + 译文页)
-                mp = mono.new_page(width=pw, height=ph)
-                self._ocr_render_page(mp, paras, ph, font_bytes)
+                tdoc = self._ocr_translate_one_page(src, pno, ocr, translator,
+                                                    layout_model, font_bytes)
+                mono.insert_pdf(tdoc)                             # 译文页
                 dual.insert_pdf(src, from_page=pno, to_page=pno)  # 原扫描页
-                dp = dual.new_page(width=pw, height=ph)           # 译文页
-                self._ocr_render_page(dp, paras, ph, font_bytes)
-
+                dual.insert_pdf(tdoc)                             # 译文页
+                tdoc.close()
                 self.progress.emit(i + 1, total)
                 self.status.emit(f"扫描件翻译… {i+1}/{total}")
 
@@ -1356,6 +1371,106 @@ class TranslateWorker(QThread):
             return mono_path, dual_path
         finally:
             src.close(); mono.close(); dual.close()
+
+    @staticmethod
+    def _ocr_lines_from_pix(ocr, pix, pw, ph):
+        """对一张页面位图跑 OCR，返回 PDF 坐标系下的文字行列表。"""
+        result, _ = ocr(pix.tobytes("png"))
+        sx, sy = pw / pix.width, ph / pix.height
+        lines = []
+        for box, text, conf in (result or []):
+            if conf < 0.5 or not text.strip():
+                continue
+            x0 = min(p[0] for p in box) * sx
+            y0 = min(p[1] for p in box) * sy
+            x1 = max(p[0] for p in box) * sx
+            y1 = max(p[1] for p in box) * sy
+            lines.append({"x0": x0, "y0": y0, "x1": x1, "y1": y1,
+                          "cx": (x0 + x1) / 2, "text": text})
+        return lines
+
+    def _ocr_translate_one_page(self, src, pno, ocr, translator, layout_model, font_bytes):
+        """翻译扫描件的一页，返回只含该译文页的 1 页文档（几何和原页一致）。
+        v2.3.24: 内含"整页旋转"处理——论文里横向排版的整页大表(把页面转90°才能读)
+        直接按横排逻辑处理必然崩(分栏/分段全错)。这里先按 OCR 文字框的长宽比判断
+        整页是不是旋转内容，是的话用 show_pdf_page 造一张"转正"的临时页，在转正
+        空间里跑完整流程(分区/分段/翻译/排版)，最后把渲染结果整页转回原朝向——
+        既不用手推坐标变换，也复用了全部现有逻辑。"""
+        page = src[pno]
+        pw, ph = page.rect.width, page.rect.height
+        pix = page.get_pixmap(dpi=300)
+        lines = self._ocr_lines_from_pix(ocr, pix, pw, ph)
+
+        # 注：不做"整页转正"。实测版面模型在扫描页的原始朝向下识别更准(第12页那种
+        # 整页横排大表，原朝向能识别出 table 并整块保原图；先把页面转正反而识别不到)。
+        # 旋转的文字按"区域"单独处理：OCR 本来就能读出旋转文字的内容，只是框是竖条，
+        # 分段时把坐标转置复用同一套逻辑，渲染时用 insert_htmlbox(rotate=) 竖排回去。
+        return self._ocr_build_page(src, pno, pix, lines, pw, ph,
+                                    translator, layout_model, font_bytes)
+
+    def _ocr_build_page(self, src, pno, pix, lines, pw, ph, translator,
+                        layout_model, font_bytes):
+        """在"已转正"的坐标系里，把一页拆区域→翻译→排版，返回 1 页文档。"""
+        # 版面分区：表格/插图/公式整块保留原扫描图，其余文字才翻译
+        keep_rects = []
+        if layout_model is not None:
+            regions = self._ocr_layout_regions(layout_model, pix, pw, ph)
+            keep_rects = self._ocr_merge_keep_regions(regions)
+            if keep_rects:
+                def _in_keep(l):
+                    c = fitz.Point((l["x0"] + l["x1"]) / 2, (l["y0"] + l["y1"]) / 2)
+                    return any(c in k for k in keep_rects)
+                lines = [l for l in lines if not _in_keep(l)]
+
+        # 横排行和"竖条行"(旋转文字)分开处理。旋转文字 OCR 内容是对的、只是框是
+        # 竖条，直接套横排的分栏/分段逻辑会全错；把坐标转置后复用同一套逻辑分段，
+        # 再把段落框转置回来、渲染时按 rotate 竖排回去。
+        horiz = [l for l in lines if (l["y1"] - l["y0"]) <= (l["x1"] - l["x0"]) * 1.5]
+        rot = [l for l in lines if (l["y1"] - l["y0"]) > (l["x1"] - l["x0"]) * 1.5]
+
+        paras = []
+        flows = self._ocr_classify_flows(horiz, pw)
+        for flow_key in ("full", "L", "R"):
+            for grp in self._ocr_group_paragraphs(flows[flow_key]):
+                txt = " ".join(g["text"] for g in grp)
+                bx0 = min(g["x0"] for g in grp); by0 = min(g["y0"] for g in grp)
+                bx1 = max(g["x1"] for g in grp); by1 = max(g["y1"] for g in grp)
+                hs = sorted(g["y1"] - g["y0"] for g in grp)
+                paras.append({"rect": fitz.Rect(bx0, by0, bx1, by1), "text": txt,
+                              "line_h": hs[len(hs) // 2] or 10, "flow": flow_key,
+                              "rotate": 0})
+        if rot:
+            # 转置:(x,y)→(y,x)，让竖排文字在转置空间里表现为横排，复用分栏/分段
+            tr = [{"x0": l["y0"], "y0": l["x0"], "x1": l["y1"], "y1": l["x1"],
+                   "cx": (l["y0"] + l["y1"]) / 2, "text": l["text"]} for l in rot]
+            tflows = self._ocr_classify_flows(tr, ph)
+            for flow_key in ("full", "L", "R"):
+                for grp in self._ocr_group_paragraphs(tflows[flow_key]):
+                    txt = " ".join(g["text"] for g in grp)
+                    ty0 = min(g["x0"] for g in grp); tx0 = min(g["y0"] for g in grp)
+                    ty1 = max(g["x1"] for g in grp); tx1 = max(g["y1"] for g in grp)
+                    hs = sorted(g["y1"] - g["y0"] for g in grp)   # 转置空间的"行高"= 原来的框宽
+                    paras.append({"rect": fitz.Rect(tx0, ty0, tx1, ty1), "text": txt,
+                                  "line_h": hs[len(hs) // 2] or 10,
+                                  "flow": "rot_" + flow_key, "rotate": 90})
+
+        for p in paras:
+            try:
+                zh = translator.translate(p["text"])
+            except Exception:
+                zh = None
+            p["zh"] = (zh or p["text"]).strip()
+
+        out = fitz.open()
+        op = out.new_page(width=pw, height=ph)
+        for kr in keep_rects:                       # 先贴保留区原图(表格/插图)
+            try:
+                op.show_pdf_page(kr, src, pno, clip=kr)
+            except Exception:
+                pass
+        self._ocr_render_page(op, paras, ph, font_bytes)
+        return out
+
 
     def _ocr_font_bytes(self):
         """取译文渲染用的字体(和普通 pdf2zh 翻译同款好看字体，而非 fitz 默认的
@@ -1406,22 +1521,34 @@ class TranslateWorker(QThread):
                 face = "@font-face{font-family:han;src:url(han.ttf);}"
             except Exception:
                 arc = None; fam = "sans-serif"; face = ""
-        for flow_key in ("full", "L", "R"):
-            fp = sorted([p for p in vis if p.get("flow") == flow_key], key=lambda p: p["rect"].y0)
+        flow_keys = sorted({p.get("flow", "full") for p in vis})
+        for flow_key in flow_keys:
+            fp = [p for p in vis if p.get("flow") == flow_key]
+            rotated = bool(fp) and fp[0].get("rotate", 0)
+            # 竖排流按 x 排序(视觉上从左到右就是阅读顺序)，横排流按 y
+            fp.sort(key=lambda p: (p["rect"].x0 if rotated else p["rect"].y0))
             for i, p in enumerate(fp):
                 r = p["rect"]
                 pfs = fs * 1.4 if p["line_h"] >= 16 else fs   # 标题类稍大
-                next_top = fp[i + 1]["rect"].y0 - 2 if i + 1 < len(fp) else page_h
-                bottom = min(max(next_top, r.y0 + pfs * 1.2), page_h)
                 css = (f"{face}* {{font-family:{fam};font-size:{pfs:.1f}px;"
                        f"line-height:1.35;color:black;}}")
                 esc = p["zh"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                box = fitz.Rect(r.x0, r.y0, r.x1, bottom)
+                if rotated:
+                    # 竖排:裁剪到同流下一段的左边界，避免压到相邻竖排块
+                    next_x = fp[i + 1]["rect"].x0 - 2 if i + 1 < len(fp) else page.rect.x1
+                    right = min(max(next_x, r.x0 + pfs * 1.2), page.rect.x1)
+                    box = fitz.Rect(r.x0, r.y0, right, r.y1)
+                else:
+                    next_top = fp[i + 1]["rect"].y0 - 2 if i + 1 < len(fp) else page_h
+                    bottom = min(max(next_top, r.y0 + pfs * 1.2), page_h)
+                    box = fitz.Rect(r.x0, r.y0, r.x1, bottom)
+                rot = int(p.get("rotate", 0)) or 0
                 try:
                     if arc is not None:
-                        page.insert_htmlbox(box, esc, css=css, archive=arc, scale_low=0)
+                        page.insert_htmlbox(box, esc, css=css, archive=arc,
+                                            rotate=rot, scale_low=0)
                     else:
-                        page.insert_htmlbox(box, esc, css=css, scale_low=0)
+                        page.insert_htmlbox(box, esc, css=css, rotate=rot, scale_low=0)
                 except Exception:
                     pass
 
