@@ -8,6 +8,15 @@ import fitz  # PyMuPDF
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
+# v2.3.27 (issue #29): 工作线程栈大小。
+# macOS 主线程栈有 8MB，但 QThread 子线程用系统默认（约 512KB）。翻译大文档时
+# PDF 解析递归一深就把子线程栈撑爆，撞到栈守护页 → EXC_BAD_ACCESS(SIGBUS)
+# 整个程序硬崩，连 Python 的 RecursionError 都来不及抛（实测子线程递归还没到
+# Python 默认上限 1000 就已经 SIGBUS 了），用户看到的就是"意外退出"。
+# 500 多页 / 25MB 的 PDF 正好能触发。这里给工作线程显式留足栈空间；栈是虚拟地址
+# 预留，不实际占物理内存，设大不会增加内存开销。
+WORKER_STACK_SIZE = 64 * 1024 * 1024  # 64MB
+
 
 def _table_cell_should_translate(text: str) -> bool:
     """判断表格单元格文字是否需要翻译（跳过纯数字/日期/编号/单字符），
@@ -754,6 +763,7 @@ class TranslateWorker(QThread):
                  scan_mode=False, translate_tables=False, table_pages=None, ocr_mode=False,
                  parent=None):
         super().__init__(parent)
+        self.setStackSize(WORKER_STACK_SIZE)  # issue #29: 防子线程栈溢出硬崩
         self.file_path = file_path
         self.output_dir = output_dir
         self.lang_in = lang_in
@@ -1459,6 +1469,7 @@ class SummaryWorker(QThread):
 
     def __init__(self, pdf_path: str, parent=None):
         super().__init__(parent)
+        self.setStackSize(WORKER_STACK_SIZE)  # issue #29: 防子线程栈溢出硬崩
         self.pdf_path = pdf_path
 
     def run(self):
@@ -1499,6 +1510,7 @@ class QAWorker(QThread):
 
     def __init__(self, messages: list, parent=None):
         super().__init__(parent)
+        self.setStackSize(WORKER_STACK_SIZE)  # issue #29: 防子线程栈溢出硬崩
         self.messages = messages
 
     def run(self):
@@ -1519,6 +1531,10 @@ class UpdateCheckWorker(QThread):
     """后台查询 GitHub 最新 Release, 只检测+返回信息, 不下载不替换任何文件"""
     found = pyqtSignal(str, str)  # 最新版本号(不带v前缀), release 页面 URL
     error = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStackSize(WORKER_STACK_SIZE)  # issue #29: 统一给工作线程留足栈
 
     def run(self):
         try:
