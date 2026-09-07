@@ -1008,6 +1008,36 @@ class TranslateWorker(QThread):
             # 注：ocr_mode 扫描件已在前面走独立管线并 return，不会到这里；此处只处理
             # 普通(数字版)PDF 的常规流程。
 
+            # ── 目录页排版还原（v2.3.26）──
+            # 带点线的目录页("标题 …… 页码")被当成流水正文翻译后，分级缩进丢失、
+            # 页码塞进行内、条目跨行断开甚至丢条。这里从原文页抽出条目，标题打包成
+            # 一次请求翻译，再按原缩进/点线/右对齐页码重排回译文页。检测很保守，
+            # 普通正文页不会命中；任何一页失败都只跳过该页。
+            try:
+                from pdf2zh.toc_fix import fix_toc_pages
+                from pdf2zh.ocr_pipeline import ScannedPdfTranslator as _SPT
+                import sys as _sys2
+                _fb = _SPT(  # 复用同一套取字体逻辑(思源宋体/GoNoto)
+                    file_path="", output_dir="", pages=None,
+                    lang_out=self.lang_out, translator=None,
+                    asset_dir=os.path.join(
+                        getattr(_sys2, "_MEIPASS", os.path.dirname(os.path.dirname(__file__))),
+                        "assets"),
+                )._ocr_font_bytes()
+                _tf = 0
+                for pdf_path, is_dual in [(mono_path, False), (dual_path, True)]:
+                    if pdf_path and os.path.exists(pdf_path):
+                        _tf += fix_toc_pages(
+                            self.file_path, pdf_path,
+                            translator=self._get_table_translator(),
+                            font_bytes=_fb,
+                            dual=is_dual, pages=self.pages,
+                            status_cb=self.status.emit)
+                if _tf:
+                    self.status.emit(f"目录页排版已还原（{_tf} 页）")
+            except Exception:
+                pass
+
             # ── 生成 Side-by-Side（可选：output_formats 控制是否生成）──
             base = os.path.splitext(mono_path)[0]
             if base.endswith("-mono"):
