@@ -156,8 +156,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'pdf2zh',
         'CFBundleDisplayName': 'pdf2zh-desktop',
-        'CFBundleVersion': '2.3.27',
-        'CFBundleShortVersionString': '2.3.27',
+        'CFBundleVersion': '2.3.28',
+        'CFBundleShortVersionString': '2.3.28',
         'LSMinimumSystemVersion': '13.0',
         'NSHighResolutionCapable': True,
         'LSApplicationCategoryType': 'public.app-category.productivity',
