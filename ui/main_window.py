@@ -82,6 +82,7 @@ def _install_pdf2zh_color_fix():
         from pdfminer.layout import LTChar as _LTChar, LTFigure as _LTFigure, LTLine as _LTLine
         from pdfminer.pdffont import PDFCIDFont as _PDFCIDFont
         from tenacity import retry as _retry, wait_fixed as _wait_fixed
+        from builtins import id as _objid   # receive_layout 内有局部变量 id，会遮蔽内置
 
         Paragraph = mod.Paragraph
         OpType = mod.OpType
@@ -142,8 +143,77 @@ def _install_pdf2zh_color_fix():
                 return False
 
             ############################################################
+            # v2.3.30: 识别左边距的行号，整页跳过。
+            #
+            # 投稿稿/录用稿常在左边距逐行标行号（x≈35 的 '250' '251'…，字号和正文
+            # 一样）。它们和正文（x≈72）在字符流里交替出现，而段落连续性判断里有一条
+            # `abs(child.x0 - xt.x0) > vmax` —— 每行都被这 37pt 的横跳打断，结果整页
+            # 退化成**逐行翻译**：实测某篇录用稿 103 段、中位仅 90 字符，其中 21%
+            # 切在句子中间（以 the/that/of 结尾），模型拿到半句只能编，译文里就出现
+            # 「适当的______」「与……相比」这种残缺句。
+            #
+            # 只把 cls 置 0（保留不翻译）不够——那仍然会改写 xt_cls 打断段落，
+            # 必须整个跳过，让正文的上下行直接相连。
+            _skip_ids = set()
+            # 设 P2Z_DISABLE_LINENUM_SKIP=1 可关掉这个识别（A/B 对比、排查用）
+            try:
+                import os as _os_ln
+                _ln_off = bool(_os_ln.environ.get("P2Z_DISABLE_LINENUM_SKIP"))
+            except Exception:
+                _ln_off = False
+            try:
+                if _ln_off:
+                    raise RuntimeError("disabled")
+                _chars = [c for c in ltpage if isinstance(c, _LTChar)]
+                if len(_chars) > 200:          # 只对正文页做，图形块跳过
+                    _rows = {}
+                    for _c in _chars:
+                        _rows.setdefault(round(_c.y0), []).append(_c)
+                    _margin = ltpage.x0 + (ltpage.width * 0.12)
+                    _cand = []
+                    for _row in _rows.values():
+                        _row.sort(key=lambda c: c.x0)
+                        # 行首连续的数字
+                        _run = []
+                        for _c in _row:
+                            _t = _c.get_text()
+                            if _t.isdigit():
+                                _run.append(_c)
+                            else:
+                                break
+                        if not (1 <= len(_run) <= 5):
+                            continue
+                        if _run[0].x0 > _margin:          # 必须在最左边距里
+                            continue
+                        _rest = _row[len(_run):]
+                        # 数字串后面要有明显空隙（≥ 一个字号），否则是 "2. 引言" 这类正常行首
+                        _gap = None
+                        for _c in _rest:
+                            if _c.get_text().strip():
+                                _gap = _c.x0 - _run[-1].x1
+                                break
+                        if _gap is None or _gap < max(_run[-1].size, 6):
+                            continue
+                        # 数字和正文之间的空格也要一起跳过：它同样落在行号栏的
+                        # abandon 区（cls=0），只跳数字的话这个空格照样会造成
+                        # cls 切换，段落还是每行断一次。
+                        for _c in _rest:
+                            if _c.get_text().strip():
+                                break
+                            _run.append(_c)
+                        _cand.append(_run)
+                    # 该模式要在多行重复才认定是行号栏，避免误伤偶发的编号行
+                    if len(_cand) >= 5:
+                        for _run in _cand:
+                            _skip_ids.update(_objid(c) for c in _run)
+            except Exception:
+                _skip_ids = set()   # 识别失败就按原逻辑走，绝不因此翻译不出来
+
+            ############################################################
             # A. 原文档解析
             for child in ltpage:
+                if _objid(child) in _skip_ids:
+                    continue
                 if isinstance(child, _LTChar):
                     cur_v = False
                     layout = self.layout[ltpage.pageid]
@@ -674,7 +744,7 @@ def _load_active_glossary():
         return {}
 
 
-APP_VERSION = "2.3.29"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.30"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
