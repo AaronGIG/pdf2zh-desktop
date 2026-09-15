@@ -526,10 +526,21 @@ def _install_pdf2zh_color_fix():
             # A: OpenAITranslator 加 _SYSTEM_PROMPT + prompt override(无 system 则加)
             if not hasattr(ot, "_SYSTEM_PROMPT"):
                 ot._SYSTEM_PROMPT = _SYS
-            _orig_prompt = ot.prompt
+            # v2.3.29 (issue #31): 这里**不能**把 ot.prompt 提前捕获成局部变量。
+            # high_level 里的 _ensure_plaintext_prompt() 会在用到术语库时把
+            # BaseTranslator.prompt 换成纯文本版（替掉上游那个 eval 实现）；如果
+            # 这个包装器闭包里锁死了打补丁那一刻的旧函数，换了也白换——实测打包
+            # 后每段都抛 SyntaxError、被降级成保留原文。改成每次调用时动态解析。
+            _bt = getattr(mod, "BaseTranslator", None)
+
+            def _base_prompt(self, text, prompt_template):
+                fn = getattr(_bt, "prompt", None) if _bt is not None else None
+                if fn is None:
+                    fn = ot.__mro__[1].prompt
+                return fn(self, text, prompt_template)
 
             def _new_prompt(self, text, prompt_template=None):
-                msgs = _orig_prompt(self, text, prompt_template)
+                msgs = _base_prompt(self, text, prompt_template)
                 sysp = getattr(self, "_SYSTEM_PROMPT", None)
                 if sysp and not (
                     msgs and isinstance(msgs[0], dict) and msgs[0].get("role") == "system"
@@ -654,7 +665,16 @@ from ui.translate_worker import (
     build_service_envs, SummaryWorker, QAWorker, UpdateCheckWorker,
 )
 
-APP_VERSION = "2.3.28"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+def _load_active_glossary():
+    """取当前生效的术语库(issue #31)。读失败不该让翻译跑不起来，返回空表即可。"""
+    try:
+        from ui.glossary_manager import GlossaryManager
+        return GlossaryManager.load() or {}
+    except Exception:
+        return {}
+
+
+APP_VERSION = "2.3.29"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -3558,6 +3578,16 @@ class TranslatePage(QWidget):
         self.ocr_mode_check = QCheckBox("OCR 识别")
         self.ocr_mode_check.setToolTip("对纯图片扫描件先进行 OCR 文字识别再翻译。\n需要额外处理时间，普通 PDF 请勿勾选。")
         r5.addWidget(self.ocr_mode_check)
+        # issue #31: 翻译前先让模型通读全文抽一张术语对照表，注入后续每段翻译，
+        # 保证同一个专业术语全文译法统一。只多花一次模型调用。
+        self.auto_gloss_check = QCheckBox("自动提取术语")
+        self.auto_gloss_check.setToolTip(
+            "翻译前先通读全文，自动整理出专业术语对照表，\n"
+            "让同一个术语在全文里译法统一。\n"
+            "手工术语库优先级更高，会覆盖自动提取的结果。\n"
+            "仅对大模型服务有效（Google / Bing 等不支持）。")
+        self.auto_gloss_check.setChecked(bool(self.cfg.get("auto_glossary", False)))
+        r5.addWidget(self.auto_gloss_check)
         r5.addStretch()
         cl.addLayout(r5)
 
@@ -3829,6 +3859,7 @@ class TranslatePage(QWidget):
         self.cfg["lang_out"] = self.tgt_combo.currentText()
         self.cfg["output_format"] = self.fmt_combo.currentText()
         self.cfg["thread_count"] = self.thread_spin.value()
+        self.cfg["auto_glossary"] = self.auto_gloss_check.isChecked()
         self.cfg["chunk_enabled"] = self.chunk_check.isChecked()
         self.cfg["chunk_size"] = self.chunk_size_spin.value()
         self.cfg["chunk_delay"] = self.chunk_delay_spin.value()
@@ -3942,6 +3973,8 @@ class TranslatePage(QWidget):
             translate_tables=self.translate_tables_check.isChecked(),
             table_pages=self._get_table_pages(),
             ocr_mode=self.ocr_mode_check.isChecked(),
+            glossary=_load_active_glossary(),   # issue #31
+            auto_glossary=self.auto_gloss_check.isChecked(),
         )
         # v2.3.0: 传递 output_formats 到 worker（如果单文件模式被激活）
         # 由 _cli_format 属性（Zotero 唤起时设置）决定

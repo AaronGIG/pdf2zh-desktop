@@ -761,7 +761,7 @@ class TranslateWorker(QThread):
                  chunk_size=50, chunk_delay=10, envs=None,
                  skip_subset_fonts=False, ignore_cache=False,
                  scan_mode=False, translate_tables=False, table_pages=None, ocr_mode=False,
-                 parent=None):
+                 glossary=None, auto_glossary=False, parent=None):
         super().__init__(parent)
         self.setStackSize(WORKER_STACK_SIZE)  # issue #29: 防子线程栈溢出硬崩
         self.file_path = file_path
@@ -781,9 +781,13 @@ class TranslateWorker(QThread):
         self.translate_tables = translate_tables
         self.table_pages = table_pages
         self.ocr_mode = ocr_mode
+        self.glossary = glossary or {}   # issue #31: 手工术语库，注入翻译 prompt
+        self.auto_glossary = auto_glossary  # issue #31: 翻译前自动提取术语
         self._ocr_tmp_path = None  # OCR 预处理产出的临时文件，翻译结束后清理
         self.cancelled = False
         self._cancel_event = None
+        self._net_state = None     # issue #30: 网络策略的错误记录
+        self._auto_terms = 0       # issue #31: 自动提取到的术语条数
 
     # 需要 API Key 的服务列表
     SERVICES_NEED_KEY = {
@@ -856,6 +860,18 @@ class TranslateWorker(QThread):
                 model = OnnxModel.load_available()
             self._cancel_event = asyncio.Event()
 
+            # issue #30: 装上网络策略（超时 + 重试分级 + 错误可见）。
+            # 原本 converter.py 的重试装饰器没有 stop 条件，API Key 失效这类
+            # 永久性错误会被每秒重试一次、永不放弃 —— 界面上不报错，只表现成
+            # 「翻译极慢 / 卡住不动」。实测 60 秒重试 34 次仍在继续。
+            try:
+                from pdf2zh import net_policy
+                self._net_state = net_policy.install(
+                    cancellation_event=self._cancel_event)
+            except Exception as _e:   # 模块缺失不该让翻译跑不起来
+                self._net_state = None
+                print(f"[net_policy] 未启用: {_e}")
+
             # 获取总页数
             doc = fitz.open(self.file_path)
             total_pages = len(doc)
@@ -925,7 +941,27 @@ class TranslateWorker(QThread):
                 # pdf2zh 的 scan_mode 会在每个译文块下先铺白底矩形(converter.py 约531行)，
                 # 正好把对应区域的原图盖白，中文落在干净背景上，扫描件才有可读性。
                 scan_mode=self.scan_mode or self.ocr_mode,
+                # issue #31: 术语库。之前 macOS 版根本没往下传，界面上的术语库是摆设。
+                glossary=self.glossary,
             )
+
+            # issue #31: 自动提取术语。先通读全文采样让模型抽一张术语对照表，
+            # 再和手工术语库合并（手工优先）注入后续翻译，保证同一术语全文统一。
+            # 失败只是少一张表，不影响翻译本身。
+            if self.auto_glossary:
+                try:
+                    from pdf2zh import auto_glossary as _ag
+                    _doc = fitz.open(actual_file)
+                    _tr = self._get_table_translator()
+                    _auto = _ag.extract(_doc, _tr, self.lang_in or "English",
+                                        self.lang_out or "Chinese",
+                                        status_cb=lambda m: self.status.emit(m))
+                    _doc.close()
+                    if _auto:
+                        base_param["glossary"] = _ag.merge(_auto, self.glossary)
+                        self._auto_terms = len(_auto)
+                except Exception as _e:
+                    self.status.emit(f"术语提取跳过（{_e}）")
 
             def on_progress(p):
                 try:
@@ -990,6 +1026,14 @@ class TranslateWorker(QThread):
 
             if self.cancelled:
                 self.error.emit("已取消")
+                return
+
+            # issue #30: 永久性错误（Key 失效/余额不足…）时，pdf2zh 可能已经把
+            # 当前页跑完、正常返回了一份「原文照抄」的 PDF。这时候绝不能当成功
+            # 交付 —— 必须把原因报出来，否则用户拿到一份没翻译的文件还不知道为什么。
+            _ns = getattr(self, "_net_state", None)
+            if _ns is not None and _ns.aborted:
+                self.error.emit(_ns.abort_reason)
                 return
 
             result_list = list(results)
@@ -1077,7 +1121,13 @@ class TranslateWorker(QThread):
             except Exception:
                 pass
 
-            self.status.emit("翻译完成")
+            # issue #30: 有段落因暂时性错误重试后仍失败（已保留原文），提示用户
+            _ns = getattr(self, "_net_state", None)
+            if _ns is not None and _ns.failed_count:
+                self.status.emit(
+                    f"翻译完成（{_ns.failed_count} 段失败已保留原文：{_ns.warnings[0][1]}）")
+            else:
+                self.status.emit("翻译完成")
             self.finished.emit({
                 "mono": mono_path,
                 "dual": dual_path,
@@ -1090,9 +1140,15 @@ class TranslateWorker(QThread):
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
-            # 取最后一行有意义的错误信息
-            msg = str(e) or tb.strip().split('\n')[-1]
-            self.error.emit(msg)
+            # issue #30: 网络策略判定为永久性错误时（Key 失效、余额不足…），
+            # 报它给出的中文原因，而不是底层那句 "task cancelled"
+            _ns = getattr(self, "_net_state", None)
+            if _ns is not None and _ns.aborted:
+                self.error.emit(_ns.abort_reason)
+            else:
+                # 取最后一行有意义的错误信息
+                msg = str(e) or tb.strip().split('\n')[-1]
+                self.error.emit(msg)
         finally:
             # 清理 OCR 预处理临时目录（output_dir/.pdf2zh_ocr_tmp/，含 OCR 文件 + pdf2zh 可能留下的中间产物）
             if self._ocr_tmp_path:
@@ -1306,8 +1362,14 @@ class TranslateWorker(QThread):
             if translator_cls is None:
                 continue
             if service_name == getattr(translator_cls, "name", None):
-                return translator_cls(self.lang_in, self.lang_out, service_model,
-                                       envs=self.envs or {}, ignore_cache=False)
+                # ignore_cache 在 macOS 打包的 pdf2zh 1.8.9 里是**类属性**不是构造
+                # 参数（BaseTranslator.__init__ 只收 lang_in/lang_out/model），
+                # 之前当成关键字传进去每次都抛 TypeError → 表格翻译被 except 静默
+                # 吞掉，界面上只闪一句「表格翻译跳过」。构造后再赋值才对。
+                _tr = translator_cls(self.lang_in, self.lang_out, service_model,
+                                     envs=self.envs or {})
+                _tr.ignore_cache = False
+                return _tr
         raise RuntimeError(f"未识别的翻译服务: {self.service}")
 
     def _translate_tables_postprocess(self, pdf_path, dual=False):
