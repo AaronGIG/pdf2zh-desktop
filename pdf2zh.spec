@@ -97,6 +97,10 @@ a = Analysis(
         'ctranslate2', 'argostranslate',
         'gradio', 'gradio_client',
         'matplotlib', 'scipy', 'pandas',
+        # v2.3.31: 系统 Python 里被别的项目装了 pyarrow/polars 等数据科学包后，
+        # huggingface_hub → fsspec 会顺着可选依赖把 pyarrow 整包（~100MB）带进来。
+        # 我们完全用不到，全部排除，别让打包机上碰巧装了什么就漂进用户的安装包。
+        'pyarrow', 'polars', 'narwhals', 'duckdb', 'plotly', 'pyarrow.fs',
         'tkinter', '_tkinter',
         'IPython', 'jupyter',
         'pytest', 'setuptools', 'pip', 'wheel',
@@ -157,8 +161,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'pdf2zh',
         'CFBundleDisplayName': 'pdf2zh-desktop',
-        'CFBundleVersion': '2.3.30',
-        'CFBundleShortVersionString': '2.3.30',
+        'CFBundleVersion': '2.3.31',
+        'CFBundleShortVersionString': '2.3.31',
         'LSMinimumSystemVersion': '13.0',
         'NSHighResolutionCapable': True,
         'LSApplicationCategoryType': 'public.app-category.productivity',
