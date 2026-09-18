@@ -101,7 +101,7 @@
 <nav class="top">
   <div class="inner">
     <a href="https://www.metaeidos.com/" target="_blank" rel="noopener" class="me-logo" title="MetaEidos · 北京知元智行科技有限公司">MetaEidos</a>
-    <span class="brand">pdf2zh-desktop<span class="ver">macOS · v2.3.32</span></span>
+    <span class="brand">pdf2zh-desktop<span class="ver">macOS · v2.3.33</span></span>
     <a href="#install" class="tab">安装</a>
     <a href="#sec-translate" class="tab">翻译</a>
     <a href="#sec-settings" class="tab">设置</a>
@@ -131,7 +131,7 @@
 <div class="wrap">
 
   <header class="hero">
-    <div class="eyebrow">macOS Edition · v2.3.32</div>
+    <div class="eyebrow">macOS Edition · v2.3.33</div>
     <h1>把外文论文翻成<span class="grad">中文 PDF</span><br>排版照旧、公式不糊</h1>
     <p class="sub">pdf2zh-desktop 是一款 macOS 学术 PDF 翻译工具，保留原始排版、公式、图表，支持多家翻译服务，自带阅读器与 AI 助手。本教程用真实截图带你走完每一步操作。</p>
     <div class="meta">
@@ -218,7 +218,7 @@
       <div class="step"><div class="badge">2</div><div class="body"><h4>拖放区</h4><p>把一个或多个 PDF 直接拖进来，也可以点击选择文件。<strong>支持批量</strong>：拖进 5 个文件就排队翻 5 个。</p></div></div>
       <div class="step"><div class="badge">3</div><div class="body"><h4>源语言</h4><p>原文语言。一般保持 <code>English</code>。如果你翻日文/德文，下拉选对应语种 — 选错会导致句子拆分错乱。</p></div></div>
       <div class="step"><div class="badge">4</div><div class="body"><h4>目标语言</h4><p>翻成什么语种。默认 <code>中文(简体)</code>，可改繁中、日、韩、英、俄、法、德、意、葡、西、阿等 20+ 语言。</p></div></div>
-      <div class="step"><div class="badge">5</div><div class="body"><h4>翻译服务</h4><p>核心选项。Google 免费但慢且需翻墙；DeepSeek/通义千问/智谱用 API Key，质量好且便宜。<a href="#api">→ 怎么选见下文</a></p></div></div>
+      <div class="step"><div class="badge">5</div><div class="body"><h4>翻译服务</h4><p>核心选项。<b>免费 Google 在国内很不稳（经常被限流，见下文）</b>；国内强烈建议 DeepSeek/通义千问/智谱，用 API Key，质量好、便宜、不用翻墙。<a href="#api">→ 怎么选见下文</a></p></div></div>
       <div class="step"><div class="badge">6</div><div class="body"><h4>页码范围</h4><p>默认全部。也可填 <code>1-10</code> 只翻前 10 页，或 <code>1,3,5-8</code> 跳着翻。<strong>建议先小范围试翻</strong>验证服务可用。</p></div></div>
       <div class="step"><div class="badge">7</div><div class="body"><h4>输出格式</h4><p>三选一：<strong>左右并排</strong>（推荐 · 原文译文同页对照）/ <strong>双语对照</strong>（先原文页后译文页）/ <strong>仅译文</strong>（只输出中文版）。</p></div></div>
       <div class="step"><div class="badge">8</div><div class="body"><h4>线程数</h4><p>同时跑多少个翻译请求。免费服务别开太大（容易封 IP），DeepSeek/通义建议 <code>16-32</code>，长文本翻得快。</p></div></div>
@@ -336,7 +336,7 @@
     </div>
 
     <div class="steps">
-      <div class="step"><div class="badge">1</div><div class="body"><h4>版本与简介</h4><p>左上角是当前版本号（v2.3.32）。下面是简短描述：「开箱即用的学术 PDF 翻译工具」。</p></div></div>
+      <div class="step"><div class="badge">1</div><div class="body"><h4>版本与简介</h4><p>左上角是当前版本号（v2.3.33）。下面是简短描述：「开箱即用的学术 PDF 翻译工具」。</p></div></div>
       <div class="step"><div class="badge">2</div><div class="body"><h4>macOS 版特性</h4><p>列出本版本的核心能力：原生设计、深色模式、Dual/Mono/Side by Side、历史管理、智能分块、触摸板手势、术语表、AI 问答、Zotero 联动等。</p></div></div>
       <div class="step"><div class="badge">3</div><div class="body"><h4>小红书账号</h4><p>「艾伦说」是项目作者的小红书号。发布更新预告、使用技巧、用户案例。点「关注」直接跳到主页。</p></div></div>
       <div class="step"><div class="badge">4</div><div class="body"><h4>GitHub ↗</h4><p>跳转到 <a href="https://github.com/AaronGIG/pdf2zh-desktop">仓库主页</a>。看 Release 页下载新版、看 Issue 报 bug、看 Star 涨了多少。</p></div></div>
@@ -360,7 +360,7 @@
       </div>
       <div class="dec-row">
         <div class="q">完全免费</div>
-        <div class="a"><strong>Google 翻译</strong> · 不要 Key · 但要稳定翻墙，且大文件容易被限流；适合临时小文件</div>
+        <div class="a"><strong>Google 翻译</strong> · 不要 Key · 但要翻墙，且<b>经常被限流</b>（与文件大小/线程数无关，见下方说明）；只适合偶尔试一下</div>
       </div>
       <div class="dec-row">
         <div class="q">国内不翻墙</div>
@@ -469,7 +469,7 @@
           <h5>Google 翻译</h5>
           <span class="tag free">免费</span>
         </div>
-        <p class="desc">不需要 Key，但需要稳定翻墙环境。质量一般，大文件容易被限流。<strong>仅用于第一次试用流程</strong>，正式用强烈建议切到 LLM 服务。</p>
+        <p class="desc">不需要 Key，但需要翻墙，质量一般，而且<b>经常整段被限流（429）翻不出来</b>——原因见下方「为什么免费 Google 老是被限流」。<strong>只适合第一次试一下</strong>，正式用强烈建议切到 DeepSeek 等 LLM 服务。</p>
         <div class="links">
           <a href="#sec-translate">→ 翻译页直接选</a>
         </div>
@@ -681,6 +681,13 @@
       <h2>常见问题</h2>
     </div>
     <div class="grid">
+      <div class="card" style="border-left:3px solid #ff9500">
+        <div class="top"><h5>为什么免费 Google 老是被限流（429）翻不出来？</h5></div>
+        <p class="desc"><b>这是免费 Google 的先天问题，不是你电脑或软件的毛病。</b><br>
+        软件里的「Google 翻译」用的是<b>免费蹭谷歌的公开网页接口</b>（不是付费 API）。谷歌不希望有人拿它批量翻译，于是<b>按「出口 IP」限流</b>：某个 IP 请求一多就整个封一段时间。<br>
+        而你翻墙用的落地节点，往往是<b>成百上千人共用的一个 IP</b>——大家的翻译请求全堆在这一个 IP 上，早被刷爆了，轮到你就是 429。所以<b>调小线程数、重试、换节点通常都没用</b>（实测：单线程、每 10 秒发一次，照样次次 429）。这也是为什么有人能用、有人不能——纯看你分到哪个节点。<br>
+        <b style="color:#1d6d3a">✅ 解决办法：国内改用 DeepSeek</b>（或通义千问/智谱）。它是你自己的付费 API，额度绑在<b>你的账号</b>上、跟 IP 无关，还不用翻墙，稳定又便宜。<a href="#api">→ 怎么申请 DeepSeek Key 见上文</a></p>
+      </div>
       <div class="card">
         <div class="top"><h5>翻译卡住不动 / 极慢？</h5></div>
         <p class="desc"><b>v2.3.29 起软件会直接告诉你原因</b>——先看界面上的提示。<br>
@@ -791,7 +798,7 @@
   </section>
 
   <footer>
-    <p>pdf2zh-desktop · macOS Edition · v2.3.32</p>
+    <p>pdf2zh-desktop · macOS Edition · v2.3.33</p>
     <p>基于 PDFMathTranslate / MuPDF / PyQt5 ·  <a href="https://github.com/AaronGIG/pdf2zh-desktop">GitHub</a> · QQ 群从「关于」页加</p>
     <p style="margin-top:14px;font-size:13px;color:#666">出品方 · <a href="https://www.metaeidos.com/" target="_blank" rel="noopener" style="font-family:'DM Sans','Noto Sans SC',sans-serif;font-weight:700;letter-spacing:-0.3px;color:#222">MetaEidos</a> 北京知元智行科技有限公司</p>
     <p style="margin-top:6px;font-size:11px;color:#aaa">本教程截图来自实际运行的 v2.3.4 · macOS 14 · 1421×894 窗口 · 截图已脱敏</p>
