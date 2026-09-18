@@ -1,12 +1,17 @@
 /*
- * pdf2zh Connector for Zotero  v1.0.18
+ * pdf2zh Connector for Zotero  v1.0.20
  *
  * 功能：
  *   1. HTTP 端点 /pdf2zh/attach — 接收 pdf2zh 翻译结果作为子附件（原有回写机制，一行不动）
  *   2. HTTP 端点 /pdf2zh/ping   — 健康检查（一行不动）
  *   3. NEW: 右键菜单「用 pdf2zh 翻译」— 唤起本地 pdf2zh app 翻译选中 PDF
  *
- * 兼容 Zotero 7 / 8 / 9（strict_min_version 6.999, strict_max_version 9.*）
+ * 兼容 Zotero 7+（strict_min_version 6.999, strict_max_version "*" 不设上限）。
+ * v1.0.20: 之前 strict_max_version 写死 "9.*"，Zotero 升级到 10 后被 Zotero
+ * 自动判定为不兼容并禁用整个插件——用户端表现就是"回写失效"，且没有任何
+ * 报错提示（插件从一开始就没启动，/pdf2zh/attach 端点根本没注册，本地
+ * 127.0.0.1:23119 连不上）。改成不设上限，避免每次 Zotero 出大版本都要
+ * 手动跟着发新版才能让老用户的插件继续可用。
  */
 
 /* exported startup, shutdown, install, uninstall */
@@ -90,7 +95,7 @@ function _makePingEndpoint() {
             return [200, 'application/json', JSON.stringify({
                 status: 'ok',
                 plugin: 'pdf2zh-desktop-connector',
-                version: '1.0.18'
+                version: '1.0.20'
             })];
         }
     };
