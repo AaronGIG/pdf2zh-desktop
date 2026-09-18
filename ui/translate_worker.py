@@ -1121,8 +1121,27 @@ class TranslateWorker(QThread):
             except Exception:
                 pass
 
-            # issue #30: 有段落因暂时性错误重试后仍失败（已保留原文），提示用户
+            # v2.3.32: 用户选了页码范围（如「仅首页」）时，把产物裁成只含这些页。
+            # pdf2zh 只翻选中页、但输出整篇文档，用户会看到「首页中文 + 其余全是
+            # 英文原文」，翻到后面就以为「没翻译」、看到全部页数就以为「翻了全部」。
+            if self.pages:
+                try:
+                    from pdf2zh.output_util import crop_to_pages
+                    for _p, _k in ((mono_path, "mono"), (dual_path, "dual"),
+                                   (sbs_path, "side_by_side")):
+                        if _p:
+                            crop_to_pages(_p, self.pages, _k)
+                except Exception as _e:
+                    print(f"[crop] 页码裁剪跳过: {_e}")
+
+            # v2.3.32: 大面积段落都保留了原文 —— 基本是网络/服务不通（最典型：
+            # 用 Google 翻译但没科学上网，每段都超时）。产物是一份没翻译的英文
+            # PDF，绝不能报「翻译完成」骗用户，必须当错误报出来。
             _ns = getattr(self, "_net_state", None)
+            if _ns is not None and _ns.mostly_failed:
+                self.error.emit(_ns.network_failure_message)
+                return
+            # 少量段落失败（网络偶发抖动）：正常完成，但把失败数提示出来
             if _ns is not None and _ns.failed_count:
                 self.status.emit(
                     f"翻译完成（{_ns.failed_count} 段失败已保留原文：{_ns.warnings[0][1]}）")
