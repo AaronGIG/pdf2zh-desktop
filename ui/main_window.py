@@ -5490,7 +5490,7 @@ class SettingsPage(QWidget):
         guide_card = _card("sm"); guide_lo = QVBoxLayout(guide_card)
         guide_lo.setContentsMargins(12,8,12,8); guide_lo.setSpacing(1)
         for tip in [
-            "Google / Bing 无需配置，开箱即用",
+            "Google / Bing 免费但常被限流（按 IP，国内建议改用 DeepSeek）",
             "OpenAI 兼容接口可对接任意第三方服务",
             "Ollama 本地需先启动服务",
             "50 页以上建议开启分块翻译",
