@@ -551,7 +551,11 @@ def _install_pdf2zh_color_fix():
                 _orig_init(self, *a, **kw)
                 try:
                     _m = (getattr(self, "model", "") or "").lower()
-                    if ("v4" in _m) or ("chat" in _m):
+                    # v2.3.33: DeepSeek 除 deepseek-reasoner(纯推理,尊重用户显式选择)外
+                    # 一律关思考。原来只认 "v4"/"chat"，但官方新名 deepseek-flash 两个都不含，
+                    # 会漏掉、默认走思考模式（实测裸调吐 429 字推理）→ 翻译又慢又可能漏译。
+                    # 实测 flash/v4-flash/v4-pro/chat/coder 加 thinking:disabled 都正常直出。
+                    if _m and "reasoner" not in _m:
                         if not getattr(self, "options", None):
                             self.options = {}
                         self.options["extra_body"] = {"thinking": {"type": "disabled"}}
@@ -744,7 +748,7 @@ def _load_active_glossary():
         return {}
 
 
-APP_VERSION = "2.3.32"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.33"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 

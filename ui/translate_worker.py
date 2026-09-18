@@ -867,7 +867,8 @@ class TranslateWorker(QThread):
             try:
                 from pdf2zh import net_policy
                 self._net_state = net_policy.install(
-                    cancellation_event=self._cancel_event)
+                    cancellation_event=self._cancel_event,
+                    service=self.service)
             except Exception as _e:   # 模块缺失不该让翻译跑不起来
                 self._net_state = None
                 print(f"[net_policy] 未启用: {_e}")
