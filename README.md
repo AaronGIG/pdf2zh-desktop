@@ -152,10 +152,12 @@
 
 ### 📥 第一步：下载
 
+> 👉 **[前往最新版下载页](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest)**（此链接始终指向最新版本，请在页面底部 **Assets** 里按平台下载）
+
 | 平台 | 下载 | 大小 | 启动方式 |
 |------|------|------|---------|
-| 🪟 Windows | [`pdf2zh-desktop-win-v2.3.9.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.9/pdf2zh-desktop-win-v2.3.9.zip) | ~287MB | 解压 → 双击 `pdf2zh.exe` |
-| 🍎 macOS | [`pdf2zh-desktop-mac-v2.3.9.zip`](https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.9/pdf2zh-desktop-mac-v2.3.9.zip) | ~228MB | 解压 → 双击 `pdf2zh.app` |
+| 🪟 Windows | [最新 Windows 版 →](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) 选 `pdf2zh-desktop-win-*.zip` | ~295MB | 解压 → 双击 `pdf2zh.exe` |
+| 🍎 macOS | [最新 macOS 版 →](https://github.com/AaronGIG/pdf2zh-desktop/releases/latest) 选 `pdf2zh-desktop-mac-*.zip` | ~280MB | 解压 → 双击 `pdf2zh.app` |
 
 ### 🖱️ 第二步：启动
 
