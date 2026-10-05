@@ -1,11 +1,12 @@
 @echo off
+chcp 936 >nul 2>&1
 setlocal enabledelayedexpansion
 
 :: pdf2zh 桌面版一键安装脚本
 title pdf2zh 桌面版 - 安装程序
 
 echo ================================================================
-echo   pdf2zh 桌面版 v2.3.9 - 一键安装程序
+echo   pdf2zh 桌面版 v2.3.34 - 一键安装程序
 echo   PDF 文档翻译工具
 echo ================================================================
 echo.

@@ -1,4 +1,5 @@
 @echo off
+chcp 936 >nul 2>&1
 setlocal enabledelayedexpansion
 
 :: pdf2zh ×ÀÃæ°æÅäÖÃ¹ÜÀíÆ÷

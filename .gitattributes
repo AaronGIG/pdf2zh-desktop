@@ -6,3 +6,6 @@
 *.exe filter=lfs diff=lfs merge=lfs -text
 *.so filter=lfs diff=lfs merge=lfs -text
 *.dylib filter=lfs diff=lfs merge=lfs -text
+
+# Windows 批处理脚本必须 CRLF 行尾，否则 cmd.exe 乱解析(2026-10 修 install.bat 报错屏)
+*.bat text eol=crlf
