@@ -281,6 +281,12 @@
 
 ## 📋 更新日志
 
+### v2.3.35（2026-10-12）
+
+- 🐛 **修复 Windows 下 Zotero 自定义数据目录的译文「没写回、跑到软件目录」**（仅 Windows）：当 Zotero Connector 插件没响应时（最常见是把 Zotero 升级到 9/10 后旧插件被禁用，或翻译时 Zotero 没开着），译文不会再孤零零留在软件目录的 `pdf2zh_files` 文件夹，而是**兜底存回该文献在 Zotero 里所在的文件夹（含你自定义的数据目录）**，和原文献放在一起、方便找到。根因是 Windows 端在「插件没响应」时提前返回、跳过了这个兜底拷贝（macOS 端一直没这个问题，本次把 Windows 行为对齐到 macOS）。<br>
+  想让译文**真正自动挂进 Zotero** 成为子附件：请到软件「设置」页点「一键安装」把 Connector 插件更新到最新版，并在翻译时保持 Zotero 开着，然后重新翻译。
+- macOS 端行为不变，本版仅版本号跟进。
+
 ### v2.3.34（2026-10-05）
 
 - 🐛 **修复 Windows 的 `.bat` 脚本一跑就满屏「不是内部或外部命令」**（仅 Windows）：双击 `install.bat`（或其它 `.bat`）会刷出一屏报错、中间还夹着乱码。根因是**这些脚本的行尾是 Unix 的 LF，而 Windows 的 `cmd.exe` 跑批处理必须用 CRLF**——LF 会让 cmd 乱切行，把本该显示的提示文字当成命令执行。7 个 `.bat`（install / uninstall / config_manager / diagnostic / debug_start / module_manager / pdf2zh.bat）全部转成 CRLF，并在开头加 `chcp 936`（让非中文 Windows 也能正确显示中文）。真机 A/B 验证：旧版 16 处报错 → 新版 0 处。<br>
