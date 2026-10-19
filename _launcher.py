@@ -72,6 +72,22 @@ def preload_onnxruntime():
         if os.path.isdir(onnx_dll_dir):
             os.add_dll_directory(os.path.abspath(onnx_dll_dir))
 
+    # v2.3.37 (issue #35): onnxruntime 1.21 需要较新的 VC++ C++ 运行库（MSVCP140 / MSVCP140_1）。
+    # 用户电脑上只有旧版运行库时，onnxruntime 会报「DLL load failed ... 动态链接库(DLL)初始化
+    # 例程失败」，AI 版面检测用不了；install.bat 又只看注册表键在不在、不看版本，旧版也当已安装跳过。
+    # 安装包里 pikepdf 自带 14.42 版运行库：在任何模块加载 msvcp140 之前按完整路径先载入它，
+    # 整个进程（onnxruntime、Qt）统一用这一份，不再依赖系统里装的是哪个版本。
+    crt_dir = os.path.join(app_dir, 'core', 'site-packages', 'pikepdf')
+    try:
+        import ctypes
+        for dll in ('msvcp140.dll', 'msvcp140_1.dll'):
+            p = os.path.join(crt_dir, dll)
+            if os.path.isfile(p):
+                ctypes.WinDLL(os.path.abspath(p))
+        log(f"已载入安装包自带的 VC++ 运行库: {crt_dir}")
+    except Exception as e:
+        log(f"载入自带 VC++ 运行库失败（改用系统运行库）: {e}")
+
     result = [None]
     def _load():
         try:

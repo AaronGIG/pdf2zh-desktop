@@ -44,7 +44,7 @@ echo [2/6] 删除桌面快捷方式...
 set "DESKTOP=%USERPROFILE%\Desktop"
 del "%DESKTOP%\pdf2zh 桌面版.lnk" 2>nul
 if exist "%DESKTOP%\pdf2zh 桌面版.lnk" (
-    echo [!] 无法删除桌面快捷方式
+    echo [*] 无法删除桌面快捷方式
 ) else (
     echo [✓] 桌面快捷方式已删除
 )

@@ -39,18 +39,33 @@ if %errorlevel% == 0 (
 :: 检查 VC++ Redistributable
 echo.
 echo [2/6] 检查 Visual C++ 运行库...
-reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" >nul 2>&1
-if %errorlevel% == 0 (
-    echo [√] Visual C++ Redistributable 已安装
+set "VC_OK=0"
+set "VC_MINOR="
+set "VC_MINOR_DEC=0"
+for /f "tokens=3" %%a in ('reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" /v Minor 2^>nul ^| find /i "Minor"') do set "VC_MINOR=%%a"
+if defined VC_MINOR set /a VC_MINOR_DEC=!VC_MINOR!
+rem v2.3.37: onnxruntime 1.21 需要 14.40 以上的运行库；旧版只看注册表键在不在，旧运行库也当已安装跳过
+if !VC_MINOR_DEC! GEQ 40 set "VC_OK=1"
+if "!VC_OK!"=="1" (
+    echo [√] Visual C++ 运行库已安装（14.!VC_MINOR_DEC!）
 ) else (
-    echo [!] 需要安装 Visual C++ Redistributable
+    if defined VC_MINOR (
+        echo [注意] Visual C++ 运行库版本过旧（14.!VC_MINOR_DEC!），需要更新
+    ) else (
+        echo [注意] 需要安装 Visual C++ 运行库
+    )
     if exist "%INSTALL_DIR%VC_redist.x64.exe" (
         echo 正在安装 VC++ 运行库...
-        "%INSTALL_DIR%VC_redist.x64.exe" /quiet /norestart
-        if %errorlevel% == 0 (
+        "%INSTALL_DIR%VC_redist.x64.exe" /install /quiet /norestart
+        set "VC_RC=!errorlevel!"
+        if "!VC_RC!"=="0" (
             echo [√] VC++ 运行库安装成功
+        ) else if "!VC_RC!"=="3010" (
+            echo [√] VC++ 运行库安装成功（建议重启电脑）
+        ) else if "!VC_RC!"=="1638" (
+            echo [√] 已有更新版本的 VC++ 运行库
         ) else (
-            echo [×] VC++ 运行库安装失败
+            echo [×] VC++ 运行库安装失败（代码 !VC_RC!）
             pause
             exit /b 1
         )
@@ -102,7 +117,7 @@ powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = 
 if exist "%SHORTCUT%" (
     echo [√] 桌面快捷方式创建成功
 ) else (
-    echo [!] 桌面快捷方式创建失败（不影响使用，可手动双击 pdf2zh.bat 启动）
+    echo [注意] 桌面快捷方式创建失败（不影响使用，可手动双击 pdf2zh.bat 启动）
 )
 
 :: 安装完成

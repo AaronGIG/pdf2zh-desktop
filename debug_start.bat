@@ -84,7 +84,7 @@ reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" /v Version
 if %errorlevel% equ 0 (
     echo [✓] VC++ 运行库 (AI布局检测可用)
 ) else (
-    echo [!] VC++ 运行库未安装 (AI布局检测不可用，翻译功能不受影响)
+    echo [*] VC++ 运行库未安装 (AI布局检测不可用，翻译功能不受影响)
     echo     运行 VC_redist.x64.exe 或 install.bat 安装
 )
 goto :eof

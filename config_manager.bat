@@ -170,7 +170,7 @@ if exist "%CONFIG_DIR%" (
     xcopy "%CONFIG_DIR%\*" "%BACKUP_DIR%\" /y >nul
     echo [✓] 配置文件已备份到: %BACKUP_DIR%
 ) else (
-    echo [!] 配置目录不存在
+    echo [*] 配置目录不存在
 )
 pause
 goto menu
@@ -190,7 +190,7 @@ if exist "%backup_name%" (
         echo [✓] 配置已从 %backup_name% 恢复
     )
 ) else (
-    echo [!] 备份目录不存在: %backup_name%
+    echo [*] 备份目录不存在: %backup_name%
 )
 pause
 goto menu
@@ -209,21 +209,21 @@ if "%edit_choice%"=="1" (
     if exist "%APP_CONFIG%" (
         notepad "%APP_CONFIG%"
     ) else (
-        echo [!] 文件不存在: %APP_CONFIG%
+        echo [*] 文件不存在: %APP_CONFIG%
     )
 )
 if "%edit_choice%"=="2" (
     if exist "%USER_CONFIG%" (
         notepad "%USER_CONFIG%"
     ) else (
-        echo [!] 文件不存在: %USER_CONFIG%
+        echo [*] 文件不存在: %USER_CONFIG%
     )
 )
 if "%edit_choice%"=="3" (
     if exist "%MODULES_CONFIG%" (
         notepad "%MODULES_CONFIG%"
     ) else (
-        echo [!] 文件不存在: %MODULES_CONFIG%
+        echo [*] 文件不存在: %MODULES_CONFIG%
     )
 )
 if "%edit_choice%"=="0" goto menu
@@ -248,7 +248,7 @@ for %%f in ("%APP_CONFIG%" "%USER_CONFIG%" "%MODULES_CONFIG%") do (
         }
         "
     ) else (
-        echo [!] 文件不存在: %%f
+        echo [*] 文件不存在: %%f
     )
 )
 
@@ -285,7 +285,7 @@ if "%ie_choice%"=="2" (
             echo [✓] 配置包已导入
         )
     ) else (
-        echo [!] 文件不存在: !import_file!
+        echo [*] 文件不存在: !import_file!
     )
 )
 

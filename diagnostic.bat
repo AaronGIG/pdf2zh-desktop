@@ -175,18 +175,18 @@ echo [问题分析]
 set "ISSUES_FOUND=0"
 
 if not exist "core\runtime\python.exe" (
-    echo [!] 问题: Python 运行时未安装
+    echo [*] 问题: Python 运行时未安装
     set /a ISSUES_FOUND+=1
 )
 
 if not exist "core\site-packages\pdf2zh" (
-    echo [!] 问题: pdf2zh 库未安装
+    echo [*] 问题: pdf2zh 库未安装
     set /a ISSUES_FOUND+=1
 )
 
 reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] 问题: VC++ 运行库未安装
+    echo [*] 问题: VC++ 运行库未安装
     set /a ISSUES_FOUND+=1
 )
 
@@ -194,20 +194,20 @@ for /f %%p in ('powershell -command "[math]::Floor((Get-CimInstance Win32_Comput
     set "MEMORY_GB=%%p"
 )
 if %MEMORY_GB% LSS 4 (
-    echo [!] 问题: 系统内存不足 (%MEMORY_GB%GB^<4GB)
+    echo [*] 问题: 系统内存不足 (%MEMORY_GB%GB^<4GB)
     set /a ISSUES_FOUND+=1
 )
 
 ping -n 1 google.com >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] 问题: 网络连接异常
+    echo [*] 问题: 网络连接异常
     set /a ISSUES_FOUND+=1
 )
 
 if %ISSUES_FOUND% == 0 (
     echo [✓] 未发现明显问题
 ) else (
-    echo [!] 发现 %ISSUES_FOUND% 个问题
+    echo [*] 发现 %ISSUES_FOUND% 个问题
 )
 
 echo.
