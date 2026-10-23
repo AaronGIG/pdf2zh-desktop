@@ -926,6 +926,24 @@ class TranslateWorker(QThread):
             # 预处理链
             actual_file = self.file_path
 
+            # v2.3.39 (issue #35 后续): 源 PDF 里有坏对象时（MuPDF 报 cannot parse object），
+            # pdf2zh 翻译开头另存就会失败。修好的副本放输出目录的临时文件夹（文件名不变，产物
+            # 命名照旧；不动用户原文件，Zotero 回写仍按原文件找条目），结束时由下方清理删除。
+            try:
+                from pdf2zh.output_util import repair_pdf_bytes, SourcePdfError
+                with open(actual_file, "rb") as _f:
+                    _fixed, _how = repair_pdf_bytes(_f.read())
+                if _fixed is not None:
+                    _rdir = os.path.join(self.output_dir, ".pdf2zh_repair_tmp")
+                    os.makedirs(_rdir, exist_ok=True)
+                    actual_file = os.path.join(_rdir, os.path.basename(self.file_path))
+                    with open(actual_file, "wb") as _f:
+                        _f.write(_fixed)
+                    self.status.emit("这份 PDF 内部有损坏的数据，已自动修复，继续翻译…")
+            except SourcePdfError as e:
+                self.error.emit(str(e))
+                return
+
             # 翻译参数基础模板（pdf2zh 1.8.9 兼容）
             base_param = dict(
                 files=[actual_file],
