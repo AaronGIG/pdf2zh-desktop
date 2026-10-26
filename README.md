@@ -167,6 +167,7 @@
   - 🟡 **想要桌面图标 / 开始菜单，建议做一次**：双击 **`install.bat`**（顺带自动检查/安装 VC++ 运行库；跑完就没用了，不做也完全不影响用 `pdf2zh.exe` 正常使用，只是桌面上不会有图标）
   - 🟡 **遇到问题**：双击 `debug_start.bat`（看启动日志）或 `diagnostic.bat`（系统诊断）；改设置用 `config_manager.bat`
   - 🔴 **卸载**：双击 `uninstall.bat`
+  - ⚠️ 首次双击提示「**Windows 已保护你的电脑**」（Microsoft Defender SmartScreen）：不是病毒，是软件没有购买微软商业签名证书，Windows 对从网上下载的新程序都会先拦一下。点窗口里的「**更多信息**」→「**仍要运行**」即可；若每次都弹，右键下载的 zip →「属性」→ 勾选「**解除锁定**」→ 确定，再重新解压
   - ⚠️ `install.bat`/`uninstall.bat`/`debug_start.bat`/`diagnostic.bat`/`config_manager.bat` 这几个是批处理脚本，v2.3.9 起已修复中文 Windows 上的编码乱码问题；`pdf2zh.exe`/`pdf2zh.vbs` 不受此类问题影响，追求最稳就选它们
 - **macOS**：双击 `pdf2zh.app`；首次启动若提示「**已损坏，无法打开**」，终端跑一行：`xattr -cr /Applications/pdf2zh.app`，或 Finder 里**右键 → 打开**
 
@@ -264,7 +265,8 @@
 
 | 😰 遇到了啥？ | 💡 这样解决 |
 | --- | --- |
-| 双击 vbs 报"不兼容" | Windows 11 24H2 废弃了 VBScript，请改用 `pdf2zh.bat` |
+| Windows 提示「Windows 已保护你的电脑」 | 系统的 SmartScreen 拦截（软件未购买商业签名证书），不是病毒：点「更多信息」→「仍要运行」；若每次都弹，右键 zip →「属性」→ 勾选「解除锁定」后重新解压 |
+| 双击 vbs 报"不兼容" | Windows 11 24H2 废弃了 VBScript，请改用 `pdf2zh.exe`（或 `pdf2zh.bat`） |
 | macOS 提示"无法验证开发者" | 右键 → 打开 → 确认（仅需一次） |
 | 翻译中途断了 | 检查磁盘空间，重启后自动从缓存续接 |
 | 排版错乱 / 乱码 | 试试勾选「跳过字体子集」 |
