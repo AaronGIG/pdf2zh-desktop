@@ -194,6 +194,7 @@ OUTPUT_MODES = {
     "双语交替 (Dual)": "dual",
     "仅翻译 (Mono)": "mono",
     "左右并排 (Side by Side)": "side_by_side",
+    "全部格式（单语+双语+并排）": "all",   # v2.3.40: 三种都保留
 }
 
 
@@ -911,13 +912,16 @@ class TranslateWorker(QThread):
                         create_side_by_side_pdf(mono_path, dual_path, sbs_path)
                     except Exception as e:
                         sbs_path = ""; self.status.emit(f"并排版生成失败: {e}")
-                try:
-                    if "mono" not in output_formats and mono_path and os.path.exists(mono_path):
-                        os.remove(mono_path); mono_path = ""
-                    if "dual" not in output_formats and dual_path and os.path.exists(dual_path):
-                        os.remove(dual_path); dual_path = ""
-                except Exception:
-                    pass
+                # v2.3.40: 所选格式一个都没生成出来（如拼并排版失败）时不删，免得什么都拿不到
+                _have = {"mono": mono_path, "dual": dual_path, "side_by_side": sbs_path}
+                if any(_have.get(f) and os.path.exists(_have[f]) for f in output_formats):
+                    try:
+                        if "mono" not in output_formats and mono_path and os.path.exists(mono_path):
+                            os.remove(mono_path); mono_path = ""
+                        if "dual" not in output_formats and dual_path and os.path.exists(dual_path):
+                            os.remove(dual_path); dual_path = ""
+                    except Exception:
+                        pass
                 self.status.emit("翻译完成")
                 self.finished.emit({"mono": mono_path, "dual": dual_path,
                                     "side_by_side": sbs_path, "table_translate_result": None})
@@ -1132,13 +1136,16 @@ class TranslateWorker(QThread):
                 sbs_path = ""
 
             # 删掉用户不要的中间文件（比如只要 side_by_side 时删 mono/dual）
-            try:
-                if "mono" not in output_formats and mono_path and os.path.exists(mono_path):
-                    os.remove(mono_path); mono_path = ""
-                if "dual" not in output_formats and dual_path and os.path.exists(dual_path):
-                    os.remove(dual_path); dual_path = ""
-            except Exception:
-                pass
+            # v2.3.40: 所选格式一个都没生成出来（如拼并排版失败）时不删，免得什么都拿不到
+            _have = {"mono": mono_path, "dual": dual_path, "side_by_side": sbs_path}
+            if any(_have.get(f) and os.path.exists(_have[f]) for f in output_formats):
+                try:
+                    if "mono" not in output_formats and mono_path and os.path.exists(mono_path):
+                        os.remove(mono_path); mono_path = ""
+                    if "dual" not in output_formats and dual_path and os.path.exists(dual_path):
+                        os.remove(dual_path); dual_path = ""
+                except Exception:
+                    pass
 
             # v2.3.32: 用户选了页码范围（如「仅首页」）时，把产物裁成只含这些页。
             # pdf2zh 只翻选中页、但输出整篇文档，用户会看到「首页中文 + 其余全是

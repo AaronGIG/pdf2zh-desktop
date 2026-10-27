@@ -748,7 +748,7 @@ def _load_active_glossary():
         return {}
 
 
-APP_VERSION = "2.3.39"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.40"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -3736,6 +3736,14 @@ class TranslatePage(QWidget):
         outer_lo.addStretch(2)  # 下部弹性稍大 — 视觉重心偏上
 
         self._update_dice()  # 初始化骰子状态
+        # v2.3.40: 控件都按配置初始化完之后再接上「一改就保存」，初始化过程不触发写盘
+        self.svc_combo.currentTextChanged.connect(lambda _: self._save_prefs_now())
+        self.fmt_combo.currentTextChanged.connect(lambda _: self._save_prefs_now())
+        self.thread_spin.valueChanged.connect(lambda _: self._save_prefs_now())
+        self.auto_gloss_check.toggled.connect(lambda _: self._save_prefs_now())
+        self.chunk_check.toggled.connect(lambda _: self._save_prefs_now())
+        self.chunk_size_spin.valueChanged.connect(lambda _: self._save_prefs_now())
+        self.chunk_delay_spin.valueChanged.connect(lambda _: self._save_prefs_now())
         scroll.setWidget(content)
         page_lo = QVBoxLayout(self); page_lo.setContentsMargins(0,0,0,0); page_lo.addWidget(scroll)
 
@@ -3927,6 +3935,27 @@ class TranslatePage(QWidget):
         except Exception:
             pass  # 保存失败不影响翻译主流程
 
+    def _save_prefs_now(self):
+        """v2.3.40: 翻译页的选项一改就保存（之前只在点「开始翻译」时才存，改完没翻译就关掉，
+        下次打开又回到原样）。和 _save_langs_now 一样：读磁盘上的配置、只更新这几项再写回，
+        不碰设置页存的 API Key 等字段。"""
+        try:
+            cfg = UserConfigManager.load() or {}
+            vals = {
+                "service": self.svc_combo.currentText(),
+                "output_format": self.fmt_combo.currentText(),
+                "thread_count": self.thread_spin.value(),
+                "auto_glossary": self.auto_gloss_check.isChecked(),
+                "chunk_enabled": self.chunk_check.isChecked(),
+                "chunk_size": self.chunk_size_spin.value(),
+                "chunk_delay": self.chunk_delay_spin.value(),
+            }
+            cfg.update(vals)
+            UserConfigManager.save(cfg)
+            self.cfg.update(vals)   # 同步内存 cfg，避免之后 _save_config 用旧值覆盖
+        except Exception:
+            pass  # 保存失败不影响翻译主流程
+
     def _save_config(self):
         self.cfg["service"] = self.svc_combo.currentText()
         self.cfg["lang_in"] = self.src_combo.currentText()
@@ -4059,6 +4088,19 @@ class TranslatePage(QWidget):
             self.worker.output_formats = [_cli_fmt]
             # 用完清掉，避免影响下次手动翻译
             self._cli_format = None
+        elif not _cli_fmt:
+            # v2.3.40: 手动翻译也按「输出格式」只保留选中的那种（之前下拉只被保存、没被用到，
+            # 三种全出）。核心照常产出，worker 在最后删掉没选的；文献来自 Zotero 时，
+            # Zotero 回写要用的格式一并保留。选「全部格式」时不设，三种都留。
+            _sel = OUTPUT_MODES.get(self.fmt_combo.currentText(), "all")
+            if _sel != "all":
+                _fmts = {_sel}
+                try:
+                    if detect_zotero_source(fp) or find_zotero_key_by_path(fp):
+                        _fmts |= set(UserConfigManager.load().get("zotero_output_modes", ["side_by_side"]) or [])
+                except Exception:
+                    _fmts = {"mono", "dual", "side_by_side"}   # 判断不了就全留
+                self.worker.output_formats = sorted(_fmts)
         self.worker.progress.connect(self._on_prog)
         self.worker.status.connect(self._on_status)
         self.worker.finished.connect(self._on_single_done)
@@ -5172,7 +5214,7 @@ class SettingsPage(QWidget):
         "Gemini":          {"key_ph":"密钥",  "models":["gemini-pro","gemini-1.5-pro","gemini-1.5-flash","gemini-2.0-flash"], "url":""},
         "Groq":            {"key_ph":"密钥",  "models":["llama-3.1-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768","llama-3.3-70b-versatile"], "url":"https://api.groq.com/openai/v1"},
         # 国产大模型
-        "Zhipu 智谱":     {"key_ph":"密钥",  "models":["glm-4","glm-4-flash","glm-4-plus","glm-3-turbo","cogview-3"], "url":"https://open.bigmodel.cn/api/paas/v4"},
+        "Zhipu 智谱":     {"key_ph":"密钥",  "models":["glm-4-flash","glm-4-plus","glm-4-air","glm-4"], "url":"https://open.bigmodel.cn/api/paas/v4"},
         "Qwen 通义千问":  {"key_ph":"密钥",  "models":["qwen-turbo","qwen-plus","qwen-max","qwen-long"], "url":"https://dashscope.aliyuncs.com/compatible-mode/v1"},
         "Tencent 腾讯":   {"key_ph":"密钥",  "models":["hunyuan-pro","hunyuan-standard","hunyuan-lite"], "url":""},
         "Silicon 硅基流动":{"key_ph":"密钥",  "models":["deepseek-ai/DeepSeek-V3","Qwen/Qwen2.5-72B-Instruct","Pro/THUDM/glm-4-9b-chat"], "url":"https://api.siliconflow.cn/v1"},
