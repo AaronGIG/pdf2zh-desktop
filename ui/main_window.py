@@ -748,7 +748,7 @@ def _load_active_glossary():
         return {}
 
 
-APP_VERSION = "2.3.41"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.42"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -5411,6 +5411,13 @@ class SettingsPage(QWidget):
         _pref_grid.addWidget(self.cache_check, 0, 1)
         _pref_grid.addWidget(self.ai_check, 1, 0)
         _pref_grid.addWidget(self.font_check, 1, 1)
+        # v2.3.42: 一键更新开关（默认开：有新版本时后台下载好，重启或下次打开就是新版本）
+        self.auto_update_check = QCheckBox("自动更新")
+        self.auto_update_check.setToolTip("有新版本时在后台下载好，点「重启更新」或下次打开软件就是新版本；\n"
+                                          "关掉后只提示，不自动下载")
+        self.auto_update_check.setChecked(bool(UserConfigManager.load().get("auto_update", True)))
+        self.auto_update_check.toggled.connect(self._save_auto_update)
+        _pref_grid.addWidget(self.auto_update_check, 2, 0)
         cl.addLayout(_pref_grid)
         self.theme_row = QWidget(); tr_lo = QHBoxLayout(self.theme_row)
         tr_lo.setContentsMargins(0,2,0,2); tr_lo.setSpacing(6)
@@ -5758,6 +5765,11 @@ class SettingsPage(QWidget):
         path, _ = QFileDialog.getSaveFileName(self, "导出模板", "pdf2zh_prompts.json", "JSON (*.json)")
         if path:
             PromptTemplateManager.export_to_file(path)
+
+    def _save_auto_update(self, on):
+        cfg = UserConfigManager.load()
+        cfg["auto_update"] = bool(on)
+        UserConfigManager.save(cfg)
 
     def _set_theme_color(self, hex_color):
         """切换主题色并即时应用"""
@@ -6111,6 +6123,14 @@ class AboutPage(QWidget):
         self._update_dismiss_btn.setCursor(Qt.PointingHandCursor); self._update_dismiss_btn.setVisible(False)
         self._update_dismiss_btn.setToolTip("忽略此版本(下次仍会提示更新的版本)")
         top.addWidget(self._update_dismiss_btn)
+        # v2.3.42: 手动检查更新 + 状态（自动更新的进度也显示在这里）
+        self._chk_update_btn = QPushButton("检查更新"); self._chk_update_btn.setObjectName("Gh")
+        self._chk_update_btn.setCursor(Qt.PointingHandCursor)
+        self._chk_update_btn.clicked.connect(
+            lambda: self.window()._check_for_update(manual=True) if hasattr(self.window(), "_check_for_update") else None)
+        top.addWidget(self._chk_update_btn)
+        self._update_status = QLabel(""); self._update_status.setObjectName("Cap")
+        top.addWidget(self._update_status)
         top.addStretch()
         gb = QPushButton("GitHub ↗"); gb.setObjectName("Gh"); gb.setCursor(Qt.PointingHandCursor)
         gb.clicked.connect(lambda: webbrowser.open("https://github.com/AaronGIG/pdf2zh-desktop"))
@@ -6276,6 +6296,9 @@ class AboutPage(QWidget):
         cols.addLayout(right, 7)
 
         lo.addLayout(cols)
+
+    def set_update_status(self, text):
+        self._update_status.setText(text)
 
     def show_update_notice(self, version, url):
         """v2.3.7: 显示"有新版本"提示; 只提示, 不下载不替换任何文件"""
@@ -6563,7 +6586,23 @@ class MainWindow(QMainWindow):
         sp = SettingsPage(); ap = AboutPage()
         for name, page in [("翻译",tp),("阅读",rp),("设置",sp),("关于",ap)]:
             self.stack.addWidget(page); self.pages[name] = page
-        root.addWidget(self.stack)
+        # v2.3.42: 一键更新横幅（平时隐藏，放在内容区最上方）
+        _content = QWidget(); _cl = QVBoxLayout(_content)
+        _cl.setContentsMargins(0, 0, 0, 0); _cl.setSpacing(0)
+        self._upd_banner = QFrame(); self._upd_banner.setObjectName("UpdBanner")
+        _bl = QHBoxLayout(self._upd_banner); _bl.setContentsMargins(16, 8, 12, 8); _bl.setSpacing(10)
+        self._upd_text = QLabel(""); self._upd_text.setWordWrap(True)
+        _bl.addWidget(self._upd_text, 1)
+        self._upd_action = QPushButton(""); self._upd_action.setObjectName("Pr")
+        self._upd_action.setCursor(Qt.PointingHandCursor)
+        _bl.addWidget(self._upd_action)
+        self._upd_close = QPushButton("✕"); self._upd_close.setObjectName("Gh")
+        self._upd_close.setCursor(Qt.PointingHandCursor); self._upd_close.setToolTip("先不更新（下次退出软件时仍会自动换上已下载好的新版本）")
+        self._upd_close.clicked.connect(lambda: self._upd_banner.setVisible(False))
+        _bl.addWidget(self._upd_close)
+        self._upd_banner.setVisible(False)
+        _cl.addWidget(self._upd_banner); _cl.addWidget(self.stack, 1)
+        root.addWidget(_content)
 
         # 信号连接
         sp.dark_mode_changed.connect(self._toggle_dark)
@@ -6604,31 +6643,152 @@ class MainWindow(QMainWindow):
         if now.hour == 3 and 25 <= now.minute <= 35:
             QTimer.singleShot(800, self._midnight_bloom)
 
-        # ── v2.3.7: 启动后检查更新(只检测+提示, 不下载不替换任何文件) ──
+        # ── v2.3.42: 一键更新。启动 3 秒后检查；能自动装就后台下载，下好后横幅提示「重启更新」，
+        # 不点的话下次退出软件时自动换上。上次更新的结果在启动后提示一次。 ──
+        self._update_launched = False
+        self._upd_worker = None
+        QTimer.singleShot(1_500, self._report_last_update)
         QTimer.singleShot(3_000, self._check_for_update)
+        QApplication.instance().aboutToQuit.connect(self._apply_update_on_quit)
 
-    def _check_for_update(self):
-        self._update_worker = UpdateCheckWorker()
-        self._update_worker.found.connect(self._on_update_found)
-        self._update_worker.start()
-
-    def _on_update_found(self, version, url):
+    def _show_upd_banner(self, text, action_text="", action=None, closable=True):
+        self._upd_text.setText(text)
         try:
-            cur = tuple(int(x) for x in APP_VERSION.split("."))
-            new = tuple(int(x) for x in version.split("."))
+            self._upd_action.clicked.disconnect()
+        except TypeError:
+            pass
+        self._upd_action.setVisible(bool(action_text))
+        if action_text:
+            self._upd_action.setText(action_text)
+            self._upd_action.clicked.connect(action)
+        self._upd_close.setVisible(closable)
+        c = _C
+        self._upd_banner.setStyleSheet(
+            f"QFrame#UpdBanner{{background:{c['acc_l']};border-bottom:0.5px solid {c['brd']};}}"
+            f"QFrame#UpdBanner QLabel{{background:transparent;font-size:13px;color:{c['t1']};}}")
+        self._upd_banner.setVisible(True)
+
+    def _report_last_update(self):
+        if getattr(self, "_upd_reported", False):
+            return
+        self._upd_reported = True   # 必须先于检查更新：失败的版本要先记下来，检查时才不会再下载它
+        try:
+            from pdf2zh import self_update as su
+            res = su.on_startup(APP_VERSION)
         except Exception:
             return
-        if new <= cur:
+        if not res:
+            return
+        if res.get("ok"):
+            self._show_upd_banner(f"✓ 已更新到 v{APP_VERSION}")
+            QTimer.singleShot(10_000, lambda: self._upd_banner.setVisible(False))
+        else:
+            self._upd_failed_shown = True
+            url = "https://github.com/AaronGIG/pdf2zh-desktop/releases/latest"
+            self._show_upd_banner(
+                f"自动更新到 v{res.get('version')} 没有成功，当前仍是 v{APP_VERSION}，可以到 GitHub 手动下载新版本。",
+                "前往下载", lambda: webbrowser.open(url))
+
+    def _check_for_update(self, manual=False):
+        """manual=True：关于页「检查更新」按钮，结果都要告诉用户；自动检查只在有新版时出声"""
+        if self._upd_worker is not None and self._upd_worker.isRunning():
+            return
+        self._report_last_update()
+        try:
+            from pdf2zh import self_update as su
+        except Exception:
+            return
+        auto = (UserConfigManager.load() or {}).get("auto_update", True)
+        self._upd_manual = manual
+        self._upd_worker = su.qt_worker_class()(APP_VERSION, download=(auto or manual))
+        self._upd_worker.state.connect(self._on_update_state)
+        self._upd_worker.start()
+        ap = self.pages.get("关于")
+        if manual and ap:
+            ap.set_update_status("正在检查更新…")
+
+    def _on_update_state(self, kind, data):
+        ap = self.pages.get("关于")
+        manual = getattr(self, "_upd_manual", False)
+        status = (lambda t: ap.set_update_status(t)) if ap else (lambda t: None)
+        if kind == "none":
+            if manual:
+                status(f"已是最新版本 v{APP_VERSION}")
+        elif kind == "error":
+            if manual:
+                status("检查更新失败：连不上 GitHub，请稍后再试")
+        elif kind == "manual":
+            ver, url = data.get("version"), data.get("release_url")
+            if not manual and (UserConfigManager.load() or {}).get("dismissed_update_version") == ver:
+                return
+            if not manual and getattr(self, "_upd_failed_shown", False):
+                return   # 「自动更新没有成功」的横幅已经在提示手动下载了
+            if ap:
+                ap.show_update_notice(ver, url)
+            reason = data.get("reason") or ""
+            status(f"新版本 v{ver} 需要手动下载" + (f"（{reason}）" if reason else ""))
+        elif kind == "available":
+            self._show_upd_banner(f"发现新版本 v{data.get('version')}。", "立即更新",
+                                  lambda: self._check_for_update(manual=True))
+        elif kind == "downloading":
+            status(f"正在下载新版本 v{data.get('version')}…")
+            if manual:
+                self._show_upd_banner(f"正在下载新版本 v{data.get('version')}…", closable=True)
+        elif kind == "progress":
+            status(f"正在下载新版本… {data}%")
+            if manual and self._upd_banner.isVisible():
+                self._upd_text.setText(f"正在下载新版本… {data}%")
+        elif kind == "ready":
+            ver = data.get("version")
+            first = (data.get("notes") or "").strip().splitlines()
+            tip = f"（{first[0][:60]}）" if first else ""
+            self._show_upd_banner(f"新版本 v{ver} 已准备好{tip}。重启即可更新，设置和翻译记录都会保留。",
+                                  "重启更新", self._restart_to_update)
+            status(f"新版本 v{ver} 已下载好，重启后生效")
+        elif kind == "failed":
+            info = (data or {}).get("info") or {}
+            if ap and info.get("version"):
+                ap.show_update_notice(info.get("version"), info.get("release_url"))
+            status("新版本下载没有成功，下次启动会再试；也可以到 GitHub 手动下载")
+            if manual:
+                self._show_upd_banner("新版本下载没有成功，请检查网络后再试，或到 GitHub 手动下载。")
+
+    def _translation_busy(self):
+        tp = self.pages.get("翻译")
+        if not tp:
+            return False
+        w = getattr(tp, "worker", None)
+        try:
+            running = bool(w is not None and w.isRunning())
+        except RuntimeError:
+            running = False
+        return running or tp.go_btn.text().startswith("翻译中")
+
+    def _restart_to_update(self):
+        from pdf2zh import self_update as su
+        if self._translation_busy():
+            QMessageBox.information(self, "正在翻译", su.busy_translating_hint())
             return
         try:
-            cfg = UserConfigManager.load() or {}
-            if cfg.get("dismissed_update_version") == version:
-                return
+            su.launch_apply(APP_VERSION, relaunch=True)
+        except Exception as e:
+            QMessageBox.warning(self, "暂时无法更新", f"{e}\n\n可以到 GitHub 手动下载新版本。")
+            return
+        self._update_launched = True
+        self.close()
+        QApplication.quit()
+
+    def _apply_update_on_quit(self):
+        """退出时如果有已下载好的新版本，交给替换程序在本程序退出后换上（不重新打开）"""
+        if self._update_launched:
+            return
+        try:
+            from pdf2zh import self_update as su
+            if su.pending(APP_VERSION) and su.can_install()[0]:
+                su.launch_apply(APP_VERSION, relaunch=False)
+                self._update_launched = True
         except Exception:
             pass
-        ap = self.pages.get("关于")
-        if ap:
-            ap.show_update_notice(version, url)
 
     # ─────────────────────────────────────────────
     #  凌晨 3:30 彩蛋 — 烟花 + 暖心寄语

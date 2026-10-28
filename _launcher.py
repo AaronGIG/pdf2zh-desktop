@@ -153,6 +153,17 @@ def main():
     log(f"Python: {sys.version}")
     log(f"工作目录: {os.getcwd()}")
 
+    # v2.3.42: 一键更新的替换程序正在换文件时（标记文件存在且是 3 分钟内的），等它换完再启动，
+    # 避免读到一半新一半旧的文件。最多等 60 秒。
+    try:
+        import time as _t
+        _mk = APP_DIR / "_update" / "applying"
+        _end = _t.time() + 60
+        while _mk.exists() and _t.time() - _mk.stat().st_mtime < 180 and _t.time() < _end:
+            _t.sleep(0.5)
+    except Exception:
+        pass
+
     # 设置 Qt 插件路径，避免与系统中其他 Qt 安装冲突
     qt_plugin_path = str(APP_DIR / "core" / "site-packages" / "PyQt5" / "Qt5" / "plugins")
     os.environ["QT_PLUGIN_PATH"] = qt_plugin_path

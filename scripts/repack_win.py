@@ -13,10 +13,10 @@
   * 文本文件（前 8KB 无 NUL）比较时统一行尾；写回时沿用包内原条目的行尾（原来是 CRLF 就转 CRLF）。
   * 二进制文件逐字节比较、逐字节替换。
   * Git LFS 指针存根跳过（工作树里没有真文件，无法同步，也就不会把存根写进包）。
-  * 不新增条目、不删除条目；仓库里新增的运行时文件要手工确认后再加（脚本会列出疑似缺失）。
+  * 不删除条目；仓库里新增的运行时文件要手工确认后用 --add 加（脚本会列出疑似缺失）。
 
 用法：
-  python3 scripts/repack_win.py --base 上一版.zip --out 新版.zip
+  python3 scripts/repack_win.py --base 上一版.zip --out 新版.zip [--add 仓库相对路径 ...]
   python3 scripts/repack_win.py --check 某版.zip        # 只检查，有过期文件就退出码 1
 """
 import argparse
@@ -75,7 +75,7 @@ def suspect_missing(zf):
     return out
 
 
-def repack(base, out):
+def repack(base, out, add=()):
     zo = zipfile.ZipFile(base)
     stale = {name: (rel, b) for name, rel, b in stale_entries(zo)}
     now = time.localtime()[:6]
@@ -97,6 +97,11 @@ def repack(base, out):
                 zn.writestr(ni, data)
             else:
                 zn.writestr(info, zo.read(info.filename), compress_type=info.compress_type)
+        for rel in add:   # 手工确认要加的新文件（仓库原样字节）
+            ni = zipfile.ZipInfo(PREFIX + rel, date_time=now)
+            ni.external_attr = 0o644 << 16
+            ni.compress_type = zipfile.ZIP_DEFLATED
+            zn.writestr(ni, open(os.path.join(REPO, rel), "rb").read())
     return sorted(rel for rel, _ in stale.values())
 
 
@@ -105,6 +110,7 @@ def main():
     ap.add_argument("--base")
     ap.add_argument("--out")
     ap.add_argument("--check")
+    ap.add_argument("--add", action="append", default=[], help="新增到包里的仓库文件（相对路径），可重复")
     a = ap.parse_args()
 
     if a.check:
@@ -120,14 +126,22 @@ def main():
 
     if not (a.base and a.out):
         ap.error("需要 --base 和 --out，或者 --check")
-    changed = repack(a.base, a.out)
+    names0 = set(zipfile.ZipFile(a.base).namelist())
+    for rel in a.add:
+        if not os.path.isfile(os.path.join(REPO, rel)) or rel not in _tracked():
+            ap.error(f"--add {rel}：不是仓库里已跟踪的文件")
+        if PREFIX + rel in names0:
+            ap.error(f"--add {rel}：包里已经有了")
+    changed = repack(a.base, a.out, a.add)
     print(f"同步了 {len(changed)} 个文件:")
     for rel in changed:
         print("  *", rel)
+    for rel in a.add:
+        print("  + 新增", rel)
 
     # 自检：条目集合不变、zip 完整、再无过期文件
     zo, zn = zipfile.ZipFile(a.base), zipfile.ZipFile(a.out)
-    assert zo.namelist() == zn.namelist(), "条目列表变了"
+    assert zn.namelist() == zo.namelist() + [PREFIX + r for r in a.add], "条目列表变了"
     bad = zn.testzip()
     assert bad is None, f"zip 损坏: {bad}"
     left = stale_entries(zn)
@@ -137,7 +151,7 @@ def main():
         print("⚠️ 仓库里有、包里没有的运行时文件（需人工确认是否要加）:")
         for rel in miss:
             print("   ", rel)
-    print(f"自检通过：条目 {len(zn.namelist())} 个不变，zip 完整，无过期文件。写出 {a.out}")
+    print(f"自检通过：条目 {len(zn.namelist())} 个（新增 {len(a.add)} 个），zip 完整，无过期文件。写出 {a.out}")
 
 
 if __name__ == "__main__":
