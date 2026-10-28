@@ -19,12 +19,32 @@ CHAT_SERVICES = [
 ]
 
 
+# 翻译页服务显示名 → 设置页/CHAT_SERVICES 里的名字（两边命名历史上不一致）
+_TRANSLATE_TO_CHAT = {
+    "DeepSeek": "DeepSeek",
+    "OpenAI": "OpenAI",
+    "Zhipu (智谱)": "Zhipu 智谱",
+    "Ali Qwen": "Qwen 通义千问",
+    "Groq": "Groq",
+    "Silicon": "Silicon 硅基流动",
+    "Grok": "Grok",
+    "Ollama": "Ollama 本地",
+    "OpenAI-liked": "OpenAI 兼容",
+}
+
+
 def detect_service():
-    """自动检测第一个可用的 chat completion 服务，返回 dict 或 None。
+    """检测可用的 chat completion 服务，返回 dict 或 None。
+    v2.3.41: 设置页写的是「默认与翻译服务相同」，所以先看翻译页当前选的服务能不能用来对话；
+    选的是 Google/Bing/DeepL 这类不能对话的服务时，再按 CHAT_SERVICES 顺序找第一个配好的。
     返回: {"name", "base_url", "api_key", "model"} 或 None
     """
     cfg = UserConfigManager.load()
-    for name, default_url, needs_key in CHAT_SERVICES:
+    order = list(CHAT_SERVICES)
+    cur = _TRANSLATE_TO_CHAT.get(cfg.get("service", ""))
+    if cur:
+        order.sort(key=lambda s: s[0] != cur)   # 当前翻译服务排第一，其余保持原顺序
+    for name, default_url, needs_key in order:
         api_raw = cfg.get(f"api_{name}", "")
         api_key = UserConfigManager.decode_sensitive(api_raw) if api_raw else ""
         model = cfg.get(f"model_{name}", "")

@@ -874,6 +874,18 @@ class TranslateWorker(QThread):
                 self._net_state = None
                 print(f"[net_policy] 未启用: {_e}")
 
+            # v2.3.41: 源语言「自动检测」传给内核的是 ""，Bing 只认 "auto-detect"，
+            # 收到 "" 会返回错误对象（每段 KeyError: 0），整篇保持原文——默认设置
+            # （Bing + 自动检测）就会撞上。Mac 内核 translator.py 不在仓库里，在这里补映射；
+            # Windows 内核已在 translator.py 里改。只影响 Bing，其它服务不动。
+            try:
+                from pdf2zh.translator import BingTranslator as _Bing
+                _m = dict(getattr(_Bing, "lang_map", None) or {})
+                _m.setdefault("", "auto-detect"); _m.setdefault("auto", "auto-detect")
+                _Bing.lang_map = _m
+            except Exception:
+                pass
+
             # 获取总页数
             doc = fitz.open(self.file_path)
             total_pages = len(doc)

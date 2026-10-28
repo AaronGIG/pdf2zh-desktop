@@ -748,7 +748,7 @@ def _load_active_glossary():
         return {}
 
 
-APP_VERSION = "2.3.40"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.41"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -2251,13 +2251,24 @@ class QAPanelWidget(QWidget):
             self._paper_text = ""
         self._messages = []
         self._clear()
+        self._refresh_svc_label(force_btn=True)
+
+    def _refresh_svc_label(self, force_btn=False):
+        """按磁盘上的最新配置刷新右上角「via 服务 · 模型」。
+        v2.3.41: 之前只在打开 PDF 时刷新一次，设置页改了 AI 助手模型后回到阅读页还显示旧模型；
+        现在面板每次显示时都刷新（实际请求本来就每次重新读配置）。"""
         try:
             from ui.ai_client import detect_assistant_service
             svc = detect_assistant_service()
             self._svc_label.setText(f"via {svc['name']} · {svc['model']}" if svc else "未配置")
-            self._send_btn.setEnabled(bool(svc))
+            if force_btn or not self._busy:
+                self._send_btn.setEnabled(bool(svc))
         except Exception:
             pass
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._refresh_svc_label()
 
     def _clear(self):
         try:
@@ -3957,16 +3968,25 @@ class TranslatePage(QWidget):
             pass  # 保存失败不影响翻译主流程
 
     def _save_config(self):
-        self.cfg["service"] = self.svc_combo.currentText()
-        self.cfg["lang_in"] = self.src_combo.currentText()
-        self.cfg["lang_out"] = self.tgt_combo.currentText()
-        self.cfg["output_format"] = self.fmt_combo.currentText()
-        self.cfg["thread_count"] = self.thread_spin.value()
-        self.cfg["auto_glossary"] = self.auto_gloss_check.isChecked()
-        self.cfg["chunk_enabled"] = self.chunk_check.isChecked()
-        self.cfg["chunk_size"] = self.chunk_size_spin.value()
-        self.cfg["chunk_delay"] = self.chunk_delay_spin.value()
-        UserConfigManager.save(self.cfg)
+        """v2.3.41: 改为合并写入。之前用启动时读入的 self.cfg 整体覆盖磁盘，点「开始翻译」就会把
+        设置页在本次启动后改过的字段（AI 助手服务/模型、Zotero 输出、主题色等）冲回启动时的旧值，
+        用户看到的就是「AI 助手选了模型，阅读页还是显示默认的 glm-4」。现在只更新翻译页自己的这几项，
+        其余字段以磁盘为准。"""
+        vals = {
+            "service": self.svc_combo.currentText(),
+            "lang_in": self.src_combo.currentText(),
+            "lang_out": self.tgt_combo.currentText(),
+            "output_format": self.fmt_combo.currentText(),
+            "thread_count": self.thread_spin.value(),
+            "auto_glossary": self.auto_gloss_check.isChecked(),
+            "chunk_enabled": self.chunk_check.isChecked(),
+            "chunk_size": self.chunk_size_spin.value(),
+            "chunk_delay": self.chunk_delay_spin.value(),
+        }
+        cfg = UserConfigManager.load() or {}
+        cfg.update(vals)
+        UserConfigManager.save(cfg)
+        self.cfg = cfg
 
     def _start(self):
         files = []
@@ -4005,10 +4025,9 @@ class TranslatePage(QWidget):
             except Exception:
                 pass  # 健康检查失败不阻断主流程
 
-        # 先保存翻译页配置（先 save 自己，再让设置页覆盖 API Key 字段，避免互相 stomp）
+        # 先保存翻译页配置（v2.3.41 起合并写入，不再整体覆盖磁盘）
         self._save_config()
         # 修复：强制让设置页保存（防 editingFinished 漏触发导致 API Key 丢失）
-        # 必须在 _save_config 之后，因为 _save_config 用 self.cfg 整体覆盖磁盘，会丢失 api_xxx
         try:
             mw = self.window()
             if hasattr(mw, "pages") and "设置" in mw.pages:
