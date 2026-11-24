@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pdf2zh Studio</title><link rel="stylesheet" href="style.css"><style>.check-row{display:flex!important;align-items:flex-start;gap:9px;padding:11px 12px;background:#f7faf7;border:1px solid #e1eae2;border-radius:5px;cursor:pointer}.check-row input{width:15px;height:15px;margin:1px 0 0;accent-color:#23795b;flex:0 0 auto}.check-row span{min-width:0}.check-row strong{display:block;font-size:12px;font-weight:500}.check-row small{display:block;margin-top:5px;font-size:10px;color:#a0a9a2}#maxPagesPerPart{width:100%;border:1px solid #dce2dd;border-radius:5px;background:#fff;color:#364139;padding:9px 10px;font-size:12px;outline:none;min-height:37px}#maxPagesPerPart:focus{border-color:#77a48b}</style></head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark"><i data-icon="languages"></i></span><div><strong>Pdf2zh</strong><span>STUDIO</span></div></div>
+    <nav><button class="nav-item active" data-view="translate"><i data-icon="file-text"></i><span>文档翻译</span></button><button class="nav-item" data-view="models"><i data-icon="box"></i><span>本地模型</span><span id="modelDot" class="nav-dot hidden"></span></button><button class="nav-item" data-view="history"><i data-icon="history"></i><span>翻译记录</span></button></nav>
+    <div class="sidebar-bottom"><div class="privacy"><i data-icon="shield"></i><div><strong>文档留在本机</strong><span>GGUF 本地推理 · 无需上传</span></div></div><button class="nav-item" data-view="settings"><i data-icon="settings"></i><span>设置</span></button><div class="version">PDFMathTranslate · GGUF Edition <span>v1.0</span></div></div>
+  </aside>
+  <main>
+    <header class="topbar"><div><h1 id="pageTitle">文档翻译</h1><p id="pageDescription">保留论文排版，让阅读没有语言边界。</p></div><div id="engineBadge" class="engine-badge"><span class="status-dot"></span><span>等待本地模型</span></div></header>
+    <div class="content">
+      <section id="view-translate" class="view active">
+        <div class="translate-grid">
+          <div class="workspace">
+            <div id="dropZone" class="drop-zone">
+              <div id="emptyFile" class="empty-file"><div class="upload-icon"><i data-icon="upload"></i></div><h2>导入要翻译的 PDF</h2><p>学术论文、技术文档，原文排版与公式会保留</p><button class="button secondary" id="choosePdf"><i data-icon="folder-open"></i>选择 PDF 文档</button><span class="file-hint">支持 PDF · 文件仅在本机处理</span></div>
+              <div id="fileInfo" class="file-info hidden"><div class="preview-frame"><img id="pdfPreview" alt=""><div id="pdfPreviewFallback" class="pdf-preview-fallback hidden"><div class="pdf-file-icon"><i data-icon="file-pdf"></i><span>PDF</span></div><small>首页预览不可用</small></div></div><div class="file-details"><div class="file-label">已选文档 <button class="icon-button" id="removePdf" title="移除文档"><i data-icon="x"></i></button></div><h2 id="pdfName"></h2><p id="pdfMeta"></p><div id="textStatus" class="tag"></div><p id="pdfSample" class="sample"></p><button class="text-button" id="changePdf">更换文档<i data-icon="arrow-right"></i></button></div></div>
+            </div>
+            <div id="activeJob" class="active-job hidden"><div class="job-head"><span id="jobDetail">正在准备翻译</span><strong id="jobPercent">0%</strong></div><div class="progress-track"><div id="jobProgress" class="progress-bar"></div></div><div class="job-footer"><span><i data-icon="cpu"></i>本地模型正在逐段翻译</span><button id="cancelJob" class="text-button danger">取消任务</button></div></div>
+            <div id="completedBox" class="completed-box hidden"><div class="success-icon"><i data-icon="check"></i></div><div><h3>文档翻译完成</h3><p id="completedName"></p></div><button class="button primary" id="openResult"><i data-icon="external-link"></i>查看译文</button></div>
+          </div>
+          <aside class="options-panel">
+            <div class="panel-heading"><h2>翻译设置</h2><i data-icon="sliders"></i></div>
+            <div class="form-group"><label>翻译方向</label><div class="language-row"><select id="sourceLanguage"><option value="en">英语</option><option value="zh">简体中文</option><option value="ja">日语</option><option value="de">德语</option><option value="fr">法语</option></select><i data-icon="arrow-right"></i><select id="targetLanguage"><option value="zh">简体中文</option><option value="zh-TW">繁体中文</option><option value="en">英语</option><option value="ja">日语</option><option value="de">德语</option><option value="fr">法语</option></select></div></div>
+            <div class="form-group"><label>输出格式</label><div class="segment-control"><button data-format="dual" class="selected">双语对照</button><button data-format="side">左右并排</button><button data-format="mono">仅译文</button></div></div>
+            <div class="form-group"><label for="pages">页面范围 <span>可选</span></label><input id="pages" type="text" placeholder="全部页面，如 1-5, 8"><small>留空则翻译整篇文档</small></div>
+            <div class="form-group"><label for="maxPagesPerPart">文档分块页数 <span>可选</span></label><input id="maxPagesPerPart" type="number" min="0" max="1000" step="10" value="50"><small>按页分块解析并合并；0 表示不拆分，非零至少 50 页</small></div>
+            <div class="form-group ocr-option"><label class="check-row"><input id="ocrEnabled" type="checkbox" checked><span><strong>启用 OCR 识别</strong><small>针对扫描件或没有文字层的页面</small></span></label></div>
+            <div class="form-group table-option"><label class="check-row"><input id="translateTableText" type="checkbox" checked><span><strong>表格结构保护</strong><small>保护表格线、列宽和单元格布局</small></span></label></div>
+            <div class="form-group"><div class="label-row"><label for="threads">并行任务</label><span id="threadValue">2</span></div><input id="threads" type="range" min="1" max="4" step="1" value="2"><div class="range-label"><span>更省资源</span><span>更快</span></div></div>
+            <div class="local-note"><i data-icon="sparkles"></i><div><strong id="translationModel">使用本地 GGUF 模型</strong><p>请先在本地模型页加载模型。上下文建议 4096 tokens 以上。</p></div></div>
+            <button class="button primary translate-button" id="startTranslate"><i data-icon="languages"></i>开始翻译</button><p class="shortcut">Ctrl + Enter 开始翻译</p>
+          </aside>
+        </div>
+      </section>
+      <section id="view-models" class="view"><div class="section-heading"><div><h2>你的模型库</h2><p>导入 GGUF 文件，加载后即可在本地完成翻译。</p></div><button class="button primary" id="importModel"><i data-icon="plus"></i>导入 GGUF 模型</button></div><div id="modelList" class="model-list"></div><div class="model-tips"><i data-icon="info"></i><div><strong>选择合适的模型</strong><p>推荐 7B–14B 指令模型与 Q4_K_M 量化版本。文件不会上传，导入时会复制到应用的模型库。</p></div><div class="hardware"><span id="ramInfo">可用内存 -- GB</span><span id="coreInfo">-- 线程</span></div></div></section>
+      <section id="view-history" class="view"><div class="section-heading"><div><h2>翻译记录</h2><p>本次启动中的翻译任务与输出文档。</p></div><button class="button secondary" id="openFolder"><i data-icon="folder-open"></i>打开输出目录</button></div><div id="historyList" class="history-list"></div></section>
+      <section id="view-settings" class="view"><div class="settings-page"><h2>运行设置</h2><p>根据你的设备调整本地推理参数。</p><div class="setting-row"><div><strong>模型上下文长度</strong><span>更大的上下文能容纳更长段落，但会占用更多内存。</span></div><select id="contextLength"><option value="2048">2048 tokens</option><option value="4096">4096 tokens</option><option value="8192">8192 tokens</option><option value="16384">16384 tokens</option></select></div><div class="setting-row"><div><strong>译文保存位置</strong><span id="outputPath"></span></div><button id="chooseOutput" class="button secondary"><i data-icon="folder-open"></i>更改目录</button></div></div></section>
+    </div>
+  </main>
+  <div id="toastRegion" class="toast-region"></div><div id="loadingOverlay" class="loading-overlay hidden"><div class="spinner"></div><h3 id="loadingStage">正在加载模型</h3><p id="loadingName"></p><span id="loadingElapsed">首次加载可能需要一些时间</span></div><script src="app.js"></script>
+</body></html>
