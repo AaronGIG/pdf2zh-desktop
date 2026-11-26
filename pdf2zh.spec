@@ -117,6 +117,9 @@ a = Analysis(
         # 后拿真实文档端到端测过才发现，没有报错、没有崩溃日志，翻译
         # 进度永远停在最开始）。onnx 是真实运行时依赖，不能排除。
         'sklearn', 'scikit-learn', 'h5py', 'psycopg2',
+        # v2.3.43: 打包机系统 Python 被别的项目装了 numba 后，llvmlite（91MB）被顺带打进包里，
+        # 安装包凭空大了 30MB。软件完全用不到（v2.3.42 没有它们一切正常），排除。
+        'numba', 'llvmlite',
     ],
     noarchive=False,
     optimize=0,
@@ -161,8 +164,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'pdf2zh',
         'CFBundleDisplayName': 'pdf2zh-desktop',
-        'CFBundleVersion': '2.3.42',
-        'CFBundleShortVersionString': '2.3.42',
+        'CFBundleVersion': '2.3.43',
+        'CFBundleShortVersionString': '2.3.43',
         'LSMinimumSystemVersion': '13.0',
         'NSHighResolutionCapable': True,
         'LSApplicationCategoryType': 'public.app-category.productivity',

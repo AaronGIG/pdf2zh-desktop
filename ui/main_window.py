@@ -561,8 +561,39 @@ def _install_pdf2zh_color_fix():
                         self.options["extra_body"] = {"thinking": {"type": "disabled"}}
                 except Exception:
                     pass
+                # v2.3.43: 内核把地址写死成官方，设置页填的 Base URL 不生效 → 中转站的 Key 一律连不上。
+                # 这里按 DEEPSEEK_BASE_URL 重建客户端（没填或填的就是官方地址则不动）。
+                try:
+                    # 只认这次传进来的地址：self.envs 合并了内核上次存下的配置，清空地址后不能沿用旧中转站
+                    _url = ((kw.get("envs") or {}).get("DEEPSEEK_BASE_URL") or "").strip()
+                    self._p2z_relay = bool(_url) and "api.deepseek.com" not in _url.lower()
+                    if self._p2z_relay:
+                        import openai as _openai
+                        self.client = _openai.OpenAI(base_url=_url, api_key=self.envs.get("DEEPSEEK_API_KEY"))
+                except Exception:
+                    self._p2z_relay = False
+
+            def _relay_do_translate(self, text, *a, **kw):
+                # v2.3.43: 有的中转站不认 thinking 参数（官方认），报 400 → 去掉后重发一次。
+                # 父类方法在调用时再取（不提前锁进闭包），后面对 OpenAITranslator 的补丁照样生效。
+                _parent = super(dt, self).do_translate
+                try:
+                    return _parent(text, *a, **kw)
+                except Exception as e:
+                    _code = getattr(e, "status_code", None)
+                    _msg = str(e).lower()
+                    # 多线程同时翻译：别的线程可能已经去掉了参数，本线程这条是去掉前发出的，也要重发
+                    if (getattr(self, "_p2z_relay", False)
+                            and ("extra_body" in (self.options or {}) or getattr(self, "_p2z_thinking_dropped", False))
+                            and (_code in (400, 422) or "thinking" in _msg or "unrecognized" in _msg)):
+                        self.options.pop("extra_body", None)
+                        self._p2z_thinking_dropped = True
+                        return _parent(text, *a, **kw)
+                    raise
 
             dt.__init__ = _new_init
+            if "do_translate" not in dt.__dict__:
+                dt.do_translate = _relay_do_translate
             dt._p2z_thinking_fixed = True
 
         # v2.3.6: 弱模型/推理模型往译文里加译者注(注：...)/前言/思考块(见 issue #27)。
@@ -748,7 +779,7 @@ def _load_active_glossary():
         return {}
 
 
-APP_VERSION = "2.3.42"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
+APP_VERSION = "2.3.43"  # v2.3.7: 检查更新用的单一版本号来源, 关于页的 QLabel 文案仍需手动同步
 
 # ─── 苹果风配色 ─────────────────────────────────────────────
 
@@ -3646,6 +3677,8 @@ class TranslatePage(QWidget):
         # 高级选项：扫描版 / 表格翻译 / OCR（参考 Win 端实现）
         r5 = QHBoxLayout(); r5.setSpacing(16)
         self.scan_mode_check = QCheckBox("扫描版 PDF")
+        # v2.3.43: 用户手动取消自动勾选的扫描版选项后，不再替他自动勾回去
+        self.scan_mode_check.toggled.connect(lambda on: None if on else setattr(self, "_scan_auto", False))
         self.scan_mode_check.setToolTip("扫描版 PDF 的文字嵌在图片中，勾选后会在译文区域覆盖底图原文。\n普通数字 PDF 请勿勾选。")
         r5.addWidget(self.scan_mode_check)
         self.translate_tables_check = QCheckBox("翻译表格内容")
@@ -3817,6 +3850,7 @@ class TranslatePage(QWidget):
         self.flist.takeItem(self.flist.row(item))
         self._update_fcount(); self._check_zotero_source()
         self._scan_hint.setVisible(False)
+        self._recheck_auto_scan()
 
     def _browse_more(self):
         fs, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
@@ -3847,11 +3881,15 @@ class TranslatePage(QWidget):
     def _auto_detect_pdf_type(self, new_files):
         """检测新加入的 PDF：
         - 纯扫描件（无文字层）→ 自动开启 OCR
-        - 扫描+OCR 层（如日文教材）→ 仅作为温和提示，不自动勾选扫描模式
-          （scan_mode 会在段落间留白处露出原图，整体观感未必更好，留给用户决定）
+        - v2.3.43: 大多数页都是「整页图片 + 看不见的识别文字层」（图书馆/老期刊扫描件）→ 自动勾选
+          「扫描版 PDF」。这种文件不勾必然重影（中文画在图片里的英文上面），勾了每段译文下铺白底，
+          实测干净（Basu 1997 JAE）；从 Zotero 右键翻译时界面提示根本看不到，所以不能只提示。
+          移除这些文件后自动取消（_recheck_auto_scan），不影响之后的普通 PDF。
+        - 只有部分页是这样（含底图）→ 仍只提示，留给用户决定
         """
         need_ocr = False
         suggest_scan = False
+        auto_scan = False
 
         for path in new_files:
             try:
@@ -3864,10 +3902,12 @@ class TranslatePage(QWidget):
                 text_pages = 0
                 scan_pages = 0       # 有覆盖 >50% 页面的大图
                 invisible_pages = 0  # 含不可见 OCR 文字层（Tr 3）
+                both_pages = 0       # v2.3.43: 同一页既是整页大图又只有隐藏文字层
                 for i in range(check_pages):
                     page = doc[i]
                     if page.get_text().strip():
                         text_pages += 1
+                    big_img = inv = False
                     page_area = page.rect.width * page.rect.height
                     if page_area > 0:
                         for info in page.get_image_info():
@@ -3875,17 +3915,23 @@ class TranslatePage(QWidget):
                             img_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
                             if img_area > page_area * 0.5:
                                 scan_pages += 1
+                                big_img = True
                                 break
                     try:
                         contents = page.read_contents() or b""
                         if b" 3 Tr" in contents or b"\n3 Tr" in contents:
                             invisible_pages += 1
+                            inv = True
                     except Exception:
                         pass
+                    if big_img and inv:
+                        both_pages += 1
                 doc.close()
 
                 if text_pages == 0:
                     need_ocr = True
+                elif both_pages >= check_pages * 0.6:
+                    auto_scan = True
                 elif invisible_pages > check_pages * 0.3 or scan_pages > check_pages * 0.3:
                     suggest_scan = True
             except Exception:
@@ -3895,7 +3941,11 @@ class TranslatePage(QWidget):
         if need_ocr and not self.ocr_mode_check.isChecked():
             self.ocr_mode_check.setChecked(True)
             hints.append("检测到纯扫描件，已自动开启 OCR")
-        if suggest_scan and not self.scan_mode_check.isChecked():
+        if auto_scan and not self.scan_mode_check.isChecked():
+            self.scan_mode_check.setChecked(True)
+            self._scan_auto = True
+            hints.append("检测到扫描版 PDF（每页是图片），已自动勾选「扫描版 PDF」，避免译文和原文重影")
+        elif suggest_scan and not self.scan_mode_check.isChecked():
             # 仅提示，不自动勾选
             hints.append("检测到扫描版 PDF（含底图），如需去除背景文字可手动勾选扫描模式")
 
@@ -3913,12 +3963,26 @@ class TranslatePage(QWidget):
         self._update_fcount()
         self._check_zotero_source()
         self._scan_hint.setVisible(False)
+        self._recheck_auto_scan()
 
     def _clear_files(self):
         self.flist.clear()
         self._update_fcount()
         self._zotero_hint.setVisible(False)
         self._scan_hint.setVisible(False)
+        self._recheck_auto_scan()
+
+    def _recheck_auto_scan(self):
+        """v2.3.43: 「扫描版 PDF」是程序自动勾上的，文件变了就撤掉，再按列表里剩下的文件重新判断。
+        用户自己勾的不动。"""
+        if not getattr(self, "_scan_auto", False):
+            return
+        self._scan_auto = False
+        self.scan_mode_check.setChecked(False)
+        rest = [self.flist.item(i).data(Qt.UserRole) for i in range(self.flist.count())]
+        rest = [p for p in rest if p]
+        if rest:
+            self._auto_detect_pdf_type(rest)
 
     def _get_pages(self):
         preset = self.page_combo.currentText()
@@ -5323,6 +5387,15 @@ class SettingsPage(QWidget):
                 ui.setText(saved_u if saved_u else conf["url"])
                 ui.editingFinished.connect(self._save)
                 self.api_inputs[svc_name]["url"] = ui
+                # v2.3.43: 填了第三方中转站地址时提示（中转站的模型名、地址格式常和官方不一样）
+                _host = {"DeepSeek": "api.deepseek.com", "OpenAI": "api.openai.com"}.get(svc_name)
+                if _host:
+                    _hint = QLabel("这是第三方中转站地址：模型名请以中转站后台列出的为准，"
+                                   "地址一般以 /v1 结尾；可点「测试连接」确认能否翻译。")
+                    _hint.setObjectName("Cap"); _hint.setWordWrap(True)
+                    _hint.setStyleSheet("color:#D46B08;")
+                    self.api_inputs[svc_name]["hint"] = _hint
+                    self.api_inputs[svc_name]["hint_host"] = _host
 
         # ── AI 助手（摘要 / 问答服务） ──
         sl_ai = QLabel("AI 助手"); sl_ai.setObjectName("SL"); left.addWidget(sl_ai)
@@ -5644,6 +5717,21 @@ class SettingsPage(QWidget):
             self.svc_layout.addWidget(inputs["url"])
             inputs["url"].setParent(self.svc_card)
             inputs["url"].show()
+            if "hint" in inputs:   # v2.3.43: 中转站提示
+                hint, host = inputs["hint"], inputs["hint_host"]
+                self.svc_layout.addWidget(hint)
+                hint.setParent(self.svc_card)
+
+                def _upd_relay_hint(*_a, _h=hint, _u=inputs["url"], _host=host):
+                    try:
+                        t = _u.text().strip().lower()
+                        _h.setVisible(bool(t) and _host not in t)
+                    except RuntimeError:
+                        pass
+                if not inputs.get("hint_connected"):
+                    inputs["url"].textChanged.connect(_upd_relay_hint)
+                    inputs["hint_connected"] = True
+                _upd_relay_hint()
 
         # 测试连接按钮
         self.svc_layout.addSpacing(4)
@@ -5670,10 +5758,43 @@ class SettingsPage(QWidget):
         url_w = inputs.get("url")
         url_val = url_w.text().strip() if url_w else ""
 
+        model_w = inputs.get("model")
+        model_val = model_w.currentText().strip() if model_w else ""
+
         try:
             import requests
+            # v2.3.43: 有地址和模型的服务，直接用填好的地址/Key/模型发一条翻译请求。之前只请求 /models，
+            # Key 错（401/403）也显示「连接成功」，地址里没有 openai/deepseek 等字样的中转站还会显示
+            # 「免费服务，无需测试」——用户以为配好了，翻译时才失败。
+            if url_val and model_val and svc_name != "Azure OpenAI":
+                headers = {"Content-Type": "application/json"}
+                if key_val:
+                    headers["Authorization"] = f"Bearer {key_val}"
+                body = {"model": model_val, "max_tokens": 20,
+                        "messages": [{"role": "user", "content": "Translate into Chinese: hello"}]}
+                if "api.deepseek.com" in url_val and "reasoner" not in model_val.lower():
+                    body["thinking"] = {"type": "disabled"}
+                r = requests.post(url_val.rstrip("/") + "/chat/completions", json=body, headers=headers, timeout=20)
+                if r.status_code == 200:
+                    self._test_label.setText("✅ 连接成功，模型可用")
+                    self._test_label.setStyleSheet(f"color:{_C['ok']};font-size:11px;")
+                else:
+                    try:
+                        _err = r.json().get("error", {})
+                        _err = _err.get("message", "") if isinstance(_err, dict) else str(_err)
+                    except Exception:
+                        _err = ""
+                    if r.status_code in (401, 403):
+                        _t = "❌ API Key 无效或没有权限"
+                    elif r.status_code == 404:
+                        _t = "❌ 地址或模型名不对（地址一般以 /v1 结尾）"
+                    else:
+                        _t = f"⚠️ HTTP {r.status_code}" + (f"：{_err[:40]}" if _err else "")
+                    self._test_label.setText(_t)
+                    self._test_label.setToolTip(_err)
+                    self._test_label.setStyleSheet(f"color:{_C['err']};font-size:11px;")
             # 对于 OpenAI 兼容类服务，测试 /models 端点
-            if url_val and ("openai" in url_val or "deepseek" in url_val
+            elif url_val and ("openai" in url_val or "deepseek" in url_val
                            or "siliconflow" in url_val or "groq" in url_val
                            or "bigmodel" in url_val or "dashscope" in url_val
                            or "localhost" in url_val or "x.ai" in url_val):
@@ -6649,7 +6770,16 @@ class MainWindow(QMainWindow):
         self._upd_worker = None
         QTimer.singleShot(1_500, self._report_last_update)
         QTimer.singleShot(3_000, self._check_for_update)
+        # v2.3.43: 把程序位置登记给 Zotero 插件（右键翻译时插件先读这里找程序）
+        QTimer.singleShot(2_000, self._register_app_location)
         QApplication.instance().aboutToQuit.connect(self._apply_update_on_quit)
+
+    def _register_app_location(self):
+        try:
+            from pdf2zh import self_update as su
+            su.register_app_location()
+        except Exception:
+            pass
 
     def _show_upd_banner(self, text, action_text="", action=None, closable=True):
         self._upd_text.setText(text)

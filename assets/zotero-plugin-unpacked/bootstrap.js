@@ -92,10 +92,14 @@ function _makePingEndpoint() {
         permitBookmarklet: false,
 
         init: async function (req) {
+            // v1.0.22: 带上软件登记的位置，方便排查「右键翻译找不到软件」（只读一个小文件，不扫盘）
+            var registered = null;
+            try { registered = await _readRegisteredLocation(); } catch (e) {}
             return [200, 'application/json', JSON.stringify({
                 status: 'ok',
                 plugin: 'pdf2zh-desktop-connector',
-                version: '1.0.20'
+                version: '1.0.22',
+                app_registered: registered
             })];
         }
     };
@@ -135,6 +139,24 @@ function _fileExists(path) {
         var f = Zotero.File.pathToFile(path);
         return f && f.exists() ? path : null;
     } catch (e) { return null; }
+}
+
+// v1.0.22: pdf2zh-desktop v2.3.43 起每次启动把自己的位置写到 <用户目录>/.pdf2zh-desktop-location
+// (Windows: pdf2zh.exe 的完整路径; Mac: pdf2zh.app 的路径)。插件先读这里, 读不到再去硬盘上猜。
+async function _readRegisteredLocation() {
+    var file = _pathJoin(_homeDir(), '.pdf2zh-desktop-location');
+    if (!_fileExists(file)) return null;
+    var text = null;
+    try {
+        if (typeof IOUtils !== 'undefined' && IOUtils.readUTF8) text = await IOUtils.readUTF8(file);
+    } catch (e) {}
+    if (text === null) {
+        try { text = await Zotero.File.getContentsAsync(file); } catch (e) { return null; }
+    }
+    var p = String(text || '').trim();
+    if (!p) return null;
+    if (Zotero.isWin && !/pdf2zh\.exe$/i.test(p)) return null;
+    return _fileExists(p);
 }
 
 // v1.0.18: 后台静默翻译开关 (存 Zotero pref, 右键菜单可切换)
@@ -179,6 +201,17 @@ function _scanDirForExe(dir, exeName) {
         }
     } catch (e) {}
     return null;
+}
+
+// v1.0.22: 查找顺序 = 手动指定 → 软件登记的位置 → 原来的硬盘搜索
+async function _findPdf2zhExecutableAsync() {
+    var saved = _getSavedExePath();
+    if (saved) return saved;
+    try {
+        var reg = await _readRegisteredLocation();
+        if (reg) return reg;
+    } catch (e) { _dbgLog('read registered location failed: ' + e); }
+    return _findPdf2zhExecutable();
 }
 
 // 找 pdf2zh 可执行文件（跨平台）— v1.0.18 大幅增强搜索
@@ -260,9 +293,44 @@ function _loadSubprocess() {
     }
 }
 
+// v1.0.22: 手动选择程序位置。之前用的 fp.init(window)/fp.show() 是旧 Firefox 写法, Zotero 7 起
+// init 要传 browsingContext、show() 已删除, 报错被吞掉 → 点「确定」后什么都不出现。
+async function _pickExe(win) {
+    var title = '选择 pdf2zh 程序';
+    try {
+        var mod = ChromeUtils.importESModule('chrome://zotero/content/modules/filePicker.mjs');
+        var fp = new mod.FilePicker();
+        fp.init(win, title, fp.modeOpen);
+        if (Zotero.isWin) fp.appendFilter('pdf2zh.exe', 'pdf2zh.exe');
+        if (Zotero.isMac) fp.appendFilters(fp.filterApps);
+        fp.appendFilters(fp.filterAll);
+        var rv = await fp.show();
+        if (rv === fp.returnOK || rv === fp.returnReplace) {
+            var f = fp.file;
+            return (typeof f === 'string') ? f : (f && f.path) || null;
+        }
+        return null;
+    } catch (e) {
+        _dbgLog('Zotero FilePicker failed: ' + e);
+    }
+    try {
+        var Ci = Components.interfaces;
+        var fp2 = Components.classes['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
+        try { fp2.init(win.browsingContext, title, Ci.nsIFilePicker.modeOpen); }
+        catch (e1) { fp2.init(win, title, Ci.nsIFilePicker.modeOpen); }
+        if (Zotero.isWin) fp2.appendFilter('pdf2zh.exe', 'pdf2zh.exe');
+        fp2.appendFilters(Ci.nsIFilePicker.filterAll);
+        var rv2 = await new Promise(function (resolve) { fp2.open(resolve); });
+        if (rv2 === Ci.nsIFilePicker.returnOK && fp2.file) return fp2.file.path;
+    } catch (e2) {
+        _dbgLog('nsIFilePicker failed: ' + e2);
+    }
+    return null;
+}
+
 // 唤起 pdf2zh app + 传参
 async function _launchPdf2zh(filePath, format, auto) {
-    var exe = _findPdf2zhExecutable();
+    var exe = await _findPdf2zhExecutableAsync();
     if (!exe) {
         // v1.0.18: 找不到时让用户手动指定 pdf2zh.exe / pdf2zh.app 路径, 存进 pref 永久生效
         var picked = null;
@@ -275,12 +343,8 @@ async function _launchPdf2zh(filePath, format, auto) {
                 '点“确定”手动选择 ' + (Zotero.isWin ? 'pdf2zh.exe' : 'pdf2zh.app') + ' 的位置(只需选一次)；\n' +
                 '点“取消”去下载：github.com/AaronGIG/pdf2zh-desktop/releases');
             if (yes) {
-                var fp = Components.classes['@mozilla.org/filepicker;1'].createInstance(Components.interfaces.nsIFilePicker);
-                fp.init(win, '选择 pdf2zh 程序', fp.modeOpen);
-                if (Zotero.isWin) { fp.appendFilter('pdf2zh.exe', 'pdf2zh.exe'); fp.appendFilters(fp.filterApps); }
-                var rv = fp.show ? fp.show() : fp.open;
-                if (rv === fp.returnOK && fp.file) {
-                    picked = fp.file.path;
+                picked = await _pickExe(win);
+                if (picked) {
                     try { Zotero.Prefs.set('extensions.pdf2zh.exePath', picked, true); } catch (e) {}
                 }
             }

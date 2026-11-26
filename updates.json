@@ -31,6 +31,16 @@
               "strict_max_version": "10.*"
             }
           }
+        },
+        {
+          "version": "1.0.22",
+          "update_link": "https://github.com/AaronGIG/pdf2zh-desktop/releases/download/v2.3.43/pdf2zh-connector-v1.0.22.xpi",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "6.999",
+              "strict_max_version": "10.*"
+            }
+          }
         }
       ]
     }

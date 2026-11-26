@@ -179,8 +179,12 @@ SERVICE_MAP = {
     "Groq": "groq",
     "Grok": "grok",
     "Silicon": "silicon",
-    "Ali Qwen": "qwen-mt",
-    "OpenAI-liked": "openai-liked",
+    # v2.3.43: 下面两个的值以前写成 "qwen-mt" / "openai-liked"，Mac 内核里没有这两个名字
+    # （OpenAI 兼容在内核叫 openailiked；qwen-mt 是 Windows 1.9.9 内核才有的），选了就报
+    # 「Unsupported translation service」。通义千问走 DashScope 的 OpenAI 兼容接口。
+    # 打包前 scripts/check_service_map.py 会逐个核对这里的值在内核里都存在。
+    "Ali Qwen": "openailiked",
+    "OpenAI-liked": "openailiked",
 }
 
 PAGE_PRESETS = {
@@ -659,7 +663,7 @@ def build_service_envs(svc_display_name):
         "Ollama":          ("Ollama 本地",      {"model": "OLLAMA_MODEL"}),
         "AnythingLLM":     ("AnythingLLM",      {"api": "AnythingLLM_APIKEY",   "url": "AnythingLLM_URL"}),
         "Grok":            ("Grok",             {"api": "GORK_API_KEY",         "url": "GORK_BASE_URL",         "model": "GORK_MODEL"}),
-        "Ali Qwen":        ("Qwen 通义千问",   {"api": "OPENAI_API_KEY",       "url": "OPENAI_BASE_URL",       "model": "OPENAI_MODEL"}),
+        "Ali Qwen":        ("Qwen 通义千问",   {"api": "OPENAILIKED_API_KEY",  "url": "OPENAILIKED_BASE_URL",  "model": "OPENAILIKED_MODEL"}),
         "OpenAI-liked":    ("OpenAI 兼容",     {"api": "OPENAILIKED_API_KEY",  "url": "OPENAILIKED_BASE_URL",  "model": "OPENAILIKED_MODEL"}),
     }
 
@@ -684,6 +688,10 @@ def build_service_envs(svc_display_name):
         if val:
             envs[env_key] = val
 
+    # v2.3.43: 通义千问没填地址/模型时用 DashScope 的 OpenAI 兼容接口和默认模型
+    if svc_display_name == "Ali Qwen":
+        envs.setdefault("OPENAILIKED_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+        envs.setdefault("OPENAILIKED_MODEL", "qwen-plus")
     return envs
 
 
@@ -794,7 +802,7 @@ class TranslateWorker(QThread):
     SERVICES_NEED_KEY = {
         "deepseek", "openai", "azure", "azure-openai", "deepl", "deeplx",
         "gemini", "zhipu", "tencent", "dify", "anythingllm", "groq", "grok",
-        "silicon", "qwen-mt", "openai-liked",
+        "silicon", "openailiked",
     }
 
     def run(self):
@@ -824,8 +832,7 @@ class TranslateWorker(QThread):
                 "groq": "GROQ_API_KEY",
                 "grok": "GORK_API_KEY",
                 "silicon": "SILICON_API_KEY",
-                "qwen-mt": "OPENAI_API_KEY",
-                "openai-liked": "OPENAILIKED_API_KEY",
+                "openailiked": "OPENAILIKED_API_KEY",
             }
             need_env = _SVC_TO_ENV.get(self.service)
             import os as _os
